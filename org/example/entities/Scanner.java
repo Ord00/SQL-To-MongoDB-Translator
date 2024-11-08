@@ -9,12 +9,11 @@ import java.util.*;
 
 public class Scanner implements LexicallyAnalysable {
     private final Map<Category, FSM> fsms;
-    private final Map<Category, AbstractFSMBuilder> builders;
 
     public Scanner() {
         fsms = new HashMap<>();
 
-        builders = new HashMap<>() {{
+        Map<Category, AbstractFSMBuilder> builders = new HashMap<>() {{
             put(Category.OPERATOR, new OperatorFSMBuilder());
             put(Category.KEYWORD, new KeywordFSMBuilder());
             put(Category.IDENTIFIER, new IdentifierFSMBuilder());
@@ -32,19 +31,19 @@ public class Scanner implements LexicallyAnalysable {
 
     public Boolean tryAnalyse(String codeToScan, List<Token> tokens, List<String> errors) {
 
-        List<String> partsSql = ParsePart(codeToScan.trim());
+        List<String> partsSql = parsePart(codeToScan.trim());
         for (String split : partsSql) {
-            boolean found = false;
+            boolean isFound = false;
             for (Category category : fsms.keySet()) {
                 FSM fsm = fsms.get(category);
                 if (fsm.simulate(split)) {
                     tokens.add(new Token(split, category));
-                    found = true;
+                    isFound = true;
                     break;
                 }
             }
 
-            if (!found) {
+            if (!isFound) {
                 errors.add(String.format("The lexeme %s is not recognised by the language!", split));
             }
         }
@@ -52,7 +51,7 @@ public class Scanner implements LexicallyAnalysable {
         return errors.isEmpty();
     }
 
-    private List<String> ParsePart(String part) {
+    private List<String> parsePart(String part) {
         List<String> specials = new ArrayList<>(List.of(
                 " ",
                 ",",
@@ -70,16 +69,22 @@ public class Scanner implements LexicallyAnalysable {
             tempParts.clear();
 
             for (String t : temps) {
-                String[] splits = t.trim().split(special + "+");
-                if (splits.length == 1) {
-                    tempParts.add(splits[0]);
-                } else {
-                    for (String split : splits) {
-                        tempParts.add(split);
-                        tempParts.add(special);
-                    }
+                String[] splits = t.trim().split(special);
 
-                    tempParts.removeLast();
+                switch (splits.length) {
+                    case (0):
+                        tempParts.add(special);
+                        break;
+                    case (1):
+                        tempParts.add(splits[0]);
+                        break;
+                    default:
+                        for (String split : splits) {
+                            tempParts.add(split);
+                            tempParts.add(special);
+                        }
+                        tempParts.removeLast();
+                        break;
                 }
 
                 tempParts = new ArrayList<>(tempParts.stream()

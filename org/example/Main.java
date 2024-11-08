@@ -4,7 +4,6 @@ import org.example.entities.Scanner;
 import org.example.entities.Token;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 public class Main {

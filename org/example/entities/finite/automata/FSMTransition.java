@@ -1,6 +1,7 @@
 package org.example.entities.finite.automata;
 
 public class FSMTransition {
+
     public FSMState start;
 
     public FSMState end;
@@ -13,8 +14,7 @@ public class FSMTransition {
         this.item = item;
     }
 
-    public FSMState Transition(char c)
-    {
+    public FSMState Transition(char c) {
         if (item == c) {
             return end;
         }

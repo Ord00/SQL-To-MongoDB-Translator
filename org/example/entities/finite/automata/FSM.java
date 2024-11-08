@@ -10,13 +10,13 @@ public class FSM {
 
     public List<FSMTransition> transitions;
 
-    public FSM()
-    {
+    public FSM() {
         states = new ArrayList<>();
         transitions = new ArrayList<>();
     }
 
     public Boolean simulate(String pattern) {
+
         FSMState currentState = states.stream()
                 .filter(i -> i.isStart)
                 .findFirst()
