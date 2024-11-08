@@ -24,16 +24,13 @@ public class Scanner implements LexicallyAnalysable {
             put(Category.ALL, new AllFSMBuilder());
         }};
 
-        for (Category category : Category.values())
-        {
+        for (Category category : Category.values()) {
             AbstractFSMBuilder fsmBuilder = builders.get(category);
             fsms.put(category, fsmBuilder.build());
         }
     }
 
     public Boolean tryAnalyse(String codeToScan, List<Token> tokens, List<String> errors) {
-        tokens = new ArrayList<>();
-        errors = new ArrayList<>();
 
         List<String> partsSql = ParsePart(codeToScan.trim());
         for (String split : partsSql) {
@@ -69,11 +66,11 @@ public class Scanner implements LexicallyAnalysable {
         tempParts.add(part);
 
         for (String special : specials) {
-            String[] temps = new String[tempParts.size()];
-            tempParts.toArray(temps);
-            tempParts = new ArrayList<>();
+            String[] temps = tempParts.toArray(new String[0]);
+            tempParts.clear();
 
             for (String t : temps) {
+                // сделать экранирование
                 String[] splits = t.trim().split(special);
                 if (splits.length == 1) {
                     tempParts.add(splits[0]);
@@ -86,10 +83,10 @@ public class Scanner implements LexicallyAnalysable {
                     tempParts.removeLast();
                 }
 
-                tempParts = tempParts.stream()
+                tempParts = new ArrayList<>(tempParts.stream()
                         .map(String::trim)
                         .filter(i -> !i.isBlank())
-                        .toList();
+                        .toList());
             }
         }
 
