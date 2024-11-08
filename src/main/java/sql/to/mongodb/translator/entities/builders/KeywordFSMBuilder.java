@@ -39,13 +39,27 @@ public class KeywordFSMBuilder extends AbstractFSMBuilder {
                     int index = 1;
                     for (int i = 0; i < l; i++) {
                         boolean end = i == l - 1;
-                        var state = new FSMState(String.format("%s%d", keyword, index), false, end);
-                        fsm.states.add(state);
 
-                        FSMTransition transition = new FSMTransition(currentState, state, keyword.charAt(i));
-                        fsm.transitions.add(transition);
+                        FSMState searchState = currentState;
+                        int pos = i;
+                        FSMTransition searchTrans = fsm.transitions.stream()
+                                .filter(k -> k.equals(new FSMTransition(searchState, null, keyword.charAt(pos))))
+                                .findFirst()
+                                .orElse(null);
 
-                        currentState = state;
+                        if (searchTrans != null) {
+                            searchTrans.end.isEnd = end;
+                            currentState = searchTrans.end;
+                        } else {
+                            FSMState state = new FSMState(String.format("%s%d", keyword, index), false, end);
+                            fsm.states.add(state);
+
+                            FSMTransition transition = new FSMTransition(currentState, state, keyword.charAt(i));
+                            fsm.transitions.add(transition);
+
+                            currentState = state;
+                        }
+
                         index++;
                     }
                 });
