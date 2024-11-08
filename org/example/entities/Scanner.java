@@ -56,6 +56,8 @@ public class Scanner implements LexicallyAnalysable {
                 " ",
                 ",",
                 "\\.",
+                "\\(",
+                "\\)",
                 "<",
                 ">",
                 "="
@@ -69,22 +71,16 @@ public class Scanner implements LexicallyAnalysable {
             tempParts.clear();
 
             for (String t : temps) {
-                String[] splits = t.trim().split(special);
+                String[] splits = t.trim().split(special, -1);
 
-                switch (splits.length) {
-                    case (0):
-                        tempParts.add(special);
-                        break;
-                    case (1):
-                        tempParts.add(splits[0]);
-                        break;
-                    default:
-                        for (String split : splits) {
-                            tempParts.add(split);
-                            tempParts.add(special);
-                        }
-                        tempParts.removeLast();
-                        break;
+                if (splits.length == 1) {
+                    tempParts.add(splits[0]);
+                } else {
+                    for (String split : splits) {
+                        tempParts.add(split);
+                        tempParts.add(special.replaceAll("\\\\", ""));
+                    }
+                    tempParts.removeLast();
                 }
 
                 tempParts = new ArrayList<>(tempParts.stream()

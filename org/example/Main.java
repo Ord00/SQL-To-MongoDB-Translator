@@ -11,7 +11,8 @@ public class Main {
         Scanner scanner = new Scanner();
         List<Token> tokens = new ArrayList<>();
         List<String> errors = new ArrayList<>();
-        scanner.tryAnalyse("SELECT * FROM Students WHERE Id > 2 AND K LIKE 'mouse'", tokens, errors);
+        // SELECT * FROM Students WHERE Id > 2 AND K LIKE 'mouse'
+        scanner.tryAnalyse("SELECT * FROM products WHERE id IN (SELECT productid FROM sales)", tokens, errors);
         System.out.println(tokens);
     }
 }
