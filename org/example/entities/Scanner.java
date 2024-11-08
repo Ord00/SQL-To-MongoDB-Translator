@@ -56,7 +56,7 @@ public class Scanner implements LexicallyAnalysable {
         List<String> specials = new ArrayList<>(List.of(
                 " ",
                 ",",
-                ".",
+                "\\.",
                 "<",
                 ">",
                 "="
@@ -70,8 +70,7 @@ public class Scanner implements LexicallyAnalysable {
             tempParts.clear();
 
             for (String t : temps) {
-                // сделать экранирование
-                String[] splits = t.trim().split(special);
+                String[] splits = t.trim().split(special + "+");
                 if (splits.length == 1) {
                     tempParts.add(splits[0]);
                 } else {

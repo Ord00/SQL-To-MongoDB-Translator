@@ -14,7 +14,5 @@ public class Main {
         List<String> errors = new ArrayList<>();
         scanner.tryAnalyse("SELECT * FROM Students WHERE Id > 2 AND K LIKE 'mouse'", tokens, errors);
         System.out.println(tokens);
-/*        String splitTest = "Select";
-        System.out.println(Arrays.toString(splitTest.split(",")));*/
     }
 }
