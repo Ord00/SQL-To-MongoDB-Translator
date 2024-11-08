@@ -21,6 +21,7 @@ public class LiteralFSMBuilder extends AbstractFSMBuilder {
         }
 
         sigma.add('%');
+        sigma.add('_');
 
         var fsm = new FSM();
         fsm.sigma = sigma;

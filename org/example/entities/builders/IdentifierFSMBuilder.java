@@ -21,6 +21,8 @@ public class IdentifierFSMBuilder extends AbstractFSMBuilder {
             sigma.add(c);
         }
 
+        sigma.add('_');
+
         FSM fsm = new FSM();
         fsm.sigma = sigma;
 

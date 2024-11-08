@@ -13,10 +13,17 @@ public class KeywordFSMBuilder extends AbstractFSMBuilder {
     public FSM build() {
         ArrayList<String> keywords = new ArrayList<>(List.of(
                 "SELECT",
-                 "FROM",
-                 "WHERE",
-                 "AND",
-                 "OR"
+                "FROM",
+                "LEFT",
+                "RIGHT",
+                "OUTER",
+                "INNER",
+                "JOIN",
+                "WHERE",
+                "AND",
+                "OR",
+                "IN",
+                "BETWEEN"
         ));
 
         var fsm = new FSM();
