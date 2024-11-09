@@ -1,1 +1,1 @@
-# Converter
+# SQL to MongoDB translator
