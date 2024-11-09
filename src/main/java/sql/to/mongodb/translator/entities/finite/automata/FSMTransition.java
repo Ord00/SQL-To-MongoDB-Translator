@@ -16,7 +16,7 @@ public class FSMTransition {
 
     public FSMState transit(char c) {
 
-        if (item == c) {
+        if (item == null || item == c) {
             return end;
         }
         return null;

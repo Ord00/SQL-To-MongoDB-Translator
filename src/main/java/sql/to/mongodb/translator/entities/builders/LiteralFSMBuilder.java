@@ -10,22 +10,8 @@ public class LiteralFSMBuilder extends FSMBuilder {
 
     @Override
     public FSM build() {
-        var sigma = new ArrayList<Character>();
 
-        for (char c = 'A'; c <= 'Z'; c++) {
-            sigma.add(c);
-        }
-
-        for (char c = 'a'; c <= 'z'; c++) {
-            sigma.add(c);
-        }
-
-        sigma.add('%');
-        sigma.add('_');
-        sigma.add(' ');
-
-        var fsm = new FSM();
-        fsm.sigma = sigma;
+        FSM fsm = new FSM();
 
         FSMState stateStart = new FSMState("start", true, false);
         fsm.states.add(stateStart);
@@ -34,15 +20,12 @@ public class LiteralFSMBuilder extends FSMBuilder {
         FSMState stateEnd = new FSMState("end", false, true);
         fsm.states.add(stateEnd);
 
-        for (Character letter : sigma) {
-            FSMTransition transition = new FSMTransition(stateInterm, stateInterm, letter);
-            fsm.transitions.add(transition);
-        }
-
         FSMTransition transitionStartInterm = new FSMTransition(stateStart, stateInterm, '\'');
         fsm.transitions.add(transitionStartInterm);
         FSMTransition transitionIntermEnd = new FSMTransition(stateInterm, stateEnd, '\'');
         fsm.transitions.add(transitionIntermEnd);
+
+        fsm.transitions.add(new FSMTransition(stateInterm, stateInterm, null));
 
         return fsm;
     }

@@ -92,4 +92,28 @@ public class ScannerTest {
         SCANNER.tryAnalyse("SELECT COUNT(DISTINCT Id_book) FROM Library WHERE Id_book IN(7, 19)", tokens, errors);
         Assertions.assertEquals(expectedTokens, tokens);
     }
+
+    @Test
+    public void testLiteralsRecognition() {
+
+        List<Token> expectedTokens = new ArrayList<>(List.of(
+                new Token("SELECT", Category.KEYWORD),
+                new Token("*", Category.ALL),
+                new Token("FROM", Category.KEYWORD),
+                new Token("Students", Category.IDENTIFIER),
+                new Token("WHERE", Category.KEYWORD),
+                new Token("Id", Category.IDENTIFIER),
+                new Token(">", Category.OPERATOR),
+                new Token("'.2#, '", Category.LITERAL),
+                new Token("AND", Category.KEYWORD),
+                new Token("K", Category.IDENTIFIER),
+                new Token("LIKE", Category.OPERATOR),
+                new Token("'mou %_se'", Category.LITERAL)
+        ));
+
+        List<Token> tokens = new ArrayList<>();
+        List<String> errors = new ArrayList<>();
+        SCANNER.tryAnalyse("SELECT * FROM Students WHERE Id > '.2#, ' AND K LIKE 'mou %_se'", tokens, errors);
+        Assertions.assertEquals(expectedTokens, tokens);
+    }
 }

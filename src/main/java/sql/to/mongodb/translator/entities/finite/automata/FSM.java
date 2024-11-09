@@ -2,6 +2,8 @@ package sql.to.mongodb.translator.entities.finite.automata;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 public class FSM {
 
@@ -37,6 +39,7 @@ public class FSM {
                     .toList();
 
             for (FSMTransition transition : transFromCurState) {
+
                 currentState = transition.transit(c);
                 if (currentState != null) {
                     break;
