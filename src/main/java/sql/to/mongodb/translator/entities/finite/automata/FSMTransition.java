@@ -14,7 +14,8 @@ public class FSMTransition {
         this.item = item;
     }
 
-    public FSMState Transition(char c) {
+    public FSMState transit(char c) {
+
         if (item == c) {
             return end;
         }
@@ -23,6 +24,7 @@ public class FSMTransition {
 
     @Override
     public boolean equals(Object obj) {
+
         if (this == obj) {
             return true;
         }

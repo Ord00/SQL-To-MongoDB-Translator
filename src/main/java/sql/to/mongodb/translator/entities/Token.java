@@ -15,6 +15,7 @@ public class Token {
 
     @Override
     public boolean equals(Object obj) {
+
         if (this == obj) {
             return true;
         }

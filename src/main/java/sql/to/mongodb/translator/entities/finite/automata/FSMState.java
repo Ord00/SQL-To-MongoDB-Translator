@@ -1,6 +1,7 @@
 package sql.to.mongodb.translator.entities.finite.automata;
 
 public class FSMState {
+
     public String id;
 
     public Boolean isStart;

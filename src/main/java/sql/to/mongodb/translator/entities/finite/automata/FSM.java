@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class FSM {
+
     public List<Character> sigma;
 
     public List<FSMState> states;
@@ -22,15 +23,21 @@ public class FSM {
                 .findFirst()
                 .orElse(null);
 
+        if (currentState == null) {
+            return false;
+        }
+
         char[] lowerPattern = pattern.toLowerCase().toCharArray();
+
         for (Character c : lowerPattern) {
+
             String curId = currentState.id;
-            List<FSMTransition> newTransitions = transitions.stream()
+            List<FSMTransition> transFromCurState = transitions.stream()
                     .filter(i -> i.start.id.equals(curId))
                     .toList();
 
-            for (FSMTransition transition : newTransitions) {
-                currentState = transition.Transition(c);
+            for (FSMTransition transition : transFromCurState) {
+                currentState = transition.transit(c);
                 if (currentState != null) {
                     break;
                 }

@@ -13,6 +13,7 @@ public class KeywordFSMBuilder extends AbstractFSMBuilder {
     public FSM build() {
         ArrayList<String> keywords = new ArrayList<>(List.of(
                 "SELECT",
+                "DISTINCT",
                 "FROM",
                 "LEFT",
                 "RIGHT",
@@ -35,23 +36,25 @@ public class KeywordFSMBuilder extends AbstractFSMBuilder {
                 .map(String::toLowerCase)
                 .forEach(keyword -> {
                     FSMState currentState = state0;
-                    int l = keyword.length();
+                    int length = keyword.length();
                     int index = 1;
-                    for (int i = 0; i < l; i++) {
-                        boolean end = i == l - 1;
+                    for (int i = 0; i < length; i++) {
 
-                        FSMState searchState = currentState;
+                        boolean isEnd = i == length - 1;
+                        FSMState startState = currentState;
                         int pos = i;
-                        FSMTransition searchTrans = fsm.transitions.stream()
-                                .filter(k -> k.equals(new FSMTransition(searchState, null, keyword.charAt(pos))))
+
+                        FSMState nextState = fsm.transitions.stream()
+                                .filter(k -> k.start.equals(startState) && k.item.equals(keyword.charAt(pos)))
+                                .map(k -> k.end)
                                 .findFirst()
                                 .orElse(null);
 
-                        if (searchTrans != null) {
-                            searchTrans.end.isEnd = end;
-                            currentState = searchTrans.end;
+                        if (nextState != null) {
+                            nextState.isEnd = isEnd;
+                            currentState = nextState;
                         } else {
-                            FSMState state = new FSMState(String.format("%s%d", keyword, index), false, end);
+                            FSMState state = new FSMState(String.format("%s%d", keyword, index), false, isEnd);
                             fsm.states.add(state);
 
                             FSMTransition transition = new FSMTransition(currentState, state, keyword.charAt(i));
@@ -59,7 +62,6 @@ public class KeywordFSMBuilder extends AbstractFSMBuilder {
 
                             currentState = state;
                         }
-
                         index++;
                     }
                 });
