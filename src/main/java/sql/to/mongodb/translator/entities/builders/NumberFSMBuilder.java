@@ -28,6 +28,8 @@ public class NumberFSMBuilder extends FSMBuilder {
         for (Character letter : sigma) {
             FSMTransition transition0 = new FSMTransition(state0, stateEnd, letter);
             fsm.transitions.add(transition0);
+            FSMTransition transitionEnd = new FSMTransition(stateEnd, stateEnd, letter);
+            fsm.transitions.add(transitionEnd);
         }
 
         return fsm;

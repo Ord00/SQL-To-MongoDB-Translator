@@ -76,7 +76,7 @@ public class Scanner implements LexicallyAnalysable {
             tempParts.clear();
 
             for (String t : temps) {
-                String[] splits = t.trim().split(special, -1);
+                String[] splits = t.trim().split(String.format("%s(?=(?:[^']|'[^']*')*[^']*$)", special), -1);
 
                 if (splits.length == 1) {
                     tempParts.add(splits[0]);

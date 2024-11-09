@@ -43,7 +43,7 @@ public class FSM {
                 }
             }
 
-            if (currentState == null) {
+            if (transFromCurState.isEmpty() || currentState == null) {
                 return false;
             }
         }
