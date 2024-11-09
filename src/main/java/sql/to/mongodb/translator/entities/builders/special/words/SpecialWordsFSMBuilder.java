@@ -1,35 +1,29 @@
-package sql.to.mongodb.translator.entities.builders;
+package sql.to.mongodb.translator.entities.builders.special.words;
 
+import sql.to.mongodb.translator.entities.builders.FSMBuilder;
 import sql.to.mongodb.translator.entities.finite.automata.FSM;
 import sql.to.mongodb.translator.entities.finite.automata.FSMState;
 import sql.to.mongodb.translator.entities.finite.automata.FSMTransition;
 
-import java.util.ArrayList;
 import java.util.List;
 
-public class FunctionFSMBuilder extends AbstractFSMBuilder {
+public abstract class SpecialWordsFSMBuilder extends FSMBuilder {
+
+    protected static List<String> words;
 
     @Override
     public FSM build() {
-        ArrayList<String> functions = new ArrayList<>(List.of(
-                "SUM",
-                "COUNT",
-                "MAX",
-                "MIN",
-                "AVG",
-                "TRIM"
-        ));
 
         var fsm = new FSM();
 
         FSMState state0 = new FSMState("0", true, false);
         fsm.states.add(state0);
 
-        functions.stream()
+        words.stream()
                 .map(String::toLowerCase)
-                .forEach(function -> {
+                .forEach(word -> {
                     FSMState currentState = state0;
-                    int length = function.length();
+                    int length = word.length();
                     int index = 1;
                     for (int i = 0; i < length; i++) {
 
@@ -38,7 +32,7 @@ public class FunctionFSMBuilder extends AbstractFSMBuilder {
                         int pos = i;
 
                         FSMState nextState = fsm.transitions.stream()
-                                .filter(k -> k.start.equals(startState) && k.item.equals(function.charAt(pos)))
+                                .filter(k -> k.start.equals(startState) && k.item.equals(word.charAt(pos)))
                                 .map(k -> k.end)
                                 .findFirst()
                                 .orElse(null);
@@ -47,10 +41,10 @@ public class FunctionFSMBuilder extends AbstractFSMBuilder {
                             nextState.isEnd = isEnd;
                             currentState = nextState;
                         } else {
-                            FSMState state = new FSMState(String.format("%s%d", function, index), false, isEnd);
+                            FSMState state = new FSMState(String.format("%s%d", word, index), false, isEnd);
                             fsm.states.add(state);
 
-                            FSMTransition transition = new FSMTransition(currentState, state, function.charAt(i));
+                            FSMTransition transition = new FSMTransition(currentState, state, word.charAt(i));
                             fsm.transitions.add(transition);
 
                             currentState = state;

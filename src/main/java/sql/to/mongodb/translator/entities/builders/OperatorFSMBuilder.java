@@ -7,7 +7,7 @@ import sql.to.mongodb.translator.entities.finite.automata.FSMTransition;
 import java.util.ArrayList;
 import java.util.List;
 
-public class OperatorFSMBuilder extends AbstractFSMBuilder {
+public class OperatorFSMBuilder extends FSMBuilder {
 
     @Override
     public FSM build() {

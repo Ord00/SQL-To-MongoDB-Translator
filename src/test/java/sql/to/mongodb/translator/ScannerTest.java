@@ -66,11 +66,11 @@ public class ScannerTest {
     }
 
     @Test
-    public void testFunctions() {
+    public void testAggregateFunctions() {
 
         List<Token> expectedTokens = new ArrayList<>(List.of(
                 new Token("SELECT", Category.KEYWORD),
-                new Token("COUNT", Category.FUNCTION),
+                new Token("COUNT", Category.AGGREGATE),
                 new Token("(", Category.PUNCTUATION),
                 new Token("DISTINCT", Category.KEYWORD),
                 new Token("Id_book", Category.IDENTIFIER),

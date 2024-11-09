@@ -1,6 +1,9 @@
 package sql.to.mongodb.translator.entities;
 
 import sql.to.mongodb.translator.entities.builders.*;
+import sql.to.mongodb.translator.entities.builders.special.words.AggregateFSMBuilder;
+import sql.to.mongodb.translator.entities.builders.special.words.FunctionFSMBuilder;
+import sql.to.mongodb.translator.entities.builders.special.words.KeywordFSMBuilder;
 import sql.to.mongodb.translator.entities.finite.automata.FSM;
 import sql.to.mongodb.translator.enums.Category;
 import sql.to.mongodb.translator.interfaces.LexicallyAnalysable;
@@ -13,9 +16,10 @@ public class Scanner implements LexicallyAnalysable {
     public Scanner() {
         fsms = new LinkedHashMap<>();
 
-        Map<Category, AbstractFSMBuilder> builders = new LinkedHashMap<>() {{
+        Map<Category, FSMBuilder> builders = new LinkedHashMap<>() {{
             put(Category.OPERATOR, new OperatorFSMBuilder());
             put(Category.KEYWORD, new KeywordFSMBuilder());
+            put(Category.AGGREGATE, new AggregateFSMBuilder());
             put(Category.FUNCTION, new FunctionFSMBuilder());
             put(Category.IDENTIFIER, new IdentifierFSMBuilder());
             put(Category.NUMBER, new NumberFSMBuilder());
@@ -25,7 +29,7 @@ public class Scanner implements LexicallyAnalysable {
         }};
 
         for (Category category : Category.values()) {
-            AbstractFSMBuilder fsmBuilder = builders.get(category);
+            FSMBuilder fsmBuilder = builders.get(category);
             fsms.put(category, fsmBuilder.build());
         }
     }

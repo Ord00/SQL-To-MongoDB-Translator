@@ -4,7 +4,7 @@ import sql.to.mongodb.translator.entities.finite.automata.FSM;
 import sql.to.mongodb.translator.entities.finite.automata.FSMState;
 import sql.to.mongodb.translator.entities.finite.automata.FSMTransition;
 
-public class AllFSMBuilder extends AbstractFSMBuilder {
+public class AllFSMBuilder extends FSMBuilder {
 
     @Override
     public FSM build() {
