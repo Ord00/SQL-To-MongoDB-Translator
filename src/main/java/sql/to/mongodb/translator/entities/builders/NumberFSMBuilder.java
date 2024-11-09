@@ -22,12 +22,23 @@ public class NumberFSMBuilder extends FSMBuilder {
 
         FSMState state0 = new FSMState("0", true, false);
         fsm.states.add(state0);
+
+        FSMState stateMinus = new FSMState("-", false, false);
+        fsm.states.add(stateMinus);
+
         FSMState stateEnd = new FSMState("1", false, true);
         fsm.states.add(stateEnd);
+
+        FSMTransition transToMinus = new FSMTransition(state0, stateMinus, '-');
+        fsm.transitions.add(transToMinus);
 
         for (Character letter : sigma) {
             FSMTransition transition0 = new FSMTransition(state0, stateEnd, letter);
             fsm.transitions.add(transition0);
+
+            FSMTransition transFromMinus = new FSMTransition(stateMinus, stateEnd, letter);
+            fsm.transitions.add(transFromMinus);
+
             FSMTransition transitionEnd = new FSMTransition(stateEnd, stateEnd, letter);
             fsm.transitions.add(transitionEnd);
         }

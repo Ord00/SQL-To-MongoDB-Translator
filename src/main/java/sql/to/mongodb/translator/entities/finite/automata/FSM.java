@@ -37,6 +37,7 @@ public class FSM {
                     .toList();
 
             for (FSMTransition transition : transFromCurState) {
+
                 currentState = transition.transit(c);
                 if (currentState != null) {
                     break;

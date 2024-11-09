@@ -8,7 +8,11 @@ import sql.to.mongodb.translator.entities.finite.automata.FSM;
 import sql.to.mongodb.translator.enums.Category;
 import sql.to.mongodb.translator.interfaces.LexicallyAnalysable;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
 
 public class Scanner implements LexicallyAnalysable {
     private final Map<Category, FSM> fsms;

@@ -11,7 +11,7 @@ public class Main {
         Scanner scanner = new Scanner();
         List<Token> tokens = new ArrayList<>();
         List<String> errors = new ArrayList<>();
-        scanner.tryAnalyse("SELECT * FROM Students WHERE Id > 2 AND K LIKE 'mou %_se", tokens, errors);
+        scanner.tryAnalyse("SELECT * FROM Students WHERE Id >= -52", tokens, errors);
         System.out.println(tokens);
     }
 }
