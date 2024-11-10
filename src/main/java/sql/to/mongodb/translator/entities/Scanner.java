@@ -40,27 +40,33 @@ public class Scanner implements LexicallyAnalysable {
 
     public Boolean tryAnalyse(String codeToScan, List<Token> tokens, List<String> errors) {
 
-        List<String> partsSql = parsePart(codeToScan.trim());
-        for (String split : partsSql) {
+        List<String> partsSql = splitIntoParts(codeToScan.trim());
+
+        for (String part : partsSql) {
+
             boolean isFound = false;
+
             for (Category category : fsms.keySet()) {
+
                 FSM fsm = fsms.get(category);
-                if (fsm.simulate(split)) {
-                    tokens.add(new Token(split, category));
+
+                if (fsm.simulate(part)) {
+                    tokens.add(new Token(part, category));
                     isFound = true;
                     break;
                 }
             }
 
             if (!isFound) {
-                errors.add(String.format("The lexeme %s is not recognised by the language!", split));
+                errors.add(String.format("The lexeme %s is not recognised by the language!", part));
             }
         }
 
         return errors.isEmpty();
     }
 
-    private List<String> parsePart(String part) {
+    private List<String> splitIntoParts(String codeToSplit) {
+
         List<String> specials = new ArrayList<>(List.of(
                 " ",
                 ",",
@@ -72,33 +78,35 @@ public class Scanner implements LexicallyAnalysable {
                 "="
         ));
 
-        List<String> tempParts = new ArrayList<>();
-        tempParts.add(part);
+        List<String> parts = new ArrayList<>();
+        parts.add(codeToSplit);
 
         for (String special : specials) {
-            String[] temps = tempParts.toArray(new String[0]);
-            tempParts.clear();
 
-            for (String t : temps) {
-                String[] splits = t.trim().split(String.format("%s(?=(?:[^']|'[^']*')*[^']*$)", special), -1);
+            String[] curParts = parts.toArray(new String[0]);
+            parts.clear();
+
+            for (String part : curParts) {
+
+                String[] splits = part.trim().split(String.format("%s(?=(?:[^']|'[^']*')*[^']*$)", special), -1);
 
                 if (splits.length == 1) {
-                    tempParts.add(splits[0]);
+                    parts.add(splits[0]);
                 } else {
                     for (String split : splits) {
-                        tempParts.add(split);
-                        tempParts.add(special.replaceAll("\\\\", ""));
+                        parts.add(split);
+                        parts.add(special.replaceAll("\\\\", ""));
                     }
-                    tempParts.removeLast();
+                    parts.removeLast();
                 }
 
-                tempParts = new ArrayList<>(tempParts.stream()
+                parts = new ArrayList<>(parts.stream()
                         .map(String::trim)
                         .filter(i -> !i.isBlank())
                         .toList());
             }
         }
 
-        return tempParts;
+        return parts;
     }
 }
