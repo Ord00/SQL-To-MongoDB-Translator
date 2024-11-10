@@ -15,6 +15,7 @@ public class OperatorFSMBuilder extends FSMBuilder {
                 "=",
                 "<",
                 ">",
+                "is",
                 "like"
         ));
 

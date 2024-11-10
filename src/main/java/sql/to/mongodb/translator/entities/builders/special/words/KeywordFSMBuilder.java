@@ -27,7 +27,8 @@ public class KeywordFSMBuilder extends SpecialWordsFSMBuilder {
                 "GROUP",
                 "HAVING",
                 "ORDER",
-                "BY"
+                "BY",
+                "NULL"
         ));
         return super.build();
     }
