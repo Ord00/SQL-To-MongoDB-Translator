@@ -16,10 +16,7 @@ public class OperatorFSMBuilder extends FSMBuilder {
                 "-",
                 "=",
                 "<",
-                ">",
-                "is",
-                "like",
-                "not"
+                ">"
         ));
 
         var fsm = new FSM();

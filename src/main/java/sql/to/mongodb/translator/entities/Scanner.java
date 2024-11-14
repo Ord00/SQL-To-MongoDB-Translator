@@ -19,7 +19,9 @@ public class Scanner implements LexicallyAnalysable {
         fsms = new LinkedHashMap<>();
 
         Map<Category, FSMBuilder> builders = new LinkedHashMap<>() {{
-            put(Category.LOGICAL_EXP, new LogicalExpFSMBuilder());
+            put(Category.NOT, new NotFSMBuilder());
+            put(Category.LOGICAL_COMBINE, new LogicalCombineFSMBuilder());
+            put(Category.LOGICAL_EXPRESSION, new LogicalExpressionFSMBuilder());
             put(Category.OPERATOR, new OperatorFSMBuilder());
             put(Category.DDL, new DdlFSMBuilder());
             put(Category.DML, new DmlFSMBuilder());

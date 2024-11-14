@@ -26,7 +26,7 @@ public class ScannerTest {
                 new Token("products", Category.IDENTIFIER),
                 new Token("WHERE", Category.KEYWORD),
                 new Token("id", Category.IDENTIFIER),
-                new Token("IN", Category.LOGICAL_EXP),
+                new Token("IN", Category.LOGICAL_EXPRESSION),
                 new Token("(", Category.PUNCTUATION),
                 new Token("SELECT", Category.DML),
                 new Token("product_id", Category.IDENTIFIER),
@@ -53,9 +53,9 @@ public class ScannerTest {
                 new Token("Id", Category.IDENTIFIER),
                 new Token(">", Category.OPERATOR),
                 new Token("2", Category.NUMBER),
-                new Token("AND", Category.LOGICAL_EXP),
+                new Token("AND", Category.LOGICAL_COMBINE),
                 new Token("K", Category.IDENTIFIER),
-                new Token("LIKE", Category.OPERATOR),
+                new Token("LIKE", Category.LOGICAL_EXPRESSION),
                 new Token("'mou%_se'", Category.LITERAL)
         ));
 
@@ -79,7 +79,7 @@ public class ScannerTest {
                 new Token("Library", Category.IDENTIFIER),
                 new Token("WHERE", Category.KEYWORD),
                 new Token("Id_book", Category.IDENTIFIER),
-                new Token("IN", Category.LOGICAL_EXP),
+                new Token("IN", Category.LOGICAL_EXPRESSION),
                 new Token("(", Category.PUNCTUATION),
                 new Token("7", Category.NUMBER),
                 new Token(",", Category.PUNCTUATION),
@@ -105,9 +105,9 @@ public class ScannerTest {
                 new Token("Id", Category.IDENTIFIER),
                 new Token(">", Category.OPERATOR),
                 new Token("'.2#, '", Category.LITERAL),
-                new Token("AND", Category.LOGICAL_EXP),
+                new Token("AND", Category.LOGICAL_COMBINE),
                 new Token("K", Category.IDENTIFIER),
-                new Token("LIKE", Category.OPERATOR),
+                new Token("LIKE", Category.LOGICAL_EXPRESSION),
                 new Token("'mou %_se'", Category.LITERAL)
         ));
 

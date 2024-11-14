@@ -1,7 +1,9 @@
 package sql.to.mongodb.translator.enums;
 
 public enum Category {
-    LOGICAL_EXP,
+    NOT,
+    LOGICAL_COMBINE,
+    LOGICAL_EXPRESSION,
     OPERATOR,
     DDL,
     DML,
