@@ -1,9 +1,7 @@
 package sql.to.mongodb.translator.entities;
 
 import sql.to.mongodb.translator.entities.builders.*;
-import sql.to.mongodb.translator.entities.builders.special.words.AggregateFSMBuilder;
-import sql.to.mongodb.translator.entities.builders.special.words.FunctionFSMBuilder;
-import sql.to.mongodb.translator.entities.builders.special.words.KeywordFSMBuilder;
+import sql.to.mongodb.translator.entities.builders.special.words.*;
 import sql.to.mongodb.translator.entities.finite.automata.FSM;
 import sql.to.mongodb.translator.enums.Category;
 import sql.to.mongodb.translator.interfaces.LexicallyAnalysable;
@@ -21,10 +19,18 @@ public class Scanner implements LexicallyAnalysable {
         fsms = new LinkedHashMap<>();
 
         Map<Category, FSMBuilder> builders = new LinkedHashMap<>() {{
+            put(Category.LOGICAL_EXP, new LogicalExpFSMBuilder());
             put(Category.OPERATOR, new OperatorFSMBuilder());
+            put(Category.DDL, new DdlFSMBuilder());
+            put(Category.DML, new DmlFSMBuilder());
+            put(Category.DCL, new DclFSMBuilder());
+            put(Category.TCL, new TclFSMBuilder());
             put(Category.KEYWORD, new KeywordFSMBuilder());
             put(Category.AGGREGATE, new AggregateFSMBuilder());
             put(Category.FUNCTION, new FunctionFSMBuilder());
+            put(Category.NULL, new NullFSMBuilder());
+            put(Category.TYPE, new TypeFSMBuilder());
+            put(Category.OBJECT, new ObjectFSMBuilder());
             put(Category.IDENTIFIER, new IdentifierFSMBuilder());
             put(Category.NUMBER, new NumberFSMBuilder());
             put(Category.LITERAL, new LiteralFSMBuilder());

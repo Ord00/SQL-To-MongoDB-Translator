@@ -11,7 +11,6 @@ public class KeywordFSMBuilder extends SpecialWordsFSMBuilder {
     public FSM build() {
 
         words = new ArrayList<>(List.of(
-                "SELECT",
                 "DISTINCT",
                 "FROM",
                 "LEFT",
@@ -20,15 +19,12 @@ public class KeywordFSMBuilder extends SpecialWordsFSMBuilder {
                 "INNER",
                 "JOIN",
                 "WHERE",
-                "AND",
-                "OR",
-                "IN",
-                "BETWEEN",
                 "GROUP",
                 "HAVING",
                 "ORDER",
                 "BY",
-                "NULL"
+                "ON",
+                "AS"
         ));
         return super.build();
     }

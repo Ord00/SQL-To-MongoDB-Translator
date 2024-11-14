@@ -12,11 +12,14 @@ public class OperatorFSMBuilder extends FSMBuilder {
     @Override
     public FSM build() {
         List<String> operators = new ArrayList<>(List.of(
+                "+",
+                "-",
                 "=",
                 "<",
                 ">",
                 "is",
-                "like"
+                "like",
+                "not"
         ));
 
         var fsm = new FSM();
