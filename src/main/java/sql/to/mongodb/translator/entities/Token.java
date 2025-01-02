@@ -27,6 +27,13 @@ public class Token {
         }
 
         Token other = (Token) obj;
+
+        if (category.equals(Category.IDENTIFIER)
+                || category.equals(Category.LITERAL)
+                || category.equals(Category.NUMBER)) {
+            return category.equals(other.category);
+        }
+
         return lexeme.equals(other.lexeme) && category.equals(other.category);
     }
 
