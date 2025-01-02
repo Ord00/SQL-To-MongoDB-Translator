@@ -12,7 +12,7 @@ public class Main {
         Scanner scanner = new Scanner();
         List<Token> tokens = new ArrayList<>();
         List<String> errors = new ArrayList<>();
-        scanner.tryAnalyse("SELECT *  FROM Students WHERE Id >= -52", tokens, errors);
+        scanner.tryAnalyse("SELECT f, g, t FROM Students WHERE Id >= -52", tokens, errors);
         System.out.println(tokens);
 
         Parser parser = new Parser(tokens, errors);

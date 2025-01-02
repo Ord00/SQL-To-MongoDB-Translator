@@ -12,9 +12,9 @@ import java.util.Stack;
 
 public class Parser {
 
-    protected List<Token> tokens;
-    protected int curTokenPos = 0;
-    protected Token curToken;
+    protected static List<Token> tokens;
+    protected static int curTokenPos = 0;
+    protected static Token curToken;
     protected List<String> errors;
 
     protected Stack<Token> stack = new Stack<>();
@@ -24,7 +24,7 @@ public class Parser {
         this.errors = errors;
     }
 
-    protected void getNextToken() {
+    protected static void getNextToken() {
         curToken = tokens.get(curTokenPos);
         ++curTokenPos;
     }
@@ -36,7 +36,7 @@ public class Parser {
 
         if (curToken.equals(new Token("SELECT", Category.DML))) {
             children.add(terminal(t -> true));
-            children.add(analyseColumnNames(0, false));
+            children.add(ColumnNamesParser.analyseSelect());
             children.add(terminal(t -> t.category.equals(Category.KEYWORD) && t.lexeme.equals("FROM")));
             children.add(terminal(t -> t.category.equals(Category.IDENTIFIER)));
 /*                children.add(where_part());
@@ -62,45 +62,7 @@ public class Parser {
         return new Node(NodeType.QUERY, children);
     }
 
-    private Node analyseColumnNames(int cntCols, boolean isAll) throws Exception {
-
-        List<Node> children = new ArrayList<>();
-
-        while (!stack.empty()) {
-            Token token = stack.pop();
-            if (!curToken.equals(token)) {
-                throw new Exception("mistake!");
-            }
-            getNextToken();
-        }
-
-        if (curToken.category.equals(Category.KEYWORD)
-                && curToken.lexeme.equals("FROM") // + проверка на терминальность последнего
-        ) {
-            return null;
-        }
-
-        if (!isAll && cntCols != 0) {
-            children.add(terminal(t -> t.category.equals(Category.PUNCTUATION) && t.lexeme.equals(",")));
-        }
-
-        if (!isAll && curToken.category == Category.IDENTIFIER) {
-            children.add(terminal(t -> true));
-            children.add(analyseColumnNames(cntCols + 1, isAll));
-            return new Node(NodeType.COLUMN_NAMES, children);
-        }
-
-        if (cntCols == 0 && curToken.category == Category.ALL) {
-            children.add(terminal(t -> true));
-            isAll = true;
-            children.add(analyseColumnNames(cntCols + 1, isAll));
-            return new Node(NodeType.COLUMN_NAMES, children);
-        }
-
-        throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
-    }
-
-    protected Node terminal(LambdaComparable comparator) throws Exception {
+    protected static Node terminal(LambdaComparable comparator) throws Exception {
         if (comparator.execute(curToken)) {
             Node terminalNode = new Node(NodeType.TERMINAL, curToken);
             getNextToken();

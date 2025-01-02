@@ -4,11 +4,9 @@ import sql.to.mongodb.translator.entities.Node;
 import sql.to.mongodb.translator.entities.Token;
 import sql.to.mongodb.translator.enums.Category;
 import sql.to.mongodb.translator.enums.NodeType;
-import sql.to.mongodb.translator.interfaces.LambdaComparable;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Stack;
 
 public class ColumnNamesParser extends Parser {
 
@@ -16,7 +14,7 @@ public class ColumnNamesParser extends Parser {
         super(tokens, errors);
     }
 
-    public Node analyseSelect() throws Exception {
+    public static Node analyseSelect() throws Exception {
 
         List<Node> children = new ArrayList<>();
 
@@ -35,15 +33,34 @@ public class ColumnNamesParser extends Parser {
         throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
     }
 
-    public void analyseIdentifier(List<Node> children) throws Exception {
+    private static void analyseIdentifier(List<Node> children) throws Exception {
+
+        if (curToken.category.equals(Category.KEYWORD)
+                && curToken.lexeme.equals("FROM") // + проверка на терминальность последнего
+        ) {
+            return;
+        }
+
         children.add(terminal(t -> t.category.equals(Category.PUNCTUATION) && t.lexeme.equals(",")));
+        analyseComma(children);
     }
 
-    public void analyseAll() throws Exception {
+    private static void analyseAll() throws Exception {
         if (!curToken.category.equals(Category.KEYWORD)
                 || !curToken.lexeme.equals("FROM") // + проверка на терминальность последнего
         ) {
             throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
         }
+    }
+
+    private static void analyseComma(List<Node> children) throws Exception {
+
+        if (curToken.category == Category.IDENTIFIER) {
+            children.add(terminal(t -> true));
+            analyseIdentifier(children);
+            return;
+        }
+
+        throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
     }
 }
