@@ -1,4 +1,4 @@
-package sql.to.mongodb.translator;
+package sql.to.mongodb.translator.parser;
 
 import sql.to.mongodb.translator.entities.Node;
 import sql.to.mongodb.translator.entities.Token;
@@ -7,25 +7,24 @@ import sql.to.mongodb.translator.enums.NodeType;
 import sql.to.mongodb.translator.interfaces.LambdaComparable;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Stack;
 
 public class Parser {
 
-    private List<Token> tokens;
-    private int curTokenPos = 0;
-    private Token curToken;
-    private List<String> errors;
+    protected List<Token> tokens;
+    protected int curTokenPos = 0;
+    protected Token curToken;
+    protected List<String> errors;
 
-    private Stack<Token> stack = new Stack<>();
+    protected Stack<Token> stack = new Stack<>();
 
     public Parser(List<Token> tokens, List<String> errors) {
         this.tokens = tokens;
         this.errors = errors;
     }
 
-    private void getNextToken() {
+    protected void getNextToken() {
         curToken = tokens.get(curTokenPos);
         ++curTokenPos;
     }
@@ -37,7 +36,7 @@ public class Parser {
 
         if (curToken.equals(new Token("SELECT", Category.DML))) {
             children.add(terminal(t -> true));
-            children.add(analyseColumnNames(0));
+            children.add(analyseColumnNames(0, false));
             children.add(terminal(t -> t.category.equals(Category.KEYWORD) && t.lexeme.equals("FROM")));
             children.add(terminal(t -> t.category.equals(Category.IDENTIFIER)));
 /*                children.add(where_part());
@@ -63,10 +62,9 @@ public class Parser {
         return new Node(NodeType.QUERY, children);
     }
 
-    private Node analyseColumnNames(int cntCols) throws Exception {
+    private Node analyseColumnNames(int cntCols, boolean isAll) throws Exception {
 
         List<Node> children = new ArrayList<>();
-        getNextToken();
 
         while (!stack.empty()) {
             Token token = stack.pop();
@@ -76,34 +74,33 @@ public class Parser {
             getNextToken();
         }
 
-        if (cntCols != 0) {
+        if (curToken.category.equals(Category.KEYWORD)
+                && curToken.lexeme.equals("FROM") // + проверка на терминальность последнего
+        ) {
+            return null;
+        }
+
+        if (!isAll && cntCols != 0) {
             children.add(terminal(t -> t.category.equals(Category.PUNCTUATION) && t.lexeme.equals(",")));
         }
 
-        if (curToken.category == Category.IDENTIFIER) {
+        if (!isAll && curToken.category == Category.IDENTIFIER) {
             children.add(terminal(t -> true));
-            children.add(analyseColumnNames(cntCols + 1));
+            children.add(analyseColumnNames(cntCols + 1, isAll));
             return new Node(NodeType.COLUMN_NAMES, children);
         }
 
-        if (curToken.category == Category.ALL) {
+        if (cntCols == 0 && curToken.category == Category.ALL) {
             children.add(terminal(t -> true));
-            children.add(analyseColumnNames(cntCols + 1));
+            isAll = true;
+            children.add(analyseColumnNames(cntCols + 1, isAll));
             return new Node(NodeType.COLUMN_NAMES, children);
         }
 
-        if (curToken.category.equals(Category.KEYWORD)
-                && curToken.lexeme.equals("FROM") // + проверка на терминальность последнего
-            ) {
-
-        }
-
-        // throw new Exception("Wrong first of column_names", curTokenPos);
-
-        return new Node(NodeType.COLUMN_NAMES, children);
+        throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
     }
 
-    private Node terminal(LambdaComparable comparator) throws Exception {
+    protected Node terminal(LambdaComparable comparator) throws Exception {
         if (comparator.execute(curToken)) {
             Node terminalNode = new Node(NodeType.TERMINAL, curToken);
             getNextToken();
