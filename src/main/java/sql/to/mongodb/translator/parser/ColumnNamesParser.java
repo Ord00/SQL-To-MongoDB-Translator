@@ -14,53 +14,28 @@ public class ColumnNamesParser extends Parser {
         super(tokens, errors);
     }
 
-    public static Node analyseSelect() throws Exception {
+    public static Node analyseColumnNames(List<Node> children) throws Exception {
 
-        List<Node> children = new ArrayList<>();
-
-        if (curToken.category == Category.IDENTIFIER) {
-            children.add(terminal(t -> true));
-            analyseIdentifier(children);
+        if (curToken.category == Category.IDENTIFIER
+        || curToken.category.equals(Category.NUMBER)
+        || curToken.category.equals(Category.LITERAL)) {
+            children.add(terminal(t -> true, NodeType.TERMINAL));
+        } else if (curToken.category == Category.ALL) {
+            children.add(terminal(t -> true, NodeType.TERMINAL));
+            if (!curToken.lexeme.equals("FROM")) {
+                throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+            }
             return new Node(NodeType.COLUMN_NAMES, children);
-        }
-
-        if (curToken.category == Category.ALL) {
-            children.add(terminal(t -> true));
-            analyseAll();
-            return new Node(NodeType.COLUMN_NAMES, children);
-        }
-
-        throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
-    }
-
-    private static void analyseIdentifier(List<Node> children) throws Exception {
-
-        if (curToken.category.equals(Category.KEYWORD)
-                && curToken.lexeme.equals("FROM") // + проверка на терминальность последнего
-        ) {
-            return;
-        }
-
-        children.add(terminal(t -> t.category.equals(Category.PUNCTUATION) && t.lexeme.equals(",")));
-        analyseComma(children);
-    }
-
-    private static void analyseAll() throws Exception {
-        if (!curToken.category.equals(Category.KEYWORD)
-                || !curToken.lexeme.equals("FROM") // + проверка на терминальность последнего
-        ) {
+        } else {
             throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
         }
-    }
 
-    private static void analyseComma(List<Node> children) throws Exception {
-
-        if (curToken.category == Category.IDENTIFIER) {
-            children.add(terminal(t -> true));
-            analyseIdentifier(children);
-            return;
+        if (curToken.category.equals(Category.PUNCTUATION) && curToken.lexeme.equals(",")) {
+            return analyseColumnNames(children);
+        } else if (curToken.lexeme.equals("FROM")) {
+            return new Node(NodeType.COLUMN_NAMES, children);
+        } else {
+            throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
         }
-
-        throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
     }
 }

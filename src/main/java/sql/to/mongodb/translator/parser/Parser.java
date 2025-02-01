@@ -34,11 +34,8 @@ public class Parser {
         List<Node> children = new ArrayList<>();
         getNextToken();
 
-        if (curToken.equals(new Token("SELECT", Category.DML))) {
-            children.add(terminal(t -> true));
-            children.add(ColumnNamesParser.analyseSelect());
-            children.add(terminal(t -> t.category.equals(Category.KEYWORD) && t.lexeme.equals("FROM")));
-            children.add(terminal(t -> t.category.equals(Category.IDENTIFIER)));
+        if (curToken.lexeme.equals("SELECT")) {
+            analyseSelect(children);
 /*                children.add(where_part());
                 children.add(skip_limit_part());*/
         }
@@ -62,9 +59,21 @@ public class Parser {
         return new Node(NodeType.QUERY, children);
     }
 
-    protected static Node terminal(LambdaComparable comparator) throws Exception {
+    private static void analyseSelect(List<Node> children ) throws Exception {
+
+        children.add(terminal(t -> true, NodeType.TERMINAL));
+
+        List<Node> colNamesChildren = new ArrayList<>();
+        children.add(ColumnNamesParser.analyseColumnNames(colNamesChildren));
+
+
+/*        children.add(terminal(t -> t.category.equals(Category.KEYWORD) && t.lexeme.equals("FROM")));
+        children.add(terminal(t -> t.category.equals(Category.IDENTIFIER)));*/
+    }
+
+    protected static Node terminal(LambdaComparable comparator, NodeType nodeType) throws Exception {
         if (comparator.execute(curToken)) {
-            Node terminalNode = new Node(NodeType.TERMINAL, curToken);
+            Node terminalNode = new Node(nodeType, curToken);
             getNextToken();
             return terminalNode;
         } else {
