@@ -20,4 +20,8 @@ public class Node {
         this.children = new ArrayList<>();
         this.token = token;
     }
+
+    public NodeType getNodeType() {
+        return nodeType;
+    }
 }

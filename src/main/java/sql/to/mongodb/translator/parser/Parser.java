@@ -29,15 +29,20 @@ public class Parser {
         ++curTokenPos;
     }
 
-    public Node tryAnalyse() throws Exception {
+    public static Node tryAnalyse(boolean isSubQuery) throws Exception {
 
         List<Node> children = new ArrayList<>();
         getNextToken();
 
-        if (curToken.lexeme.equals("SELECT")) {
+        if (isSubQuery && curToken.lexeme.equals("SELECT")) {
             analyseSelect(children);
-/*                children.add(where_part());
-                children.add(skip_limit_part());*/
+        } else if (!isSubQuery) {
+
+            switch (curToken.lexeme) {
+
+                case "SELECT" -> analyseSelect(children);
+                default -> throw new Exception("Wrong first of query");
+            }
         }
 
 /*        switch (curToken) {
@@ -61,19 +66,25 @@ public class Parser {
 
     private static void analyseSelect(List<Node> children ) throws Exception {
 
-        children.add(terminal(t -> true, NodeType.TERMINAL));
+        children.add(new Node(NodeType.TERMINAL, curToken));
+        getNextToken();
 
         List<Node> colNamesChildren = new ArrayList<>();
         children.add(ColumnNamesParser.analyseColumnNames(colNamesChildren));
 
+        children.add(new Node(NodeType.TERMINAL, curToken));
+        getNextToken();
+
+        List<Node> tableNamesChildren = new ArrayList<>();
+        children.add(TableNamesParser.analyseTableNames(tableNamesChildren, true));
 
 /*        children.add(terminal(t -> t.category.equals(Category.KEYWORD) && t.lexeme.equals("FROM")));
         children.add(terminal(t -> t.category.equals(Category.IDENTIFIER)));*/
     }
 
-    protected static Node terminal(LambdaComparable comparator, NodeType nodeType) throws Exception {
+    protected static Node terminal(LambdaComparable comparator) throws Exception {
         if (comparator.execute(curToken)) {
-            Node terminalNode = new Node(nodeType, curToken);
+            Node terminalNode = new Node(NodeType.TERMINAL, curToken);
             getNextToken();
             return terminalNode;
         } else {

@@ -16,6 +16,6 @@ public class Main {
         System.out.println(tokens);
 
         Parser parser = new Parser(tokens, errors);
-        parser.tryAnalyse();
+        parser.tryAnalyse(false);
     }
 }

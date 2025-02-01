@@ -5,7 +5,6 @@ import sql.to.mongodb.translator.entities.Token;
 import sql.to.mongodb.translator.enums.Category;
 import sql.to.mongodb.translator.enums.NodeType;
 
-import java.util.ArrayList;
 import java.util.List;
 
 public class ColumnNamesParser extends Parser {
@@ -19,9 +18,11 @@ public class ColumnNamesParser extends Parser {
         if (curToken.category == Category.IDENTIFIER
         || curToken.category.equals(Category.NUMBER)
         || curToken.category.equals(Category.LITERAL)) {
-            children.add(terminal(t -> true, NodeType.TERMINAL));
+            children.add(new Node(NodeType.TERMINAL, curToken));
+            getNextToken();
         } else if (curToken.category == Category.ALL) {
-            children.add(terminal(t -> true, NodeType.TERMINAL));
+            children.add(new Node(NodeType.TERMINAL, curToken));
+            getNextToken();
             if (!curToken.lexeme.equals("FROM")) {
                 throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
             }
@@ -30,12 +31,13 @@ public class ColumnNamesParser extends Parser {
             throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
         }
 
-        if (curToken.category.equals(Category.PUNCTUATION) && curToken.lexeme.equals(",")) {
-            return analyseColumnNames(children);
-        } else if (curToken.lexeme.equals("FROM")) {
-            return new Node(NodeType.COLUMN_NAMES, children);
-        } else {
-            throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
-        }
+        return switch (curToken.lexeme) {
+            case "," -> {
+                getNextToken();
+                yield analyseColumnNames(children);
+            }
+            case "FROM" -> new Node(NodeType.COLUMN_NAMES, children);
+            default -> throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+        };
     }
 }
