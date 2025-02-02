@@ -7,13 +7,11 @@ import sql.to.mongodb.translator.entities.finite.automata.FSMTransition;
 import java.util.ArrayList;
 import java.util.List;
 
-public class OperatorFSMBuilder extends FSMBuilder {
+public class LogicalOperatorFSMBuilder extends FSMBuilder {
 
     @Override
     public FSM build() {
         List<String> operators = new ArrayList<>(List.of(
-                "+",
-                "-",
                 "=",
                 "<",
                 ">"

@@ -22,7 +22,8 @@ public class Scanner implements LexicallyAnalysable {
             put(Category.NOT, new NotFSMBuilder());
             put(Category.LOGICAL_COMBINE, new LogicalCombineFSMBuilder());
             put(Category.LOGICAL_EXPRESSION, new LogicalExpressionFSMBuilder());
-            put(Category.OPERATOR, new OperatorFSMBuilder());
+            put(Category.LOGICAL_OPERATOR, new LogicalOperatorFSMBuilder());
+            put(Category.ARITHMETIC_OPERATOR, new ArithmeticOperatorFSMBuilder());
             put(Category.DDL, new DdlFSMBuilder());
             put(Category.DML, new DmlFSMBuilder());
             put(Category.DCL, new DclFSMBuilder());

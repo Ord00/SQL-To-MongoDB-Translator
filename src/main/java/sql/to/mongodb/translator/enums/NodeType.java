@@ -8,5 +8,6 @@ public enum NodeType {
     TABLE_NAMES,
     TABLE,
     JOIN,
-    LOGICAL_CONDITION
+    LOGICAL_CONDITION,
+    OPERATOR
 }

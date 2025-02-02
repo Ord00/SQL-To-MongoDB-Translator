@@ -51,8 +51,11 @@ public class ScannerTest {
                 new Token("Students", Category.IDENTIFIER),
                 new Token("WHERE", Category.KEYWORD),
                 new Token("Id", Category.IDENTIFIER),
-                new Token(">", Category.OPERATOR),
+                new Token(">", Category.LOGICAL_OPERATOR),
+                new Token("=", Category.LOGICAL_OPERATOR),
                 new Token("2", Category.NUMBER),
+                new Token("/", Category.ARITHMETIC_OPERATOR),
+                new Token("7", Category.NUMBER),
                 new Token("AND", Category.LOGICAL_COMBINE),
                 new Token("K", Category.IDENTIFIER),
                 new Token("LIKE", Category.LOGICAL_EXPRESSION),
@@ -61,7 +64,7 @@ public class ScannerTest {
 
         List<Token> tokens = new ArrayList<>();
         List<String> errors = new ArrayList<>();
-        SCANNER.tryAnalyse("SELECT * FROM Students WHERE Id > 2 AND K LIKE 'mou%_se'", tokens, errors);
+        SCANNER.tryAnalyse("SELECT * FROM Students WHERE Id >= 2 / 7 AND K LIKE 'mou%_se'", tokens, errors);
         Assertions.assertEquals(expectedTokens, tokens);
     }
 
@@ -103,7 +106,7 @@ public class ScannerTest {
                 new Token("Students", Category.IDENTIFIER),
                 new Token("WHERE", Category.KEYWORD),
                 new Token("Id", Category.IDENTIFIER),
-                new Token(">", Category.OPERATOR),
+                new Token(">", Category.LOGICAL_OPERATOR),
                 new Token("'.2#, '", Category.LITERAL),
                 new Token("AND", Category.LOGICAL_COMBINE),
                 new Token("K", Category.IDENTIFIER),
