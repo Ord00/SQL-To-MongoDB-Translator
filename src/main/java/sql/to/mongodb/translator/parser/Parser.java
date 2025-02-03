@@ -17,7 +17,7 @@ public class Parser {
     protected static Token curToken;
     protected List<String> errors;
 
-    protected Stack<Token> stack = new Stack<>();
+    protected static Stack<Token> stack = new Stack<>();
 
     public Parser(List<Token> tokens, List<String> errors) {
         this.tokens = tokens;
@@ -35,8 +35,11 @@ public class Parser {
         getNextToken();
 
         if (isSubQuery && curToken.lexeme.equals("SELECT")) {
+            stack.push(curToken);
             analyseSelect(children);
         } else if (!isSubQuery) {
+
+            stack.push(curToken);
 
             switch (curToken.lexeme) {
 
