@@ -24,6 +24,7 @@ public class KeywordFSMBuilder extends SpecialWordsFSMBuilder {
                 "ORDER",
                 "BY",
                 "ON",
+                "USING",
                 "AS"
         ));
         return super.build();

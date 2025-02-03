@@ -89,6 +89,15 @@ public class TableNamesParser extends Parser {
     public static Node analyseLogicalCondition() throws Exception {
         List<Node> children = new ArrayList<>();
 
+        switch (curToken.lexeme) {
+            case "USING" -> {
+                children.add(terminal(t -> t.lexeme.equals("(")));
+                children.add(terminal(t -> t.category == Category.IDENTIFIER));
+                children.add(terminal(t -> t.lexeme.equals(")")));
+            }
+            case "ON" -> LogicalConditionParser.analyseLogicalCondition(children);
+        }
+
         return new Node(NodeType.LOGICAL_CONDITION, children);
     }
 }

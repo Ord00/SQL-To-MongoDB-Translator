@@ -14,50 +14,84 @@ public class LogicalConditionParser extends Parser {
         super(tokens, errors);
     }
 
-    public static Node analyseLogicalCondition(List<Node> children) throws Exception {
-        if (analyseOperand(children)) {
-            children.add(analyseOperation());
+    public static void analyseLogicalCondition(List<Node> children) throws Exception {
+
+        List<Node> logicalCheckChildren = new ArrayList<>();
+
+        if (analyseOperand(logicalCheckChildren)) {
+
+           analyseOperation(logicalCheckChildren);
+
         } else if (curToken.lexeme.equals("NOT")) {
+
             getNextToken();
             children.add(terminal(t -> t.lexeme.equals("EXISTS")));
             children.add(terminal(t -> t.lexeme.equals("(")));
             children.add(tryAnalyse(true));
+
         } else if (curToken.lexeme.equals("EXISTS")) {
+
             getNextToken();
             children.add(terminal(t -> t.lexeme.equals("(")));
             children.add(tryAnalyse(true));
+
         } else {
+
             throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+
         }
 
+        children.add(new Node(NodeType.LOGICAL_CHECK, logicalCheckChildren));
+
         if (curToken.category == Category.LOGICAL_COMBINE) {
+
             children.add(new Node(NodeType.TERMINAL, curToken));
             getNextToken();
-            return analyseLogicalCondition(children);
-        } else if (curTokenPos == tokens.size() - 1 || curToken.category == Category.KEYWORD) {
-            return new Node(NodeType.LOGICAL_CONDITION, children);
-        } else {
+            analyseLogicalCondition(children);
+
+        } else if (curTokenPos != tokens.size() - 1 && curToken.category != Category.KEYWORD) {
+
             throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+
         }
     }
 
     public static boolean analyseOperand(List<Node> children) throws Exception {
 
+        getNextToken();
         boolean isFound = true;
 
-        if (curToken.category == Category.IDENTIFIER
-                || curToken.category.equals(Category.NUMBER)
+        if (curToken.category == Category.IDENTIFIER) {
+
+            List<Node> identifierChildren = new ArrayList<>();
+            stack.push(curToken);
+            identifierChildren.add(new Node(NodeType.TERMINAL, curToken));
+            getNextToken();
+
+            if (curToken.lexeme.equals(".")) {
+
+                getNextToken();
+                identifierChildren.add(terminal(t -> t.category == Category.IDENTIFIER));
+
+            }
+
+            children.add(new Node(NodeType.IDENTIFIER, identifierChildren));
+        } else if (curToken.category.equals(Category.NUMBER)
                 || curToken.category.equals(Category.LITERAL)) {
 
             stack.push(curToken);
             children.add(new Node(NodeType.TERMINAL, curToken));
             getNextToken();
+
         } else if (curToken.lexeme.equals("(")) {
 
             stack.push(new Token("SUBQUERY", Category.IDENTIFIER));
             children.add(tryAnalyse(true));
+
         } else {
+
             isFound = false;
+
         }
 
         return isFound;
@@ -68,13 +102,15 @@ public class LogicalConditionParser extends Parser {
         stack.push(curToken);
 
         children.add(new Node(NodeType.TERMINAL, curToken));
-        getNextToken();
 
         if (!stack.pop().lexeme.equals("=") && curToken.category == Category.LOGICAL_OPERATOR) {
+
             children.add(terminal(comparator));
+
         }
 
         if (!analyseOperand(children)) {
+
             if (curToken.lexeme.equals("ANY") || curToken.lexeme.equals("SOME") || curToken.lexeme.equals("ALL")) {
 
                 children.add(new Node(NodeType.TERMINAL, curToken));
@@ -82,8 +118,11 @@ public class LogicalConditionParser extends Parser {
 
                 children.add(terminal(t -> t.lexeme.equals("(")));
                 children.add(tryAnalyse(true));
+
             } else {
+
                 throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+
             }
         }
     }
@@ -92,14 +131,18 @@ public class LogicalConditionParser extends Parser {
         Token operandToken = stack.pop();
         if (operandToken.category != Category.IDENTIFIER
                 && operandToken.category != Category.LITERAL) {
+
             throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+
         }
 
         children.add(new Node(NodeType.TERMINAL, curToken));
         getNextToken();
 
         if (!analyseOperand(children) || curToken.category == Category.NUMBER) {
+
             throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+
         }
     }
 
@@ -108,7 +151,9 @@ public class LogicalConditionParser extends Parser {
         boolean newIsCheckStack = isCheckStack;
 
         if (!analyseOperand(children)) {
+
             throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+
         }
 
         Token curAttribute = stack.pop();
@@ -119,11 +164,15 @@ public class LogicalConditionParser extends Parser {
 
             if ((curAttribute.category == Category.NUMBER || curAttribute.category == Category.LITERAL)
             && curAttribute.category != prevAttribute.category) {
+
                 throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+
             }
         } else if (curAttribute.category == Category.NUMBER || curAttribute.category == Category.LITERAL) {
+
             stack.push(curAttribute);
             newIsCheckStack = true;
+            
         }
 
         return switch (curToken.lexeme) {
@@ -159,64 +208,59 @@ public class LogicalConditionParser extends Parser {
         stack.pop();
     }
 
-    public static Node analyseOperation() throws Exception {
+    public static void analyseOperation(List<Node> children) throws Exception {
 
-        List<Node> children = new ArrayList<>();
+        switch (curToken.lexeme) {
+            case "=" -> analyseLogicalOperator(children, t -> true);
+            case "<" -> analyseLogicalOperator(children, t -> t.lexeme.equals(">") || t.lexeme.equals("="));
+            case ">" -> analyseLogicalOperator(children, t -> t.lexeme.equals("="));
+            case "IS" -> {
 
-        if (curToken.lexeme.equals("=")) {
-            analyseLogicalOperator(children, t -> true);
-        } else if (curToken.lexeme.equals("<")) {
-            analyseLogicalOperator(children, t -> t.lexeme.equals(">") || t.lexeme.equals("="));
-        } else if (curToken.lexeme.equals(">")) {
-            analyseLogicalOperator(children, t -> t.lexeme.equals("="));
-        } else if (curToken.lexeme.equals("IS")) {
-
-            children.add(new Node(NodeType.TERMINAL, curToken));
-            getNextToken();
-
-            if (curToken.lexeme.equals("NOT")) {
                 children.add(new Node(NodeType.TERMINAL, curToken));
                 getNextToken();
-            }
 
-            children.add(terminal(t -> t.category == Category.NULL));
-
-        } else if (curToken.lexeme.equals("NOT")) {
-            children.add(new Node(NodeType.TERMINAL, curToken));
-            getNextToken();
-
-            switch (curToken.lexeme) {
-                case "LIKE" -> {
+                if (curToken.lexeme.equals("NOT")) {
                     children.add(new Node(NodeType.TERMINAL, curToken));
                     getNextToken();
-                    analyseLike(children);
                 }
-                case "IN" -> {
-                    children.add(new Node(NodeType.TERMINAL, curToken));
-                    getNextToken();
-                    children.add(terminal(t -> t.lexeme.equals("(")));
-                    List<Node> inChildren = new ArrayList<>();
-                    analyseIn(inChildren, false);
-                }
-                case "BETWEEN" -> analyseBetween(children);
-                default -> throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+
+                children.add(terminal(t -> t.category == Category.NULL));
             }
-        } else if (curToken.lexeme.equals("LIKE")) {
-            children.add(new Node(NodeType.TERMINAL, curToken));
-            getNextToken();
-            analyseLike(children);
-        } else if (curToken.lexeme.equals("IN")) {
-            children.add(new Node(NodeType.TERMINAL, curToken));
-            getNextToken();
-            children.add(terminal(t -> t.lexeme.equals("(")));
-            List<Node> inChildren = new ArrayList<>();
-            analyseIn(inChildren, false);
-        } else if (curToken.lexeme.equals("BETWEEN")) {
-            analyseBetween(children);
-        } else {
-            throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+            case "NOT" -> {
+                children.add(new Node(NodeType.TERMINAL, curToken));
+                getNextToken();
+
+                switch (curToken.lexeme) {
+                    case "LIKE" -> {
+                        children.add(new Node(NodeType.TERMINAL, curToken));
+                        getNextToken();
+                        analyseLike(children);
+                    }
+                    case "IN" -> {
+                        children.add(new Node(NodeType.TERMINAL, curToken));
+                        getNextToken();
+                        children.add(terminal(t -> t.lexeme.equals("(")));
+                        List<Node> inChildren = new ArrayList<>();
+                        analyseIn(inChildren, false);
+                    }
+                    case "BETWEEN" -> analyseBetween(children);
+                    default -> throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+                }
+            }
+            case "LIKE" -> {
+                children.add(new Node(NodeType.TERMINAL, curToken));
+                getNextToken();
+                analyseLike(children);
+            }
+            case "IN" -> {
+                children.add(new Node(NodeType.TERMINAL, curToken));
+                getNextToken();
+                children.add(terminal(t -> t.lexeme.equals("(")));
+                List<Node> inChildren = new ArrayList<>();
+                analyseIn(inChildren, false);
+            }
+            case "BETWEEN" -> analyseBetween(children);
+            default -> throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
         }
-
-        return new Node(NodeType.LOGICAL_CONDITION, children);
     }
 }
