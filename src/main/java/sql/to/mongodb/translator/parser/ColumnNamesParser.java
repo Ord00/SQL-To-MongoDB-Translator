@@ -15,29 +15,39 @@ public class ColumnNamesParser extends Parser {
 
     public static Node analyseColumnNames(List<Node> children) throws Exception {
 
-        if (curToken.category == Category.IDENTIFIER
-        || curToken.category.equals(Category.NUMBER)
-        || curToken.category.equals(Category.LITERAL)) {
+        if (curToken.category == Category.ALL) {
+
             children.add(new Node(NodeType.TERMINAL, curToken));
             getNextToken();
-        } else if (curToken.category == Category.ALL) {
-            children.add(new Node(NodeType.TERMINAL, curToken));
-            getNextToken();
+
             if (!curToken.lexeme.equals("FROM")) {
+
                 throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+
             }
             return new Node(NodeType.COLUMN_NAMES, children);
-        } else {
+
+        } else if (curToken.category == Category.AGGREGATE) {
+
+            FunctionsParser.analyseAggregate(children, true);
+
+        } else if (!analyseOperand(children)) {
+
             throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+
         }
 
         return switch (curToken.lexeme) {
+
             case "," -> {
+
                 getNextToken();
                 yield analyseColumnNames(children);
+
             }
             case "FROM" -> new Node(NodeType.COLUMN_NAMES, children);
             default -> throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+
         };
     }
 }

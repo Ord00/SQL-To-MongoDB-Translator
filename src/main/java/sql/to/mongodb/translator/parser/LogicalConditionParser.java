@@ -21,9 +21,11 @@ public class LogicalConditionParser extends Parser {
         getNextToken();
 
         while (curToken.lexeme.equals("(")) {
+
             stack.push(curToken);
             logicalCheckChildren.add(new Node(NodeType.TERMINAL, curToken));
             getNextToken();
+
         }
 
         if (analyseOperand(logicalCheckChildren)) {
@@ -45,36 +47,7 @@ public class LogicalConditionParser extends Parser {
 
         } else if (curToken.category == Category.AGGREGATE) {
 
-            if (!stack.peek().lexeme.equals("HAVING")) {
-
-                throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
-
-            }
-
-            stack.push(curToken);
-            logicalCheckChildren.add(new Node(NodeType.TERMINAL, curToken));
-            logicalCheckChildren.add(terminal(t -> t.lexeme.equals("(")));
-
-            if (stack.pop().lexeme.equals("COUNT") && curToken.category == Category.ALL) {
-
-                logicalCheckChildren.add(new Node(NodeType.TERMINAL, curToken));
-                getNextToken();
-
-            } else if (analyseOperand(logicalCheckChildren)) {
-
-                if (stack.peek().category == Category.AGGREGATE) {
-
-                    throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
-
-                }
-
-            } else {
-
-                throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
-
-            }
-
-            logicalCheckChildren.add(terminal(t -> t.lexeme.equals(")")));
+            FunctionsParser.analyseAggregate(logicalCheckChildren, false);
 
         } else {
 
@@ -123,59 +96,17 @@ public class LogicalConditionParser extends Parser {
         }
     }
 
-    public static boolean analyseOperand(List<Node> children) throws Exception {
-
-        boolean isFound = true;
-
-        if (curToken.category == Category.IDENTIFIER) {
-
-            List<Node> identifierChildren = new ArrayList<>();
-            stack.push(curToken);
-            identifierChildren.add(new Node(NodeType.TERMINAL, curToken));
-            getNextToken();
-
-            if (curToken.lexeme.equals(".")) {
-
-                getNextToken();
-                identifierChildren.add(terminal(t -> t.category == Category.IDENTIFIER));
-
-            }
-
-            children.add(new Node(NodeType.IDENTIFIER, identifierChildren));
-
-        } else if (curToken.category.equals(Category.NUMBER)
-                || curToken.category.equals(Category.LITERAL)) {
-
-            stack.push(curToken);
-            children.add(new Node(NodeType.TERMINAL, curToken));
-            getNextToken();
-
-        } else if (curToken.lexeme.equals("(")) {
-
-            stack.push(new Token("SUBQUERY", Category.IDENTIFIER));
-            children.add(tryAnalyse(true));
-
-        } else {
-
-            isFound = false;
-
-        }
-
-        return isFound;
-    }
-
     public static void analyseLogicalOperator(List<Node> children, LambdaComparable comparator) throws Exception {
 
         stack.push(curToken);
 
         children.add(new Node(NodeType.TERMINAL, curToken));
+        getNextToken();
 
         if (!stack.pop().lexeme.equals("=") && curToken.category == Category.LOGICAL_OPERATOR) {
 
             children.add(terminal(comparator));
 
-        } else {
-            getNextToken();
         }
 
         if (!analyseOperand(children)) {
@@ -200,7 +131,9 @@ public class LogicalConditionParser extends Parser {
     }
 
     public static void analyseLike(List<Node> children) throws Exception {
+
         Token operandToken = stack.pop();
+
         if (operandToken.category != Category.IDENTIFIER
                 && operandToken.category != Category.LITERAL) {
 
@@ -302,11 +235,14 @@ public class LogicalConditionParser extends Parser {
                 getNextToken();
 
                 if (curToken.lexeme.equals("NOT")) {
+
                     children.add(new Node(NodeType.TERMINAL, curToken));
                     getNextToken();
+
                 }
 
                 children.add(terminal(t -> t.category == Category.NULL));
+
             }
             case "NOT" -> {
                 children.add(new Node(NodeType.TERMINAL, curToken));

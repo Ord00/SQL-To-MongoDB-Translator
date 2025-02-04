@@ -48,22 +48,6 @@ public class Parser {
             }
         }
 
-/*        switch (curToken) {
-            case new Token("SELECT", Category.DML):
-                children.add(terminal(t -> true));
-                children.add(analyseColumnNames(0));
-                children.add(terminal(t -> t.category.equals(Category.KEYWORD) && t.lexeme.equals("FROM")));
-                children.add(terminal(t -> t.category.equals(Category.IDENTIFIER)));
-*//*                children.add(where_part());
-                children.add(skip_limit_part());*//*
-                break;
-            default:
-                // throw new Exception("Wrong first of query", curTokenPos);
-        }*/
-
-/*        if (lexer.getCurrentToken() != Token.END) {
-            throw new Exception("Wrong follow of query", curTokenPos);
-        }*/
         return new Node(NodeType.QUERY, children);
     }
 
@@ -81,10 +65,81 @@ public class Parser {
         List<Node> tableNamesChildren = new ArrayList<>();
         children.add(TableNamesParser.analyseTableNames(tableNamesChildren, true));
 
+        if (curToken.lexeme.equals("WHERE")) {
+
+            children.add(new Node(NodeType.TERMINAL, curToken));
+
+            List<Node> whereChildren = new ArrayList<>();
+            LogicalConditionParser.analyseLogicalCondition(whereChildren);
+            children.add(new Node(NodeType.LOGICAL_CONDITION, whereChildren));
+        }
+
+        if (curToken.lexeme.equals("GROUP")) {
+
+            children.add(new Node(NodeType.TERMINAL, curToken));
+            getNextToken();
+            children.add(terminal(t -> t.lexeme.equals("BY")));
+
+            List<Node> groupByChildren = new ArrayList<>();
+            children.add(GroupByParser.analyseGroupBy(groupByChildren));
+        }
+
+        if (curToken.lexeme.equals("HAVING")) {
+
+            children.add(new Node(NodeType.TERMINAL, curToken));
+
+            List<Node> havingChildren = new ArrayList<>();
+            LogicalConditionParser.analyseLogicalCondition(havingChildren);
+            children.add(new Node(NodeType.LOGICAL_CONDITION, havingChildren));
+        }
+
+        if (curToken.lexeme.equals("ORDER")) {
+
+        }
+
         children.add(new Node(NodeType.TERMINAL, curToken));
         getNextToken();
-/*        children.add(terminal(t -> t.category.equals(Category.KEYWORD) && t.lexeme.equals("FROM")));
-        children.add(terminal(t -> t.category.equals(Category.IDENTIFIER)));*/
+    }
+
+    protected static boolean analyseOperand(List<Node> children) throws Exception {
+
+        boolean isFound = true;
+
+        if (curToken.category == Category.IDENTIFIER) {
+
+            List<Node> identifierChildren = new ArrayList<>();
+            stack.push(curToken);
+            identifierChildren.add(new Node(NodeType.TERMINAL, curToken));
+            getNextToken();
+
+            if (curToken.lexeme.equals(".")) {
+
+                getNextToken();
+                identifierChildren.add(terminal(t -> t.category == Category.IDENTIFIER));
+
+            }
+
+            children.add(new Node(NodeType.IDENTIFIER, identifierChildren));
+
+        } else if (curToken.category.equals(Category.NUMBER)
+                || curToken.category.equals(Category.LITERAL)) {
+
+            stack.push(curToken);
+            children.add(new Node(NodeType.TERMINAL, curToken));
+            getNextToken();
+
+        } else if (curToken.lexeme.equals("(")) {
+
+            stack.push(new Token("SUBQUERY", Category.IDENTIFIER));
+            children.add(tryAnalyse(true));
+
+        } else {
+
+            isFound = false;
+
+        }
+
+        return isFound;
     }
 
     protected static Node terminal(LambdaComparable comparator) throws Exception {

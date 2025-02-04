@@ -12,5 +12,6 @@ public enum NodeType {
     LOGICAL_CHECK,
     OPERATOR,
     ATTRIBUTES,
-    IDENTIFIER
+    IDENTIFIER,
+    GROUP_BY
 }
