@@ -18,6 +18,14 @@ public class LogicalConditionParser extends Parser {
 
         List<Node> logicalCheckChildren = new ArrayList<>();
 
+        getNextToken();
+
+        while (curToken.lexeme.equals("(")) {
+            stack.push(curToken);
+            logicalCheckChildren.add(new Node(NodeType.TERMINAL, curToken));
+            getNextToken();
+        }
+
         if (analyseOperand(logicalCheckChildren)) {
 
            analyseOperation(logicalCheckChildren);
@@ -43,22 +51,43 @@ public class LogicalConditionParser extends Parser {
 
         children.add(new Node(NodeType.LOGICAL_CHECK, logicalCheckChildren));
 
+        Token bracketToken = stack.peek();
+
+        while (curToken.lexeme.equals(")") && bracketToken.lexeme.equals("(")) {
+            stack.pop();
+            bracketToken = stack.peek();
+
+            logicalCheckChildren.add(new Node(NodeType.TERMINAL, curToken));
+            getNextToken();
+        }
+
+        if (curToken.lexeme.equals(")")) {
+
+            throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+
+        }
+
         if (curToken.category == Category.LOGICAL_COMBINE) {
 
             children.add(new Node(NodeType.TERMINAL, curToken));
             getNextToken();
             analyseLogicalCondition(children);
 
-        } else if (curTokenPos != tokens.size() - 1 && curToken.category != Category.KEYWORD) {
+        } else if (curTokenPos == tokens.size() - 1 || curToken.category == Category.KEYWORD) {
 
+            if (stack.peek().lexeme.equals("(")) {
+
+                throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+
+            }
+
+        } else {
             throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
-
         }
     }
 
     public static boolean analyseOperand(List<Node> children) throws Exception {
 
-        getNextToken();
         boolean isFound = true;
 
         if (curToken.category == Category.IDENTIFIER) {
@@ -107,6 +136,8 @@ public class LogicalConditionParser extends Parser {
 
             children.add(terminal(comparator));
 
+        } else {
+            getNextToken();
         }
 
         if (!analyseOperand(children)) {
@@ -125,6 +156,9 @@ public class LogicalConditionParser extends Parser {
 
             }
         }
+
+        stack.pop();
+        stack.pop();
     }
 
     public static void analyseLike(List<Node> children) throws Exception {
