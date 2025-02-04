@@ -81,6 +81,8 @@ public class Parser {
         List<Node> tableNamesChildren = new ArrayList<>();
         children.add(TableNamesParser.analyseTableNames(tableNamesChildren, true));
 
+        children.add(new Node(NodeType.TERMINAL, curToken));
+        getNextToken();
 /*        children.add(terminal(t -> t.category.equals(Category.KEYWORD) && t.lexeme.equals("FROM")));
         children.add(terminal(t -> t.category.equals(Category.IDENTIFIER)));*/
     }
