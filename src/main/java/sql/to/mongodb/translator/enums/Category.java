@@ -21,5 +21,6 @@ public enum Category {
     NUMBER,
     LITERAL,
     ALL,
-    UNDEFINED
+    UNDEFINED,
+    PROC_NUMBER
 }

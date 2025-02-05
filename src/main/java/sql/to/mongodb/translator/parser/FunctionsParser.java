@@ -30,15 +30,7 @@ public class FunctionsParser extends Parser {
             children.add(new Node(NodeType.TERMINAL, curToken));
             getNextToken();
 
-        } else if (analyseOperand(children)) {
-
-            if (stack.peek().category == Category.AGGREGATE) {
-
-                throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
-
-            }
-
-        } else {
+        } else if (!analyseOperand(children, null)) {
 
             throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
 

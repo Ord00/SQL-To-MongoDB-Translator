@@ -17,6 +17,8 @@ public class ColumnNamesParser extends Parser {
 
         if (curToken.category == Category.ALL) {
 
+            stack.push(new Token("2", Category.PROC_NUMBER));
+
             children.add(new Node(NodeType.TERMINAL, curToken));
             getNextToken();
 
@@ -30,14 +32,23 @@ public class ColumnNamesParser extends Parser {
 
         } else if (curToken.category == Category.AGGREGATE) {
 
+            processOperandThroughStack(curToken);
+
             FunctionsParser.analyseAggregate(children, true);
 
-            analyseArithmeticExpression(children, true);
+            analyseArithmeticExpression(children, true, Parser::processOperandThroughStack);
 
-        } else if (!analyseOperand(children)) {
+        } else {
 
-            throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+            if (!analyseOperand(children, Parser::processOperandThroughStack)) {
 
+                throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+
+            } else {
+
+                analyseArithmeticExpression(children, true, Parser::processOperandThroughStack);
+
+            }
         }
 
         return switch (curToken.lexeme) {

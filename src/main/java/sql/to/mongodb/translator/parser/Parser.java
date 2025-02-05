@@ -4,6 +4,7 @@ import sql.to.mongodb.translator.entities.Node;
 import sql.to.mongodb.translator.entities.Token;
 import sql.to.mongodb.translator.enums.Category;
 import sql.to.mongodb.translator.enums.NodeType;
+import sql.to.mongodb.translator.interfaces.LambdaCallable;
 import sql.to.mongodb.translator.interfaces.LambdaComparable;
 
 import java.util.ArrayList;
@@ -39,15 +40,21 @@ public class Parser {
         getNextToken();
 
         if (isSubQuery && curToken.lexeme.equals("SELECT")) {
-            stack.push(curToken);
-            analyseSelect(children);
-        } else if (!isSubQuery) {
 
-            stack.push(curToken);
+            stack.push(new Token("0", Category.PROC_NUMBER));
+            analyseSelect(children);
+
+        } else if (!isSubQuery) {
 
             switch (curToken.lexeme) {
 
-                case "SELECT" -> analyseSelect(children);
+                case "SELECT" -> {
+
+                    stack.push(new Token("0", Category.PROC_NUMBER));
+                    analyseSelect(children);
+
+                }
+
                 default -> throw new Exception("Wrong first of query");
             }
         }
@@ -105,14 +112,40 @@ public class Parser {
         getNextToken();
     }
 
-    protected static boolean analyseOperand(List<Node> children) throws Exception {
+    protected static void processOperandThroughStack(Token token) {
+
+        Token prevToken = stack.pop();
+
+        if (prevToken.category == Category.PROC_NUMBER) {
+
+            if (prevToken.lexeme.equals("0")) {
+
+                stack.push(token);
+
+            } else {
+
+                int procNum = Integer.parseInt(prevToken.lexeme);
+                procNum++;
+                stack.push(new Token(Integer.toString(procNum), Category.PROC_NUMBER));
+
+            }
+
+        } else {
+
+            stack.push(new Token("2", Category.PROC_NUMBER));
+
+        }
+    }
+
+    // !!! добавить параметр - лямбду для проверки соответствия подзапроса некому условию
+    protected static boolean analyseOperand(List<Node> children, LambdaCallable func) throws Exception {
 
         boolean isFound = true;
 
         if (curToken.category == Category.IDENTIFIER) {
 
+            func.execute(curToken);
             List<Node> identifierChildren = new ArrayList<>();
-            stack.push(curToken);
             identifierChildren.add(new Node(NodeType.TERMINAL, curToken));
             getNextToken();
 
@@ -128,13 +161,12 @@ public class Parser {
         } else if (curToken.category.equals(Category.NUMBER)
                 || curToken.category.equals(Category.LITERAL)) {
 
-            stack.push(curToken);
+            func.execute(curToken);
             children.add(new Node(NodeType.TERMINAL, curToken));
             getNextToken();
 
         } else if (curToken.lexeme.equals("(")) {
 
-            stack.push(new Token("SUBQUERY", Category.IDENTIFIER));
             children.add(tryAnalyse(true));
 
         } else {
@@ -146,7 +178,7 @@ public class Parser {
         return isFound;
     }
 
-    protected static void analyseArithmeticExpression(List<Node> children, boolean isColumn) throws Exception {
+    protected static void analyseArithmeticExpression(List<Node> children, boolean isColumn, LambdaCallable func) throws Exception {
 
         List<Node> arithmeticChildren = new ArrayList<>();
         arithmeticChildren.add(children.getLast());
@@ -155,6 +187,7 @@ public class Parser {
 
         if (arithmeticChildren.size() > 1) {
 
+            func.execute(new Token("1", Category.NUMBER));
             children.removeLast();
             children.add(new Node(NodeType.ARITHMETIC_EXP, arithmeticChildren));
 
@@ -167,7 +200,7 @@ public class Parser {
 
             children.add(new Node(NodeType.TERMINAL, curToken));
 
-            if (analyseOperand(children)) {
+            if (analyseOperand(children, null)) {
 
                 if (stack.peek().category == Category.LITERAL) {
 

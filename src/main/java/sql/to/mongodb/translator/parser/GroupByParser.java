@@ -15,7 +15,7 @@ public class GroupByParser extends Parser {
 
     public static Node analyseGroupBy(List<Node> children) throws Exception {
 
-        if (analyseOperand(children)) {
+        if (analyseOperand(children, t -> stack.push(t))) {
 
             if (stack.pop().category == Category.LITERAL) {
 
