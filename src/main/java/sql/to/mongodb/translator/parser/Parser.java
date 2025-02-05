@@ -25,8 +25,12 @@ public class Parser {
     }
 
     protected static void getNextToken() {
-        curToken = tokens.get(curTokenPos);
-        ++curTokenPos;
+        if (curTokenPos != tokens.size()) {
+            curToken = tokens.get(curTokenPos);
+            ++curTokenPos;
+        } else if (curToken.category != Category.UNDEFINED) {
+            curToken = new Token("UNDEFINED", Category.UNDEFINED);
+        }
     }
 
     public static Node tryAnalyse(boolean isSubQuery) throws Exception {
@@ -140,6 +144,46 @@ public class Parser {
         }
 
         return isFound;
+    }
+
+    protected static void analyseArithmeticExpression(List<Node> children, boolean isColumn) throws Exception {
+
+        List<Node> arithmeticChildren = new ArrayList<>();
+        arithmeticChildren.add(children.getLast());
+
+        analyseArithmeticRec(arithmeticChildren, isColumn);
+
+        if (arithmeticChildren.size() > 1) {
+
+            children.removeLast();
+            children.add(new Node(NodeType.ARITHMETIC_EXP, arithmeticChildren));
+
+        }
+    }
+
+    protected static void analyseArithmeticRec(List<Node> children, boolean isColumn) throws Exception {
+
+        if (curToken.category == Category.ARITHMETIC_OPERATOR) {
+
+            children.add(new Node(NodeType.TERMINAL, curToken));
+
+            if (analyseOperand(children)) {
+
+                if (stack.peek().category == Category.LITERAL) {
+
+                    throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+
+                }
+            } else if (curToken.category == Category.AGGREGATE) {
+
+                FunctionsParser.analyseAggregate(children, isColumn);
+
+            } else {
+
+                throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+
+            }
+        }
     }
 
     protected static Node terminal(LambdaComparable comparator) throws Exception {

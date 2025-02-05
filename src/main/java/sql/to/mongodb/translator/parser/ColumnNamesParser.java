@@ -25,11 +25,14 @@ public class ColumnNamesParser extends Parser {
                 throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
 
             }
+
             return new Node(NodeType.COLUMN_NAMES, children);
 
         } else if (curToken.category == Category.AGGREGATE) {
 
             FunctionsParser.analyseAggregate(children, true);
+
+            analyseArithmeticExpression(children, true);
 
         } else if (!analyseOperand(children)) {
 

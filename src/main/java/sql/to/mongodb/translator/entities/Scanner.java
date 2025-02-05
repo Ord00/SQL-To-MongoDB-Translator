@@ -41,9 +41,12 @@ public class Scanner implements LexicallyAnalysable {
             put(Category.ALL, new AllFSMBuilder());
         }};
 
-        for (Category category : Category.values()) {
-            FSMBuilder fsmBuilder = builders.get(category);
-            fsms.put(category, fsmBuilder.build());
+        Category[] categories = Category.values();
+        int len = categories.length;
+
+        for (int i = 0; i < len - 1; ++i) {
+            FSMBuilder fsmBuilder = builders.get(categories[i]);
+            fsms.put(categories[i], fsmBuilder.build());
         }
     }
 

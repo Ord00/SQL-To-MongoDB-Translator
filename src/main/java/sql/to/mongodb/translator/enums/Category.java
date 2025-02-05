@@ -20,5 +20,6 @@ public enum Category {
     PUNCTUATION,
     NUMBER,
     LITERAL,
-    ALL
+    ALL,
+    UNDEFINED
 }

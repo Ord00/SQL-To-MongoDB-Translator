@@ -49,6 +49,8 @@ public class LogicalConditionParser extends Parser {
 
             FunctionsParser.analyseAggregate(logicalCheckChildren, false);
 
+            analyseArithmeticExpression(logicalCheckChildren, false);
+
         } else {
 
             throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
@@ -81,7 +83,7 @@ public class LogicalConditionParser extends Parser {
             getNextToken();
             analyseLogicalCondition(children);
 
-        } else if (curTokenPos == tokens.size() - 1 || curToken.category == Category.KEYWORD) {
+        } else if (curTokenPos == tokens.size() || curToken.category == Category.KEYWORD) {
 
             if (stack.peek().lexeme.equals("(")) {
 

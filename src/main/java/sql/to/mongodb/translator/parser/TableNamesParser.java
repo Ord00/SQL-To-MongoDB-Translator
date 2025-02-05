@@ -17,22 +17,34 @@ public class TableNamesParser extends Parser {
     public static Node analyseTableNames(List<Node> children, boolean isFirstTable) throws Exception {
 
         if (isFirstTable) {
+
             children.add(analyseTable(true));
-            if (!curToken.lexeme.equals("WHERE")) {
+
+            if (!List.of("WHERE", "GROUP", "HAVING", "LIMIT", "SKIP", "ORDER").contains(curToken.lexeme)) {
+
                 children.add(analyseJoin());
                 children.add(analyseTable(false));
                 children.add(analyseLogicalCondition());
+
             }
+
         } else {
+
             children.add(analyseJoin());
             children.add(analyseTable(false));
             children.add(analyseLogicalCondition());
+
         }
 
-        if (curTokenPos == tokens.size() - 1 || curToken.lexeme.equals("WHERE")) {
+        if (curTokenPos == tokens.size()
+                || List.of("WHERE", "GROUP", "HAVING", "LIMIT", "SKIP", "ORDER").contains(curToken.lexeme)) {
+
             return new Node(NodeType.TABLE_NAMES, children);
+
         } else {
+
             return analyseTableNames(children, false);
+
         }
     }
 
@@ -44,9 +56,11 @@ public class TableNamesParser extends Parser {
 
             children.add(new Node(NodeType.TERMINAL, curToken));
             getNextToken();
+
         } else if (curToken.lexeme.equals("(")) {
 
             children.add(tryAnalyse(true));
+
         } else {
 
             throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
@@ -56,9 +70,11 @@ public class TableNamesParser extends Parser {
 
             getNextToken();
             children.add(terminal(t -> t.category.equals(Category.IDENTIFIER)));
+
         } else if (curToken.category.equals(Category.IDENTIFIER)) {
 
             getNextToken();
+
         } else if (children.getLast().getNodeType() == NodeType.QUERY) {
 
             throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
@@ -72,30 +88,42 @@ public class TableNamesParser extends Parser {
         List<Node> children = new ArrayList<>();
 
         switch (curToken.lexeme) {
+
             case "INNER" -> getNextToken();
             case "LEFT", "RIGHT" -> {
+
                 getNextToken();
                 if (curToken.lexeme.equals("OUTER")) {
                         getNextToken();
                 }
+
             }
+
             default -> throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+
         }
+
         children.add(terminal(t -> t.lexeme.equals("JOIN")));
 
         return new Node(NodeType.JOIN, children);
     }
 
     public static Node analyseLogicalCondition() throws Exception {
+
         List<Node> children = new ArrayList<>();
 
         switch (curToken.lexeme) {
+
             case "USING" -> {
+
                 children.add(terminal(t -> t.lexeme.equals("(")));
                 children.add(terminal(t -> t.category == Category.IDENTIFIER));
                 children.add(terminal(t -> t.lexeme.equals(")")));
+
             }
+
             case "ON" -> LogicalConditionParser.analyseLogicalCondition(children);
+
         }
 
         return new Node(NodeType.LOGICAL_CONDITION, children);
