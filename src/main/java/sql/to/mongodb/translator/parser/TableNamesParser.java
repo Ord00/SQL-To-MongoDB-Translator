@@ -20,7 +20,8 @@ public class TableNamesParser extends Parser {
 
             children.add(analyseTable(true));
 
-            if (!List.of("WHERE", "GROUP", "HAVING", "LIMIT", "SKIP", "ORDER").contains(curToken.lexeme)) {
+            if (curTokenPos != tokens.size()
+            && !List.of("WHERE", "GROUP", "HAVING", "LIMIT", "SKIP", "ORDER").contains(curToken.lexeme)) {
 
                 children.add(analyseJoin());
                 children.add(analyseTable(false));
@@ -66,19 +67,7 @@ public class TableNamesParser extends Parser {
             throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
         }
 
-        if (curToken.lexeme.equals("AS")) {
-
-            getNextToken();
-            children.add(terminal(t -> t.category.equals(Category.IDENTIFIER)));
-
-        } else if (curToken.category.equals(Category.IDENTIFIER)) {
-
-            getNextToken();
-
-        } else if (children.getLast().getNodeType() == NodeType.QUERY) {
-
-            throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
-        }
+        analyseAlias(children);
 
         return new Node(NodeType.TABLE, children);
     }

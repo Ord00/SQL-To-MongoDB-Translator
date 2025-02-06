@@ -15,9 +15,13 @@ public class GroupByParser extends Parser {
 
     public static Node analyseGroupBy(List<Node> children) throws Exception {
 
-        if (analyseOperand(children, t -> stack.push(t))) {
+        if (analyseOperand(children,
+                t -> stack.push(t),
+                t -> t.category != Category.PROC_NUMBER)) {
 
-            if (stack.pop().category == Category.LITERAL) {
+            Token token = stack.pop();
+
+            if (token.category == Category.LITERAL || token.category == Category.NUMBER) {
 
                 throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
 

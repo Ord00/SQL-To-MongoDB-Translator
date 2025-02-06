@@ -138,13 +138,20 @@ public class Parser {
     }
 
     // !!! добавить параметр - лямбду для проверки соответствия подзапроса некому условию
-    protected static boolean analyseOperand(List<Node> children, LambdaCallable func) throws Exception {
+    protected static boolean analyseOperand(List<Node> children,
+                                            LambdaCallable func,
+                                            LambdaComparable subQueryCheck) throws Exception {
 
         boolean isFound = true;
 
         if (curToken.category == Category.IDENTIFIER) {
 
-            func.execute(curToken);
+            if (func != null) {
+
+                func.execute(curToken);
+
+            }
+
             List<Node> identifierChildren = new ArrayList<>();
             identifierChildren.add(new Node(NodeType.TERMINAL, curToken));
             getNextToken();
@@ -161,13 +168,24 @@ public class Parser {
         } else if (curToken.category.equals(Category.NUMBER)
                 || curToken.category.equals(Category.LITERAL)) {
 
-            func.execute(curToken);
+            if (func != null) {
+
+                func.execute(curToken);
+
+            }
+
             children.add(new Node(NodeType.TERMINAL, curToken));
             getNextToken();
 
         } else if (curToken.lexeme.equals("(")) {
 
             children.add(tryAnalyse(true));
+
+            if (!subQueryCheck.execute(stack.peek())) {
+
+                throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+
+            }
 
         } else {
 
@@ -176,6 +194,24 @@ public class Parser {
         }
 
         return isFound;
+    }
+
+    protected static void analyseAlias(List<Node> children) throws Exception {
+
+        if (curToken.lexeme.equals("AS")) {
+
+            getNextToken();
+            children.add(terminal(t -> t.category.equals(Category.IDENTIFIER)));
+
+        } else if (curToken.category.equals(Category.IDENTIFIER)) {
+
+            getNextToken();
+
+        } else if (children.getLast().getNodeType() == NodeType.QUERY) {
+
+            throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+        }
+
     }
 
     protected static void analyseArithmeticExpression(List<Node> children, boolean isColumn, LambdaCallable func) throws Exception {
@@ -200,7 +236,9 @@ public class Parser {
 
             children.add(new Node(NodeType.TERMINAL, curToken));
 
-            if (analyseOperand(children, null)) {
+            if (analyseOperand(children,
+                    null,
+                    t -> t.category != Category.PROC_NUMBER && t.category != Category.LITERAL)) {
 
                 if (stack.peek().category == Category.LITERAL) {
 

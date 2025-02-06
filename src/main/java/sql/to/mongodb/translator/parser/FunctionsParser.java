@@ -23,6 +23,7 @@ public class FunctionsParser extends Parser {
 
         stack.push(curToken);
         children.add(new Node(NodeType.TERMINAL, curToken));
+        getNextToken();
         children.add(terminal(t -> t.lexeme.equals("(")));
 
         if (stack.pop().lexeme.equals("COUNT") && curToken.category == Category.ALL) {
@@ -30,7 +31,7 @@ public class FunctionsParser extends Parser {
             children.add(new Node(NodeType.TERMINAL, curToken));
             getNextToken();
 
-        } else if (!analyseOperand(children, null)) {
+        } else if (!analyseOperand(children, null, t -> false)) {
 
             throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
 

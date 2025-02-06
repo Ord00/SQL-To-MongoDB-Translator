@@ -28,7 +28,9 @@ public class LogicalConditionParser extends Parser {
 
         }
 
-        if (analyseOperand(logicalCheckChildren, t -> stack.push(t))) {
+        if (analyseOperand(logicalCheckChildren,
+                t -> stack.push(t),
+                t -> t.category != Category.PROC_NUMBER)) {
 
             analyseArithmeticExpression(logicalCheckChildren, false, t -> stack.push(t));
 
@@ -113,7 +115,9 @@ public class LogicalConditionParser extends Parser {
 
         }
 
-        if (!analyseOperand(children, t -> stack.push(t))) {
+        if (!analyseOperand(children,
+                t -> stack.push(t),
+                t -> t.category != Category.PROC_NUMBER)) {
 
             if (curToken.lexeme.equals("ANY") || curToken.lexeme.equals("SOME") || curToken.lexeme.equals("ALL")) {
 
@@ -122,6 +126,12 @@ public class LogicalConditionParser extends Parser {
 
                 children.add(terminal(t -> t.lexeme.equals("(")));
                 children.add(tryAnalyse(true));
+
+                if (stack.peek().category == Category.PROC_NUMBER) {
+
+                    throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+
+                }
 
             } else {
 
@@ -148,7 +158,10 @@ public class LogicalConditionParser extends Parser {
         children.add(new Node(NodeType.TERMINAL, curToken));
         getNextToken();
 
-        if (!analyseOperand(children, t -> stack.push(t)) || curToken.category == Category.NUMBER) {
+        if (!analyseOperand(children,
+                t -> stack.push(t),
+                t -> t.category != Category.PROC_NUMBER)
+                || stack.pop().category == Category.NUMBER) {
 
             throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
 
@@ -159,7 +172,9 @@ public class LogicalConditionParser extends Parser {
 
         boolean newIsCheckStack = isCheckStack;
 
-        if (!analyseOperand(children, t -> stack.push(t))) {
+        if (!analyseOperand(children,
+                t -> stack.push(t),
+                t -> t.category != Category.PROC_NUMBER)) {
 
             throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
 
@@ -207,24 +222,26 @@ public class LogicalConditionParser extends Parser {
 
     public static void analyseBetween(List<Node> children) throws Exception {
 
-        if (!analyseOperand(children, t -> stack.push(t))) {
+        if (!analyseOperand(children,
+                null,
+                t -> t.category != Category.PROC_NUMBER)) {
 
             throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
 
         }
 
-        stack.pop();
 
         children.add(terminal(t -> t.lexeme.equals("AND")));
         getNextToken();
 
-        if (!analyseOperand(children, t -> stack.push(t))) {
+        if (!analyseOperand(children,
+                null,
+                t -> t.category != Category.PROC_NUMBER)) {
 
             throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
 
         }
 
-        stack.pop();
     }
 
     public static void analyseOperation(List<Node> children) throws Exception {

@@ -40,7 +40,9 @@ public class ColumnNamesParser extends Parser {
 
         } else {
 
-            if (!analyseOperand(children, Parser::processOperandThroughStack)) {
+            if (!analyseOperand(children,
+                    Parser::processOperandThroughStack,
+                    t -> t.category != Category.PROC_NUMBER)) {
 
                 throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
 
@@ -50,6 +52,8 @@ public class ColumnNamesParser extends Parser {
 
             }
         }
+
+        analyseAlias(children);
 
         return switch (curToken.lexeme) {
 
