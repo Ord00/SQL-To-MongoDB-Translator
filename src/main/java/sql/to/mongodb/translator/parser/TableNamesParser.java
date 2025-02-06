@@ -1,7 +1,6 @@
 package sql.to.mongodb.translator.parser;
 
-import sql.to.mongodb.translator.entities.Node;
-import sql.to.mongodb.translator.entities.Token;
+import sql.to.mongodb.translator.scanner.Token;
 import sql.to.mongodb.translator.enums.Category;
 import sql.to.mongodb.translator.enums.NodeType;
 
@@ -78,12 +77,22 @@ public class TableNamesParser extends Parser {
 
         switch (curToken.lexeme) {
 
+            case "JOIN" -> {
+
+                Node res = new Node(NodeType.TERMINAL, curToken);
+                getNextToken();
+                return res;
+
+            }
+
             case "INNER" -> getNextToken();
             case "LEFT", "RIGHT" -> {
 
                 getNextToken();
                 if (curToken.lexeme.equals("OUTER")) {
+
                         getNextToken();
+
                 }
 
             }
@@ -111,7 +120,12 @@ public class TableNamesParser extends Parser {
 
             }
 
-            case "ON" -> LogicalConditionParser.analyseLogicalCondition(children, isSubQuery);
+            case "ON" -> {
+
+                stack.push(curToken);
+                LogicalConditionParser.analyseLogicalCondition(children, isSubQuery);
+                stack.pop();
+            }
 
         }
 

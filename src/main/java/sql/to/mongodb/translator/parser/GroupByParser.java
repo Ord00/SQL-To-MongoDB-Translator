@@ -1,7 +1,6 @@
 package sql.to.mongodb.translator.parser;
 
-import sql.to.mongodb.translator.entities.Node;
-import sql.to.mongodb.translator.entities.Token;
+import sql.to.mongodb.translator.scanner.Token;
 import sql.to.mongodb.translator.enums.Category;
 import sql.to.mongodb.translator.enums.NodeType;
 

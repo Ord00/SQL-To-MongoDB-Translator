@@ -14,5 +14,6 @@ public enum NodeType {
     ATTRIBUTES,
     IDENTIFIER,
     GROUP_BY,
-    ARITHMETIC_EXP
+    ARITHMETIC_EXP,
+    AGGREGATE
 }

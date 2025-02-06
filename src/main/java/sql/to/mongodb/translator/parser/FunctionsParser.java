@@ -1,10 +1,10 @@
 package sql.to.mongodb.translator.parser;
 
-import sql.to.mongodb.translator.entities.Node;
-import sql.to.mongodb.translator.entities.Token;
+import sql.to.mongodb.translator.scanner.Token;
 import sql.to.mongodb.translator.enums.Category;
 import sql.to.mongodb.translator.enums.NodeType;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class FunctionsParser extends Parser {
@@ -22,22 +22,28 @@ public class FunctionsParser extends Parser {
         }
 
         stack.push(curToken);
-        children.add(new Node(NodeType.TERMINAL, curToken));
+
+        List<Node> aggregateChildren = new ArrayList<>();
+        aggregateChildren.add(new Node(NodeType.TERMINAL, curToken));
+
         getNextToken();
-        children.add(terminal(t -> t.lexeme.equals("(")));
+
+        checkToken(t -> t.lexeme.equals("("));
 
         if (stack.pop().lexeme.equals("COUNT") && curToken.category == Category.ALL) {
 
-            children.add(new Node(NodeType.TERMINAL, curToken));
+            aggregateChildren.add(new Node(NodeType.TERMINAL, curToken));
             getNextToken();
 
-        } else if (!analyseOperand(children, null, t -> false)) {
+        } else if (!analyseOperand(aggregateChildren, null, t -> false)) {
 
             throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
 
         }
 
-        children.add(terminal(t -> t.lexeme.equals(")")));
+        checkToken(t -> t.lexeme.equals(")"));
+
+        children.add(new Node(NodeType.AGGREGATE, aggregateChildren));
     }
 
 }

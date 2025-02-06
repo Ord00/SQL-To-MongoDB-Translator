@@ -1,7 +1,6 @@
 package sql.to.mongodb.translator.parser;
 
-import sql.to.mongodb.translator.entities.Node;
-import sql.to.mongodb.translator.entities.Token;
+import sql.to.mongodb.translator.scanner.Token;
 import sql.to.mongodb.translator.enums.Category;
 import sql.to.mongodb.translator.enums.NodeType;
 import sql.to.mongodb.translator.interfaces.LambdaComparable;
@@ -23,7 +22,7 @@ public class LogicalConditionParser extends Parser {
         while (curToken.lexeme.equals("(")) {
 
             stack.push(curToken);
-            logicalCheckChildren.add(new Node(NodeType.TERMINAL, curToken));
+            children.add(new Node(NodeType.TERMINAL, curToken));
             getNextToken();
 
         }
@@ -65,6 +64,8 @@ public class LogicalConditionParser extends Parser {
 
         children.add(new Node(NodeType.LOGICAL_CHECK, logicalCheckChildren));
 
+        clearLogicalExpInStack();
+
         Token bracketToken = stack.peek();
 
         while (curToken.lexeme.equals(")") && bracketToken.lexeme.equals("(")) {
@@ -72,7 +73,7 @@ public class LogicalConditionParser extends Parser {
             stack.pop();
             bracketToken = stack.peek();
 
-            logicalCheckChildren.add(new Node(NodeType.TERMINAL, curToken));
+            children.add(new Node(NodeType.TERMINAL, curToken));
             getNextToken();
 
         }
@@ -86,7 +87,6 @@ public class LogicalConditionParser extends Parser {
         if (curToken.category == Category.LOGICAL_COMBINE) {
 
             children.add(new Node(NodeType.TERMINAL, curToken));
-            getNextToken();
             analyseLogicalCondition(children, isSubQuery);
 
         } else if (curTokenPos == tokens.size() || curToken.category == Category.KEYWORD) {
@@ -141,9 +141,6 @@ public class LogicalConditionParser extends Parser {
 
             }
         }
-
-        stack.pop();
-        stack.pop();
     }
 
     public static void analyseLike(List<Node> children) throws Exception {
@@ -303,5 +300,18 @@ public class LogicalConditionParser extends Parser {
             case "BETWEEN" -> analyseBetween(children);
             default -> throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
         }
+    }
+
+    public static void clearLogicalExpInStack() {
+
+        Token curStackToken = stack.peek();
+
+        while (curStackToken.category != Category.KEYWORD && !curStackToken.lexeme.equals("(")) {
+
+            stack.pop();
+            curStackToken = stack.peek();
+
+        }
+
     }
 }

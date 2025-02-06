@@ -1,7 +1,6 @@
 package sql.to.mongodb.translator.parser;
 
-import sql.to.mongodb.translator.entities.Node;
-import sql.to.mongodb.translator.entities.Token;
+import sql.to.mongodb.translator.scanner.Token;
 import sql.to.mongodb.translator.enums.Category;
 import sql.to.mongodb.translator.enums.NodeType;
 import sql.to.mongodb.translator.interfaces.LambdaCallable;
@@ -21,16 +20,22 @@ public class Parser {
     protected static Stack<Token> stack = new Stack<>();
 
     public Parser(List<Token> tokens, List<String> errors) {
+
         this.tokens = tokens;
         this.errors = errors;
     }
 
     protected static void getNextToken() {
+
         if (curTokenPos != tokens.size()) {
+
             curToken = tokens.get(curTokenPos);
             ++curTokenPos;
+
         } else if (curToken.category != Category.UNDEFINED) {
+
             curToken = new Token("UNDEFINED", Category.UNDEFINED);
+
         }
     }
 
@@ -43,6 +48,7 @@ public class Parser {
 
             stack.push(new Token("0", Category.PROC_NUMBER));
             analyseSelect(children, true);
+            getNextToken();
 
         } else if (!isSubQuery) {
 
@@ -115,9 +121,6 @@ public class Parser {
         if (curToken.lexeme.equals("ORDER")) {
 
         }
-
-        children.add(new Node(NodeType.TERMINAL, curToken));
-        getNextToken();
     }
 
     protected static void processOperandThroughStack(Token token) {
@@ -145,7 +148,6 @@ public class Parser {
         }
     }
 
-    // !!! добавить параметр - лямбду для проверки соответствия подзапроса некому условию
     protected static boolean analyseOperand(List<Node> children,
                                             LambdaCallable func,
                                             LambdaComparable subQueryCheck) throws Exception {
@@ -160,18 +162,19 @@ public class Parser {
 
             }
 
-            List<Node> identifierChildren = new ArrayList<>();
-            identifierChildren.add(new Node(NodeType.TERMINAL, curToken));
+            children.add(new Node(NodeType.TERMINAL, curToken));
             getNextToken();
 
             if (curToken.lexeme.equals(".")) {
 
+                List<Node> identifierChildren = new ArrayList<>();
+                identifierChildren.add(children.removeLast());
+
                 getNextToken();
                 identifierChildren.add(terminal(t -> t.category == Category.IDENTIFIER));
 
+                children.add(new Node(NodeType.IDENTIFIER, identifierChildren));
             }
-
-            children.add(new Node(NodeType.IDENTIFIER, identifierChildren));
 
         } else if (curToken.category.equals(Category.NUMBER)
                 || curToken.category.equals(Category.LITERAL)) {
@@ -208,16 +211,20 @@ public class Parser {
 
         if (curToken.lexeme.equals("AS")) {
 
+            children.add(new Node(NodeType.TERMINAL, curToken));
             getNextToken();
             children.add(terminal(t -> t.category.equals(Category.IDENTIFIER)));
 
-        } else if (curToken.category.equals(Category.IDENTIFIER)) {
+        } else if (curToken.category == Category.IDENTIFIER) {
 
-            getNextToken();
+           // getNextToken();
+            children.add(new Node(NodeType.TERMINAL, new Token("AS" , Category.KEYWORD)));
+            children.add(terminal(t -> t.category.equals(Category.IDENTIFIER)));
 
         } else if (children.getLast().getNodeType() == NodeType.QUERY) {
 
             throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+
         }
 
     }
@@ -243,6 +250,7 @@ public class Parser {
         if (curToken.category == Category.ARITHMETIC_OPERATOR) {
 
             children.add(new Node(NodeType.TERMINAL, curToken));
+            getNextToken();
 
             if (analyseOperand(children,
                     null,
@@ -253,6 +261,7 @@ public class Parser {
                     throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
 
                 }
+
             } else if (curToken.category == Category.AGGREGATE) {
 
                 FunctionsParser.analyseAggregate(children, isColumn);
@@ -262,16 +271,36 @@ public class Parser {
                 throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
 
             }
+
+            analyseArithmeticRec(children, isColumn);
+        }
+    }
+
+    protected static void checkToken(LambdaComparable comparator) throws Exception {
+
+        if (comparator.execute(curToken)) {
+
+            getNextToken();
+
+        } else {
+
+            throw new Exception(curToken + " expected instead of " + curToken);
+
         }
     }
 
     protected static Node terminal(LambdaComparable comparator) throws Exception {
+
         if (comparator.execute(curToken)) {
+
             Node terminalNode = new Node(NodeType.TERMINAL, curToken);
             getNextToken();
             return terminalNode;
+
         } else {
+
             throw new Exception(curToken + " expected instead of " + curToken);
+
         }
     }
 }
