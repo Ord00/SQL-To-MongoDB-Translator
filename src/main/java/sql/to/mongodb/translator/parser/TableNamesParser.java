@@ -14,7 +14,7 @@ public class TableNamesParser extends Parser {
         super(tokens, errors);
     }
 
-    public static Node analyseTableNames(List<Node> children, boolean isFirstTable) throws Exception {
+    public static Node analyseTableNames(List<Node> children, boolean isFirstTable, boolean isSubQuery) throws Exception {
 
         if (isFirstTable) {
 
@@ -25,7 +25,7 @@ public class TableNamesParser extends Parser {
 
                 children.add(analyseJoin());
                 children.add(analyseTable(false));
-                children.add(analyseLogicalCondition());
+                children.add(analyseLogicalCondition(isSubQuery));
 
             }
 
@@ -33,7 +33,7 @@ public class TableNamesParser extends Parser {
 
             children.add(analyseJoin());
             children.add(analyseTable(false));
-            children.add(analyseLogicalCondition());
+            children.add(analyseLogicalCondition(isSubQuery));
 
         }
 
@@ -44,7 +44,7 @@ public class TableNamesParser extends Parser {
 
         } else {
 
-            return analyseTableNames(children, false);
+            return analyseTableNames(children, false, isSubQuery);
 
         }
     }
@@ -97,7 +97,7 @@ public class TableNamesParser extends Parser {
         return new Node(NodeType.JOIN, children);
     }
 
-    public static Node analyseLogicalCondition() throws Exception {
+    public static Node analyseLogicalCondition(boolean isSubQuery) throws Exception {
 
         List<Node> children = new ArrayList<>();
 
@@ -111,7 +111,7 @@ public class TableNamesParser extends Parser {
 
             }
 
-            case "ON" -> LogicalConditionParser.analyseLogicalCondition(children);
+            case "ON" -> LogicalConditionParser.analyseLogicalCondition(children, isSubQuery);
 
         }
 

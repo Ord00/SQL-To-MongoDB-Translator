@@ -12,7 +12,12 @@ public class Main {
         Scanner scanner = new Scanner();
         List<Token> tokens = new ArrayList<>();
         List<String> errors = new ArrayList<>();
-        scanner.tryAnalyse("SELECT MIN(TicketPrice) AS MinTicketPrice, MAX(TicketPrice) AS MaxTicketPrice FROM Race", tokens, errors);
+        scanner.tryAnalyse("SELECT SUM(Namesakes.PeopleCount) AS NamesakesCount\n" +
+                "FROM (SELECT COUNT(*) AS PeopleCount\n" +
+                "\t FROM Staff\n" +
+                "\t GROUP BY LastName\n" +
+                "\t HAVING COUNT(*) > 1\n" +
+                "\t ) AS Namesakes", tokens, errors);
         System.out.println(tokens);
 
         Parser parser = new Parser(tokens, errors);

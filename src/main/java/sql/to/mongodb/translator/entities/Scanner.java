@@ -87,7 +87,9 @@ public class Scanner implements LexicallyAnalysable {
                 "\\)",
                 "<",
                 ">",
-                "="
+                "=",
+                "\n",
+                "\t"
         ));
 
         List<String> parts = new ArrayList<>();

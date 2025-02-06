@@ -42,7 +42,7 @@ public class Parser {
         if (isSubQuery && curToken.lexeme.equals("SELECT")) {
 
             stack.push(new Token("0", Category.PROC_NUMBER));
-            analyseSelect(children);
+            analyseSelect(children, true);
 
         } else if (!isSubQuery) {
 
@@ -51,7 +51,7 @@ public class Parser {
                 case "SELECT" -> {
 
                     stack.push(new Token("0", Category.PROC_NUMBER));
-                    analyseSelect(children);
+                    analyseSelect(children, false);
 
                 }
 
@@ -62,7 +62,7 @@ public class Parser {
         return new Node(NodeType.QUERY, children);
     }
 
-    private static void analyseSelect(List<Node> children ) throws Exception {
+    private static void analyseSelect(List<Node> children, boolean isSubQuery) throws Exception {
 
         children.add(new Node(NodeType.TERMINAL, curToken));
         getNextToken();
@@ -74,15 +74,19 @@ public class Parser {
         getNextToken();
 
         List<Node> tableNamesChildren = new ArrayList<>();
-        children.add(TableNamesParser.analyseTableNames(tableNamesChildren, true));
+        children.add(TableNamesParser.analyseTableNames(tableNamesChildren, true, isSubQuery));
 
         if (curToken.lexeme.equals("WHERE")) {
+
+            stack.push(curToken);
 
             children.add(new Node(NodeType.TERMINAL, curToken));
 
             List<Node> whereChildren = new ArrayList<>();
-            LogicalConditionParser.analyseLogicalCondition(whereChildren);
+            LogicalConditionParser.analyseLogicalCondition(whereChildren, isSubQuery);
             children.add(new Node(NodeType.LOGICAL_CONDITION, whereChildren));
+
+            stack.pop();
         }
 
         if (curToken.lexeme.equals("GROUP")) {
@@ -97,11 +101,15 @@ public class Parser {
 
         if (curToken.lexeme.equals("HAVING")) {
 
+            stack.push(curToken);
+
             children.add(new Node(NodeType.TERMINAL, curToken));
 
             List<Node> havingChildren = new ArrayList<>();
-            LogicalConditionParser.analyseLogicalCondition(havingChildren);
+            LogicalConditionParser.analyseLogicalCondition(havingChildren, isSubQuery);
             children.add(new Node(NodeType.LOGICAL_CONDITION, havingChildren));
+
+            stack.pop();
         }
 
         if (curToken.lexeme.equals("ORDER")) {

@@ -14,7 +14,7 @@ public class LogicalConditionParser extends Parser {
         super(tokens, errors);
     }
 
-    public static void analyseLogicalCondition(List<Node> children) throws Exception {
+    public static void analyseLogicalCondition(List<Node> children, boolean isSubQuery) throws Exception {
 
         List<Node> logicalCheckChildren = new ArrayList<>();
 
@@ -55,6 +55,8 @@ public class LogicalConditionParser extends Parser {
 
             analyseArithmeticExpression(logicalCheckChildren, false, t -> stack.push(t));
 
+            analyseOperation(logicalCheckChildren);
+
         } else {
 
             throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
@@ -75,7 +77,7 @@ public class LogicalConditionParser extends Parser {
 
         }
 
-        if (curToken.lexeme.equals(")")) {
+        if (!isSubQuery && curToken.lexeme.equals(")")) {
 
             throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
 
@@ -85,7 +87,7 @@ public class LogicalConditionParser extends Parser {
 
             children.add(new Node(NodeType.TERMINAL, curToken));
             getNextToken();
-            analyseLogicalCondition(children);
+            analyseLogicalCondition(children, isSubQuery);
 
         } else if (curTokenPos == tokens.size() || curToken.category == Category.KEYWORD) {
 
@@ -95,7 +97,7 @@ public class LogicalConditionParser extends Parser {
 
             }
 
-        } else {
+        } else if (!(isSubQuery && curToken.lexeme.equals(")"))) {
 
             throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
 
