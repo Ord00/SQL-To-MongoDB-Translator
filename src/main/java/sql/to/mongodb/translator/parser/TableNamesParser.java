@@ -17,13 +17,14 @@ public class TableNamesParser extends Parser {
 
         if (isFirstTable) {
 
-            children.add(analyseTable(true));
+            children.add(analyseTable());
 
             if (curTokenPos != tokens.size()
-            && !List.of("WHERE", "GROUP", "HAVING", "LIMIT", "SKIP", "ORDER").contains(curToken.lexeme)) {
+            && !List.of("WHERE", "GROUP", "HAVING", "LIMIT", "SKIP", "ORDER").contains(curToken.lexeme)
+            && !(isSubQuery && curToken.lexeme.equals(")"))) {
 
                 children.add(analyseJoin());
-                children.add(analyseTable(false));
+                children.add(analyseTable());
                 children.add(analyseLogicalCondition(isSubQuery));
 
             }
@@ -31,13 +32,14 @@ public class TableNamesParser extends Parser {
         } else {
 
             children.add(analyseJoin());
-            children.add(analyseTable(false));
+            children.add(analyseTable());
             children.add(analyseLogicalCondition(isSubQuery));
 
         }
 
         if (curTokenPos == tokens.size()
-                || List.of("WHERE", "GROUP", "HAVING", "LIMIT", "SKIP", "ORDER").contains(curToken.lexeme)) {
+                || List.of("WHERE", "GROUP", "HAVING", "LIMIT", "SKIP", "ORDER").contains(curToken.lexeme)
+                || isSubQuery && curToken.lexeme.equals(")")) {
 
             return new Node(NodeType.TABLE_NAMES, children);
 
@@ -48,7 +50,7 @@ public class TableNamesParser extends Parser {
         }
     }
 
-    public static Node analyseTable(boolean isFirstTable) throws Exception {
+    public static Node analyseTable() throws Exception {
 
         List<Node> children = new ArrayList<>();
 

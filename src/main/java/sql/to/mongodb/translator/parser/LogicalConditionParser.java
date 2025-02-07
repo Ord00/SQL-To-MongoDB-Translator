@@ -27,6 +27,14 @@ public class LogicalConditionParser extends Parser {
 
         }
 
+        if (curToken.lexeme.equals("SELECT")) {
+
+            stack.pop();
+            children.removeLast();
+            getPrevToken();
+
+        }
+
         if (analyseOperand(logicalCheckChildren,
                 t -> stack.push(t),
                 t -> t.category != Category.PROC_NUMBER,
@@ -134,7 +142,12 @@ public class LogicalConditionParser extends Parser {
                 children.add(new Node(NodeType.TERMINAL, curToken));
                 getNextToken();
 
-                children.add(terminal(t -> t.lexeme.equals("(")));
+                if (!curToken.lexeme.equals("(")) {
+
+                    throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+
+                }
+
                 children.add(tryAnalyse(true));
 
                 if (stack.peek().category == Category.PROC_NUMBER) {

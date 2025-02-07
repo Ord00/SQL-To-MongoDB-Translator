@@ -39,6 +39,13 @@ public class Parser {
         }
     }
 
+    protected static void getPrevToken() {
+
+        --curTokenPos;
+        curToken = tokens.get(curTokenPos - 1);
+
+    }
+
     public static Node tryAnalyse(boolean isSubQuery) throws Exception {
 
         List<Node> children = new ArrayList<>();
@@ -200,11 +207,11 @@ public class Parser {
 
             }
 
-            if (!curToken.lexeme.equals(")")) {
+/*            if (!curToken.lexeme.equals(")")) {
 
                 throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
 
-            }
+            }*/
 
         } else {
 
@@ -225,7 +232,6 @@ public class Parser {
 
         } else if (curToken.category == Category.IDENTIFIER) {
 
-           // getNextToken();
             children.add(new Node(NodeType.TERMINAL, new Token("AS" , Category.KEYWORD)));
             children.add(terminal(t -> t.category.equals(Category.IDENTIFIER)));
 
