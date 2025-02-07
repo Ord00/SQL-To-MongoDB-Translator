@@ -17,17 +17,9 @@ public class Main {
         List<String> errors = new ArrayList<>();
 
         scanner.tryAnalyse("""
-                SELECT Tm.Id_team, Tm.TeamName, Cn.CountryName
-                                 FROM Staff S JOIN TeamStaff TS
-                                 	ON Id_staff = TS.Staff
-                                 	JOIN Team Tm
-                                 	ON TS.Team = Tm.Id_team
-                                 	JOIN Country Cn
-                                 	ON Tm.Country = Cn.Id_country
-                                 WHERE S.Post = 'Руководитель'
-                                 	AND (TS.ExitDate IS NULL OR 1 + 2 + TS.ExitDate <= TS.ExitDate)
-                                 GROUP BY Tm.Id_team, Tm.TeamName, Cn.CountryName
-                                 HAVING COUNT(*) = 1""", tokens, errors);
+                SELECT CompetitionName, Race.*
+                FROM Competition LEFT JOIN Race
+                	 ON Id_competition = Competition""", tokens, errors);
 
         System.out.println("\nResult of scanner:\n");
         System.out.println(tokens);

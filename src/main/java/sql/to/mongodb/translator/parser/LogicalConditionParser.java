@@ -29,7 +29,8 @@ public class LogicalConditionParser extends Parser {
 
         if (analyseOperand(logicalCheckChildren,
                 t -> stack.push(t),
-                t -> t.category != Category.PROC_NUMBER)) {
+                t -> t.category != Category.PROC_NUMBER,
+                false)) {
 
             analyseArithmeticExpression(logicalCheckChildren, false, t -> stack.push(t));
 
@@ -125,7 +126,8 @@ public class LogicalConditionParser extends Parser {
 
         if (!analyseOperand(children,
                 t -> stack.push(t),
-                t -> t.category != Category.PROC_NUMBER)) {
+                t -> t.category != Category.PROC_NUMBER,
+                false)) {
 
             if (curToken.lexeme.equals("ANY") || curToken.lexeme.equals("SOME") || curToken.lexeme.equals("ALL")) {
 
@@ -165,7 +167,8 @@ public class LogicalConditionParser extends Parser {
 
         if (!analyseOperand(children,
                 t -> stack.push(t),
-                t -> t.category != Category.PROC_NUMBER)
+                t -> t.category != Category.PROC_NUMBER,
+                false)
                 || stack.pop().category == Category.NUMBER) {
 
             throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
@@ -179,7 +182,8 @@ public class LogicalConditionParser extends Parser {
 
         if (!analyseOperand(children,
                 t -> stack.push(t),
-                t -> t.category != Category.PROC_NUMBER)) {
+                t -> t.category != Category.PROC_NUMBER,
+                false)) {
 
             throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
 
@@ -229,7 +233,8 @@ public class LogicalConditionParser extends Parser {
 
         if (!analyseOperand(children,
                 null,
-                t -> t.category != Category.PROC_NUMBER)) {
+                t -> t.category != Category.PROC_NUMBER,
+                false)) {
 
             throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
 
@@ -241,7 +246,8 @@ public class LogicalConditionParser extends Parser {
 
         if (!analyseOperand(children,
                 null,
-                t -> t.category != Category.PROC_NUMBER)) {
+                t -> t.category != Category.PROC_NUMBER,
+                false)) {
 
             throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
 

@@ -35,7 +35,10 @@ public class FunctionsParser extends Parser {
             aggregateChildren.add(new Node(NodeType.TERMINAL, curToken));
             getNextToken();
 
-        } else if (!analyseOperand(aggregateChildren, null, t -> false)) {
+        } else if (!analyseOperand(aggregateChildren,
+                null,
+                t -> false,
+                isColumn)) {
 
             throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
 

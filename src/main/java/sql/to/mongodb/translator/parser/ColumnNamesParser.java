@@ -41,7 +41,8 @@ public class ColumnNamesParser extends Parser {
 
             if (!analyseOperand(children,
                     Parser::processOperandThroughStack,
-                    t -> t.category != Category.PROC_NUMBER)) {
+                    t -> t.category != Category.PROC_NUMBER,
+                    true)) {
 
                 throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
 

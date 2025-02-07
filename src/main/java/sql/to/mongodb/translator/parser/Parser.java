@@ -149,16 +149,17 @@ public class Parser {
     }
 
     protected static boolean analyseOperand(List<Node> children,
-                                            LambdaCallable func,
-                                            LambdaComparable subQueryCheck) throws Exception {
+                                            LambdaCallable processToken,
+                                            LambdaComparable subQueryCheck,
+                                            boolean isColumn) throws Exception {
 
         boolean isFound = true;
 
         if (curToken.category == Category.IDENTIFIER) {
 
-            if (func != null) {
+            if (processToken != null) {
 
-                func.execute(curToken);
+                processToken.execute(curToken);
 
             }
 
@@ -171,7 +172,8 @@ public class Parser {
                 identifierChildren.add(children.removeLast());
 
                 getNextToken();
-                identifierChildren.add(terminal(t -> t.category == Category.IDENTIFIER));
+                identifierChildren.add(terminal(t -> t.category == Category.IDENTIFIER
+                        || isColumn && t.category == Category.ALL));
 
                 children.add(new Node(NodeType.IDENTIFIER, identifierChildren));
             }
@@ -179,9 +181,9 @@ public class Parser {
         } else if (curToken.category.equals(Category.NUMBER)
                 || curToken.category.equals(Category.LITERAL)) {
 
-            if (func != null) {
+            if (processToken != null) {
 
-                func.execute(curToken);
+                processToken.execute(curToken);
 
             }
 
@@ -260,7 +262,8 @@ public class Parser {
 
             if (analyseOperand(children,
                     null,
-                    t -> t.category != Category.PROC_NUMBER && t.category != Category.LITERAL)) {
+                    t -> t.category != Category.PROC_NUMBER && t.category != Category.LITERAL,
+                    isColumn)) {
 
                 if (stack.peek().category == Category.LITERAL) {
 

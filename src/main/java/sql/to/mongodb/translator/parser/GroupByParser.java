@@ -16,7 +16,8 @@ public class GroupByParser extends Parser {
 
         if (analyseOperand(children,
                 t -> stack.push(t),
-                t -> t.category != Category.PROC_NUMBER)) {
+                t -> t.category != Category.PROC_NUMBER,
+                false)) {
 
             Token token = stack.pop();
 
@@ -37,7 +38,7 @@ public class GroupByParser extends Parser {
             getNextToken();
             return analyseGroupBy(children);
 
-        } else if (curTokenPos == tokens.size() - 1 || curToken.category == Category.KEYWORD) {
+        } else if (curTokenPos == tokens.size() || curToken.category == Category.KEYWORD) {
 
             return new Node(NodeType.GROUP_BY, children);
 
