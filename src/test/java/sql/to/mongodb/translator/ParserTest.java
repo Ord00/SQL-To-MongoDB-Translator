@@ -86,4 +86,16 @@ public class ParserTest {
         Parser parser = new Parser(tokens, errors);
         Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(false));
     }
+
+    @Test
+    public void testOrderBy() {
+
+        SCANNER.tryAnalyse("""
+                SELECT R.*, R.TicketPrice * R.SoldTickets AS Profit
+                FROM Race R
+                ORDER BY R.TicketPrice * R.SoldTickets DESC""", tokens, errors);
+
+        Parser parser = new Parser(tokens, errors);
+        Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(false));
+    }
 }

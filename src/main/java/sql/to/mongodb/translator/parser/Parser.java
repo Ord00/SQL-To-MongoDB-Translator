@@ -1,5 +1,6 @@
 package sql.to.mongodb.translator.parser;
 
+import sql.to.mongodb.translator.interfaces.LambdaReleasable;
 import sql.to.mongodb.translator.scanner.Token;
 import sql.to.mongodb.translator.enums.Category;
 import sql.to.mongodb.translator.enums.NodeType;
@@ -132,10 +133,17 @@ public class Parser {
 
         if (curToken.lexeme.equals("ORDER")) {
 
+            children.add(new Node(NodeType.TERMINAL, curToken));
+            getNextToken();
+            children.add(terminal(t -> t.lexeme.equals("BY")));
+
+            List<Node> orderByChildren = new ArrayList<>();
+            children.add(OrderByParser.analyseOrderBy(orderByChildren, isSubQuery));
+
         }
     }
 
-    protected static void processOperandThroughStack(Token token) {
+    protected static void processColumnThroughStack(Token token) {
 
         Token prevToken = stack.pop();
 
@@ -156,6 +164,23 @@ public class Parser {
         } else {
 
             stack.push(new Token("2", Category.PROC_NUMBER));
+
+        }
+    }
+
+    protected static void releaseColumnThroughStack() {
+
+        Token prevToken = stack.pop();
+
+        if (prevToken.category == Category.PROC_NUMBER) {
+
+            int procNum = Integer.parseInt(prevToken.lexeme);
+            --procNum;
+            stack.push(new Token(Integer.toString(procNum), Category.PROC_NUMBER));
+
+        } else {
+
+            stack.push(new Token("0", Category.PROC_NUMBER));
 
         }
     }
@@ -244,7 +269,11 @@ public class Parser {
 
     }
 
-    protected static void analyseArithmeticExpression(List<Node> children, boolean isColumn, LambdaCallable func) throws Exception {
+    protected static void analyseArithmeticExpression(
+            List<Node> children,
+            boolean isColumn,
+            LambdaCallable processToken,
+            LambdaReleasable releaseToken) throws Exception {
 
         List<Node> arithmeticChildren = new ArrayList<>();
         arithmeticChildren.add(children.getLast());
@@ -253,7 +282,8 @@ public class Parser {
 
         if (arithmeticChildren.size() > 1) {
 
-            func.execute(new Token("1", Category.NUMBER));
+            releaseToken.execute();
+            processToken.execute(new Token("1", Category.NUMBER));
             children.removeLast();
             children.add(new Node(NodeType.ARITHMETIC_EXP, arithmeticChildren));
 
@@ -262,7 +292,7 @@ public class Parser {
 
     protected static void analyseArithmeticRec(List<Node> children, boolean isColumn) throws Exception {
 
-        if (curToken.category == Category.ARITHMETIC_OPERATOR) {
+        if (curToken.category == Category.ARITHMETIC_OPERATOR || curToken.category == Category.ALL) {
 
             children.add(new Node(NodeType.TERMINAL, curToken));
             getNextToken();

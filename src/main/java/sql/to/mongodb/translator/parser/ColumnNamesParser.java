@@ -31,16 +31,19 @@ public class ColumnNamesParser extends Parser {
 
         } else if (curToken.category == Category.AGGREGATE) {
 
-            processOperandThroughStack(curToken);
+            processColumnThroughStack(curToken);
 
             FunctionsParser.analyseAggregate(children, true);
 
-            analyseArithmeticExpression(children, true, Parser::processOperandThroughStack);
+            analyseArithmeticExpression(children,
+                    true,
+                    Parser::processColumnThroughStack,
+                    Parser::releaseColumnThroughStack);
 
         } else {
 
             if (!analyseOperand(children,
-                    Parser::processOperandThroughStack,
+                    Parser::processColumnThroughStack,
                     t -> t.category != Category.PROC_NUMBER,
                     true)) {
 
@@ -48,7 +51,10 @@ public class ColumnNamesParser extends Parser {
 
             } else {
 
-                analyseArithmeticExpression(children, true, Parser::processOperandThroughStack);
+                analyseArithmeticExpression(children,
+                        true,
+                        Parser::processColumnThroughStack,
+                        Parser::releaseColumnThroughStack);
 
             }
         }
