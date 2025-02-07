@@ -20,8 +20,8 @@ public class TableNamesParser extends Parser {
             children.add(analyseTable());
 
             if (curTokenPos != tokens.size()
-            && !List.of("WHERE", "GROUP", "HAVING", "LIMIT", "SKIP", "ORDER").contains(curToken.lexeme)
-            && !(isSubQuery && curToken.lexeme.equals(")"))) {
+                    && !List.of("WHERE", "GROUP", "HAVING", "LIMIT", "SKIP", "ORDER").contains(curToken.lexeme)
+                    && !(isSubQuery && curToken.lexeme.equals(")"))) {
 
                 children.add(analyseJoin());
                 children.add(analyseTable());

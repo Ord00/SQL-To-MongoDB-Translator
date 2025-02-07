@@ -9,7 +9,7 @@ import java.util.List;
 
 public class FunctionsParser extends Parser {
 
-    public  FunctionsParser(List<Token> tokens, List<String> errors) {
+    public FunctionsParser(List<Token> tokens, List<String> errors) {
         super(tokens, errors);
     }
 

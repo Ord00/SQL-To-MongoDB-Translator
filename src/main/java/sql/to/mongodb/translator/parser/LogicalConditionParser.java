@@ -57,6 +57,8 @@ public class LogicalConditionParser extends Parser {
 
             logicalCheckChildren.add(tryAnalyse(true));
 
+            checkToken(t -> t.lexeme.equals(")"));
+
         } else if (curToken.lexeme.equals("EXISTS")) {
 
             getNextToken();
@@ -150,6 +152,8 @@ public class LogicalConditionParser extends Parser {
 
                 children.add(tryAnalyse(true));
 
+                checkToken(t -> t.lexeme.equals(")"));
+
                 if (stack.peek().category == Category.PROC_NUMBER) {
 
                     throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
@@ -242,6 +246,35 @@ public class LogicalConditionParser extends Parser {
         };
     }
 
+    public static boolean analyseInOfSubquery(List<Node> children, LambdaComparable subQueryCheck) throws Exception {
+
+        boolean isFound = true;
+
+        if (curToken.lexeme.equals("SELECT")) {
+
+            getPrevToken();
+            Node subQueryIn = tryAnalyse(true);
+
+            if (!subQueryCheck.execute(stack.peek())) {
+
+                throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+
+            } else if (curToken.lexeme.equals(")")) {
+
+                children.add(new Node(NodeType.ATTRIBUTES, List.of(subQueryIn)));
+                getNextToken();
+            }
+
+        } else {
+
+            isFound = false;
+
+        }
+
+        return isFound;
+
+    }
+
     public static void analyseBetween(List<Node> children) throws Exception {
 
         if (!analyseOperand(children,
@@ -302,9 +335,14 @@ public class LogicalConditionParser extends Parser {
                     case "IN" -> {
                         children.add(new Node(NodeType.TERMINAL, curToken));
                         getNextToken();
-                        children.add(terminal(t -> t.lexeme.equals("(")));
-                        List<Node> inChildren = new ArrayList<>();
-                        analyseIn(inChildren, false);
+                        checkToken(t -> t.lexeme.equals("("));
+
+                        if (!analyseInOfSubquery(children, t -> t.category != Category.PROC_NUMBER)) {
+
+                            List<Node> inChildren = new ArrayList<>();
+                            analyseIn(inChildren, false);
+
+                        }
                     }
                     case "BETWEEN" -> analyseBetween(children);
                     default -> throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
@@ -318,9 +356,14 @@ public class LogicalConditionParser extends Parser {
             case "IN" -> {
                 children.add(new Node(NodeType.TERMINAL, curToken));
                 getNextToken();
-                children.add(terminal(t -> t.lexeme.equals("(")));
-                List<Node> inChildren = new ArrayList<>();
-                analyseIn(inChildren, false);
+                checkToken(t -> t.lexeme.equals("("));
+
+                if (!analyseInOfSubquery(children, t -> t.category != Category.PROC_NUMBER)) {
+
+                    List<Node> inChildren = new ArrayList<>();
+                    analyseIn(inChildren, false);
+
+                }
             }
             case "BETWEEN" -> analyseBetween(children);
             default -> throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));

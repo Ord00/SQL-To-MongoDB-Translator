@@ -55,7 +55,12 @@ public class Parser {
 
             stack.push(new Token("0", Category.PROC_NUMBER));
             analyseSelect(children, true);
-            getNextToken();
+
+            if (!curToken.lexeme.equals(")")) {
+
+                getNextToken();
+
+            }
 
         } else if (!isSubQuery) {
 
@@ -201,17 +206,13 @@ public class Parser {
 
             children.add(tryAnalyse(true));
 
+            checkToken(t -> t.lexeme.equals(")"));
+
             if (!subQueryCheck.execute(stack.peek())) {
 
                 throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
 
             }
-
-/*            if (!curToken.lexeme.equals(")")) {
-
-                throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
-
-            }*/
 
         } else {
 
