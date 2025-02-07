@@ -23,6 +23,10 @@ public class IdentifierFSMBuilder extends FSMBuilder {
 
         sigma.add('_');
 
+        for (char c = '0'; c <= '9'; c++) {
+            sigma.add(c);
+        }
+
         FSM fsm = new FSM();
         fsm.sigma = sigma;
 
@@ -32,8 +36,11 @@ public class IdentifierFSMBuilder extends FSMBuilder {
         fsm.states.add(stateEnd);
 
         for (Character letter : sigma) {
-            FSMTransition transition0 = new FSMTransition(state0, stateEnd, letter);
-            fsm.transitions.add(transition0);
+
+            if ((letter < '0' || letter > '9') && letter != '_') {
+                FSMTransition transition0 = new FSMTransition(state0, stateEnd, letter);
+                fsm.transitions.add(transition0);
+            }
             FSMTransition transitionEnd = new FSMTransition(stateEnd, stateEnd, letter);
             fsm.transitions.add(transitionEnd);
         }

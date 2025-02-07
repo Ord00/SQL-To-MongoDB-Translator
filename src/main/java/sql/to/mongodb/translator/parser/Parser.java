@@ -198,6 +198,12 @@ public class Parser {
 
             }
 
+            if (!curToken.lexeme.equals(")")) {
+
+                throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+
+            }
+
         } else {
 
             isFound = false;

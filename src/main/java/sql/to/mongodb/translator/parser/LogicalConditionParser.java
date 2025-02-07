@@ -39,7 +39,13 @@ public class LogicalConditionParser extends Parser {
 
             getNextToken();
             logicalCheckChildren.add(terminal(t -> t.lexeme.equals("EXISTS")));
-            logicalCheckChildren.add(terminal(t -> t.lexeme.equals("(")));
+
+            if (!curToken.lexeme.equals("(")) {
+
+                throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+
+            }
+
             logicalCheckChildren.add(tryAnalyse(true));
 
         } else if (curToken.lexeme.equals("EXISTS")) {

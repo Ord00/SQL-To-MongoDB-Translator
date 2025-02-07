@@ -52,7 +52,7 @@ public class ColumnNamesParser extends Parser {
             }
         }
 
-        analyseAlias(children.getLast().getChildren());
+        analyseAlias(children);
 
         return switch (curToken.lexeme) {
 
