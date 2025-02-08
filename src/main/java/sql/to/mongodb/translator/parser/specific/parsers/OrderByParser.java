@@ -1,7 +1,9 @@
-package sql.to.mongodb.translator.parser;
+package sql.to.mongodb.translator.parser.specific.parsers;
 
 import sql.to.mongodb.translator.enums.Category;
 import sql.to.mongodb.translator.enums.NodeType;
+import sql.to.mongodb.translator.parser.Node;
+import sql.to.mongodb.translator.parser.Parser;
 import sql.to.mongodb.translator.scanner.Token;
 
 import java.util.List;
@@ -19,7 +21,10 @@ public class OrderByParser extends Parser {
                 t -> t.category != Category.PROC_NUMBER,
                 false)) {
 
-            analyseArithmeticExpression(children, true, t -> stack.push(t), () -> stack.pop());
+            analyseArithmeticExpression(children,
+                    false,
+                    t -> stack.push(t),
+                    () -> stack.pop());
 
             Token token = stack.pop();
 
@@ -27,7 +32,7 @@ public class OrderByParser extends Parser {
 
                 throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
 
-            } else if (token.category == Category.NUMBER) {
+            } else if (token.category == Category.NUMBER && !token.lexeme.equals("NON")) {
 
                 int curNum = Integer.parseInt(token.lexeme);
 
@@ -60,7 +65,8 @@ public class OrderByParser extends Parser {
             getNextToken();
             return analyseOrderBy(children, isSubQuery);
 
-        } else if (curTokenPos == tokens.size() || isSubQuery && curToken.lexeme.equals(")")) {
+        } else if (curTokenPos == tokens.size() || curToken.category == Category.KEYWORD
+                || isSubQuery && curToken.lexeme.equals(")")) {
 
             return new Node(NodeType.ORDER_BY, children);
 

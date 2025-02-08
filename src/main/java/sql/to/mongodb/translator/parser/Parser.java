@@ -1,10 +1,16 @@
 package sql.to.mongodb.translator.parser;
 
 import sql.to.mongodb.translator.interfaces.LambdaReleasable;
+import sql.to.mongodb.translator.parser.specific.parsers.ColumnNamesParser;
+import sql.to.mongodb.translator.parser.specific.parsers.FunctionsParser;
+import sql.to.mongodb.translator.parser.specific.parsers.GroupByParser;
+import sql.to.mongodb.translator.parser.specific.parsers.LogicalConditionParser;
+import sql.to.mongodb.translator.parser.specific.parsers.OrderByParser;
+import sql.to.mongodb.translator.parser.specific.parsers.TableNamesParser;
 import sql.to.mongodb.translator.scanner.Token;
 import sql.to.mongodb.translator.enums.Category;
 import sql.to.mongodb.translator.enums.NodeType;
-import sql.to.mongodb.translator.interfaces.LambdaCallable;
+import sql.to.mongodb.translator.interfaces.LambdaProcessable;
 import sql.to.mongodb.translator.interfaces.LambdaComparable;
 
 import java.util.ArrayList;
@@ -74,7 +80,7 @@ public class Parser {
 
                 }
 
-                default -> throw new Exception("Wrong first of query");
+                default -> throw new Exception("Invalid query keyword!");
             }
         }
 
@@ -112,10 +118,10 @@ public class Parser {
 
             children.add(new Node(NodeType.TERMINAL, curToken));
             getNextToken();
-            children.add(terminal(t -> t.lexeme.equals("BY")));
+            children.add(terminal(t -> t.lexeme.equals("BY"), "BY"));
 
             List<Node> groupByChildren = new ArrayList<>();
-            children.add(GroupByParser.analyseGroupBy(groupByChildren));
+            children.add(GroupByParser.analyseGroupBy(groupByChildren, isSubQuery));
         }
 
         if (curToken.lexeme.equals("HAVING")) {
@@ -135,7 +141,7 @@ public class Parser {
 
             children.add(new Node(NodeType.TERMINAL, curToken));
             getNextToken();
-            children.add(terminal(t -> t.lexeme.equals("BY")));
+            children.add(terminal(t -> t.lexeme.equals("BY"), "BY"));
 
             List<Node> orderByChildren = new ArrayList<>();
             children.add(OrderByParser.analyseOrderBy(orderByChildren, isSubQuery));
@@ -186,7 +192,7 @@ public class Parser {
     }
 
     protected static boolean analyseOperand(List<Node> children,
-                                            LambdaCallable processToken,
+                                            LambdaProcessable processToken,
                                             LambdaComparable subQueryCheck,
                                             boolean isColumn) throws Exception {
 
@@ -210,7 +216,7 @@ public class Parser {
 
                 getNextToken();
                 identifierChildren.add(terminal(t -> t.category == Category.IDENTIFIER
-                        || isColumn && t.category == Category.ALL));
+                        || isColumn && t.category == Category.ALL, "Identifier or \"*\" in case of column"));
 
                 children.add(new Node(NodeType.IDENTIFIER, identifierChildren));
             }
@@ -231,11 +237,11 @@ public class Parser {
 
             children.add(tryAnalyse(true));
 
-            checkToken(t -> t.lexeme.equals(")"));
+            checkToken(t -> t.lexeme.equals(")"), ")");
 
             if (!subQueryCheck.execute(stack.peek())) {
 
-                throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+                throw new Exception("Invalid subquery type!");
 
             }
 
@@ -254,16 +260,16 @@ public class Parser {
 
             children.add(new Node(NodeType.TERMINAL, curToken));
             getNextToken();
-            children.add(terminal(t -> t.category.equals(Category.IDENTIFIER)));
+            children.add(terminal(t -> t.category.equals(Category.IDENTIFIER), "Identifier"));
 
         } else if (curToken.category == Category.IDENTIFIER) {
 
             children.add(new Node(NodeType.TERMINAL, new Token("AS" , Category.KEYWORD)));
-            children.add(terminal(t -> t.category.equals(Category.IDENTIFIER)));
+            children.add(terminal(t -> t.category.equals(Category.IDENTIFIER), "Identifier"));
 
         } else if (children.getLast().getNodeType() == NodeType.QUERY) {
 
-            throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+            throw new Exception("Subquery is missing elias!");
 
         }
 
@@ -272,7 +278,7 @@ public class Parser {
     protected static void analyseArithmeticExpression(
             List<Node> children,
             boolean isColumn,
-            LambdaCallable processToken,
+            LambdaProcessable processToken,
             LambdaReleasable releaseToken) throws Exception {
 
         List<Node> arithmeticChildren = new ArrayList<>();
@@ -283,7 +289,7 @@ public class Parser {
         if (arithmeticChildren.size() > 1) {
 
             releaseToken.execute();
-            processToken.execute(new Token("1", Category.NUMBER));
+            processToken.execute(new Token("NON", Category.NUMBER));
             children.removeLast();
             children.add(new Node(NodeType.ARITHMETIC_EXP, arithmeticChildren));
 
@@ -304,7 +310,7 @@ public class Parser {
 
                 if (stack.peek().category == Category.LITERAL) {
 
-                    throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+                    throw new Exception("Literal is involved in arithmetic operations!");
 
                 }
 
@@ -314,7 +320,10 @@ public class Parser {
 
             } else {
 
-                throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+                throw new Exception(String.format("Invalid member of arithmetic operations on %d between %s and %s!",
+                        curTokenPos,
+                        curToken.lexeme,
+                        tokens.get(curTokenPos)));
 
             }
 
@@ -322,7 +331,7 @@ public class Parser {
         }
     }
 
-    protected static void checkToken(LambdaComparable comparator) throws Exception {
+    protected static void checkToken(LambdaComparable comparator, String expectedToken) throws Exception {
 
         if (comparator.execute(curToken)) {
 
@@ -330,12 +339,15 @@ public class Parser {
 
         } else {
 
-            throw new Exception(curToken + " expected instead of " + curToken);
+            throw new Exception(String.format("%s expected instead of %s on %d!",
+                    expectedToken,
+                    curToken.lexeme,
+                    curTokenPos));
 
         }
     }
 
-    protected static Node terminal(LambdaComparable comparator) throws Exception {
+    protected static Node terminal(LambdaComparable comparator, String expectedToken) throws Exception {
 
         if (comparator.execute(curToken)) {
 
@@ -345,7 +357,10 @@ public class Parser {
 
         } else {
 
-            throw new Exception(curToken + " expected instead of " + curToken);
+            throw new Exception(String.format("%s expected instead of %s on %d!",
+                    expectedToken,
+                    curToken.lexeme,
+                    curTokenPos));
 
         }
     }
