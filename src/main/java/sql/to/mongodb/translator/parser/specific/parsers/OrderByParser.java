@@ -30,7 +30,7 @@ public class OrderByParser extends Parser {
 
             if (token.category == Category.LITERAL) {
 
-                throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+                throw new Exception(String.format("Invalid member of ORDER BY on %d!", curTokenPos));
 
             } else if (token.category == Category.NUMBER && !token.lexeme.equals("NON")) {
 
@@ -38,14 +38,14 @@ public class OrderByParser extends Parser {
 
                 if (curNum <= 0 || Integer.parseInt(stack.peek().lexeme) < curNum) {
 
-                    throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+                    throw new Exception(String.format("Invalid constant number in ORDER BY on %d!", curTokenPos));
 
                 }
             }
 
         } else {
 
-            throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+            throw new Exception(String.format("Invalid member of ORDER BY on %d!", curTokenPos));
 
         }
 
@@ -72,7 +72,7 @@ public class OrderByParser extends Parser {
 
         } else {
 
-            throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+            throw new Exception(String.format("Invalid link between members of ORDER BY on %d!", curTokenPos));
 
         }
     }

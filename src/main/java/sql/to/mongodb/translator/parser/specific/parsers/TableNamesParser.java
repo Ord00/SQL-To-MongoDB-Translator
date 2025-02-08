@@ -67,7 +67,7 @@ public class TableNamesParser extends Parser {
 
         } else {
 
-            throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+            throw new Exception(String.format("Invalid table on %d!", curTokenPos));
         }
 
         analyseAlias(children);
@@ -101,11 +101,13 @@ public class TableNamesParser extends Parser {
 
             }
 
-            default -> throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+            default -> throw new Exception(String.format("Expected JOIN clause instead of %s on %d!",
+                    curToken,
+                    curTokenPos));
 
         }
 
-        children.add(terminal(t -> t.lexeme.equals("JOIN")));
+        children.add(terminal(t -> t.lexeme.equals("JOIN"), "JOIN"));
 
         return new Node(NodeType.JOIN, children);
     }
@@ -118,9 +120,9 @@ public class TableNamesParser extends Parser {
 
             case "USING" -> {
 
-                children.add(terminal(t -> t.lexeme.equals("(")));
-                children.add(terminal(t -> t.category == Category.IDENTIFIER));
-                children.add(terminal(t -> t.lexeme.equals(")")));
+                children.add(terminal(t -> t.lexeme.equals("("), "("));
+                children.add(terminal(t -> t.category == Category.IDENTIFIER, "Identifier"));
+                children.add(terminal(t -> t.lexeme.equals(")"), ")"));
 
             }
 

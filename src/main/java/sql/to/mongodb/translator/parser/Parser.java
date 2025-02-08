@@ -241,7 +241,7 @@ public class Parser {
 
             if (!subQueryCheck.execute(stack.peek())) {
 
-                throw new Exception("Invalid subquery type!");
+                throw new Exception(String.format("Invalid subquery type on %d!", curTokenPos));
 
             }
 
@@ -269,7 +269,7 @@ public class Parser {
 
         } else if (children.getLast().getNodeType() == NodeType.QUERY) {
 
-            throw new Exception("Subquery is missing elias!");
+            throw new Exception(String.format("Subquery is missing elias on %d!", curTokenPos));
 
         }
 
@@ -310,7 +310,7 @@ public class Parser {
 
                 if (stack.peek().category == Category.LITERAL) {
 
-                    throw new Exception("Literal is involved in arithmetic operations!");
+                    throw new Exception(String.format("Literal is involved in arithmetic operations on %d!", curTokenPos));
 
                 }
 

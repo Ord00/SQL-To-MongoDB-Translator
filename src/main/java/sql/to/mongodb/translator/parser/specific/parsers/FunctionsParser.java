@@ -19,7 +19,7 @@ public class FunctionsParser extends Parser {
 
         if (!isColumn && !stack.peek().lexeme.equals("HAVING")) {
 
-            throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+            throw new Exception(String.format("Aggregate function in incorrect section on %d!", curTokenPos));
 
         }
 
@@ -42,11 +42,11 @@ public class FunctionsParser extends Parser {
                 t -> false,
                 isColumn)) {
 
-            throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+            throw new Exception(String.format("Incorrect attribute of aggregate function on %d!", curTokenPos));
 
         }
 
-        checkToken(t -> t.lexeme.equals(")"));
+        checkToken(t -> t.lexeme.equals(")"), ")");
 
         children.add(new Node(NodeType.AGGREGATE, aggregateChildren));
     }

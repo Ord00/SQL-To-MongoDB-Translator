@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class LogicalConditionParser extends Parser {
+
     public  LogicalConditionParser(List<Token> tokens, List<String> errors) {
         super(tokens, errors);
     }
@@ -56,7 +57,7 @@ public class LogicalConditionParser extends Parser {
 
             if (!curToken.lexeme.equals("(")) {
 
-                throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+                throw new Exception(String.format("Expected \"(\" after EXISTS on %d!", curTokenPos));
 
             }
 
@@ -83,7 +84,7 @@ public class LogicalConditionParser extends Parser {
 
         } else {
 
-            throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+            throw new Exception(String.format("Invalid left operand of logical expression on %d!", curTokenPos));
 
         }
 
@@ -105,7 +106,7 @@ public class LogicalConditionParser extends Parser {
 
         if (!isSubQuery && curToken.lexeme.equals(")")) {
 
-            throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+            throw new Exception(String.format("Invalid brackets of logical expression on %d!", curTokenPos));
 
         }
 
@@ -118,13 +119,13 @@ public class LogicalConditionParser extends Parser {
 
             if (stack.peek().lexeme.equals("(")) {
 
-                throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+                throw new Exception(String.format("Invalid brackets of logical expression on %d!", curTokenPos));
 
             }
 
         } else if (!(isSubQuery && curToken.lexeme.equals(")"))) {
 
-            throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+            throw new Exception(String.format("Invalid link between logical expressions on %d!", curTokenPos));
 
         }
     }
@@ -156,7 +157,9 @@ public class LogicalConditionParser extends Parser {
 
                 if (!curToken.lexeme.equals("(")) {
 
-                    throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+                    throw new Exception(String.format("Expected \"(\" after %s on %d",
+                            tokens.get(curTokenPos - 2),
+                            curTokenPos));
 
                 }
 
@@ -166,13 +169,16 @@ public class LogicalConditionParser extends Parser {
 
                 if (stack.peek().category == Category.PROC_NUMBER) {
 
-                    throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+                    throw new Exception(String.format("Invalid type of subquery on %d!", curTokenPos));
 
                 }
 
             } else {
 
-                throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+                throw new Exception(String.format("Expected %s instead of %s on %d",
+                        "[ANY, SOME, ALL]",
+                        curToken.lexeme,
+                        curTokenPos));
 
             }
         }
@@ -185,7 +191,7 @@ public class LogicalConditionParser extends Parser {
         if (operandToken.category != Category.IDENTIFIER
                 && operandToken.category != Category.LITERAL) {
 
-            throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+            throw new Exception(String.format("Invalid left operand of LIKE on %d!", curTokenPos));
 
         }
 
@@ -198,7 +204,7 @@ public class LogicalConditionParser extends Parser {
                 false)
                 || stack.pop().category == Category.NUMBER) {
 
-            throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+            throw new Exception(String.format("Invalid right operand of LIKE on on %d!", curTokenPos));
 
         }
     }

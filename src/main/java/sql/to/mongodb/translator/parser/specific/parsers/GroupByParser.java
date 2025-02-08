@@ -31,13 +31,13 @@ public class GroupByParser extends Parser {
             if (token.category == Category.LITERAL
                     || !(token.category == Category.NUMBER && token.lexeme.equals("NON"))) {
 
-                throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+                throw new Exception(String.format("Invalid member of GROUP BY on %d!", curTokenPos));
 
             }
 
         } else {
 
-            throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+            throw new Exception(String.format("Invalid member of GROUP BY on %d!", curTokenPos));
 
         }
 
@@ -53,7 +53,7 @@ public class GroupByParser extends Parser {
 
         } else {
 
-            throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+            throw new Exception(String.format("Invalid link between members of GROUP BY on %d!", curTokenPos));
 
         }
     }

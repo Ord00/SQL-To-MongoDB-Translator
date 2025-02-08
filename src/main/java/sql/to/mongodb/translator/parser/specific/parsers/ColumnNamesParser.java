@@ -25,7 +25,9 @@ public class ColumnNamesParser extends Parser {
 
             if (!curToken.lexeme.equals("FROM")) {
 
-                throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+                throw new Exception(String.format("Expected \"FROM\" instead of %s on %d!",
+                        curToken,
+                        curTokenPos));
 
             }
 
@@ -49,7 +51,7 @@ public class ColumnNamesParser extends Parser {
                     t -> t.category != Category.PROC_NUMBER,
                     true)) {
 
-                throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+                throw new Exception(String.format("Incorrect attribute on %d!", curTokenPos));
 
             } else {
 
@@ -72,7 +74,7 @@ public class ColumnNamesParser extends Parser {
 
             }
             case "FROM" -> new Node(NodeType.COLUMN_NAMES, children);
-            default -> throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+            default -> throw new Exception(String.format("Invalid link between attributes on %d!", curTokenPos));
 
         };
     }
