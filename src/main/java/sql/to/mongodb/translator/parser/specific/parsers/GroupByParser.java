@@ -8,52 +8,48 @@ import sql.to.mongodb.translator.enums.NodeType;
 
 import java.util.List;
 
-public class GroupByParser extends Parser {
+public class GroupByParser {
 
-    public GroupByParser(List<Token> tokens, List<String> errors) {
-        super(tokens, errors);
-    }
+    public static Node analyseGroupBy(Parser parser, List<Node> children, boolean isSubQuery) throws Exception {
 
-    public static Node analyseGroupBy(List<Node> children, boolean isSubQuery) throws Exception {
-
-        if (analyseOperand(children,
-                t -> stack.push(t),
+        if (parser.analyseOperand(children,
+                t -> parser.stack.push(t),
                 t -> t.category != Category.PROC_NUMBER,
                 false)) {
 
-            analyseArithmeticExpression(children,
+            parser.analyseArithmeticExpression(children,
                     false,
-                    t -> stack.push(t),
-                    () -> stack.pop());
+                    t -> parser.stack.push(t),
+                    () -> parser.stack.pop());
 
-            Token token = stack.pop();
+            Token token = parser.stack.pop();
 
             if (token.category == Category.LITERAL
                     || !(token.category == Category.NUMBER && token.lexeme.equals("NON"))) {
 
-                throw new Exception(String.format("Invalid member of GROUP BY on %d!", curTokenPos));
+                throw new Exception(String.format("Invalid member of GROUP BY on %d!", parser.curTokenPos));
 
             }
 
         } else {
 
-            throw new Exception(String.format("Invalid member of GROUP BY on %d!", curTokenPos));
+            throw new Exception(String.format("Invalid member of GROUP BY on %d!", parser.curTokenPos));
 
         }
 
-        if (curToken.lexeme.equals(",")) {
+        if (parser.curToken.lexeme.equals(",")) {
 
-            getNextToken();
-            return analyseGroupBy(children, isSubQuery);
+            parser.getNextToken();
+            return analyseGroupBy(parser, children, isSubQuery);
 
-        } else if (curTokenPos == tokens.size() || curToken.category == Category.KEYWORD
-                || isSubQuery && curToken.lexeme.equals(")")) {
+        } else if (parser.curTokenPos == parser.tokens.size() || parser.curToken.category == Category.KEYWORD
+                || isSubQuery && parser.curToken.lexeme.equals(")")) {
 
             return new Node(NodeType.GROUP_BY, children);
 
         } else {
 
-            throw new Exception(String.format("Invalid link between members of GROUP BY on %d!", curTokenPos));
+            throw new Exception(String.format("Invalid link between members of GROUP BY on %d!", parser.curTokenPos));
 
         }
     }

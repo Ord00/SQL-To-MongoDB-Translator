@@ -9,44 +9,40 @@ import sql.to.mongodb.translator.enums.NodeType;
 import java.util.ArrayList;
 import java.util.List;
 
-public class FunctionsParser extends Parser {
+public class FunctionsParser {
 
-    public FunctionsParser(List<Token> tokens, List<String> errors) {
-        super(tokens, errors);
-    }
+    public static void analyseAggregate(Parser parser, List<Node> children, boolean isColumn) throws Exception {
 
-    public static void analyseAggregate(List<Node> children, boolean isColumn) throws Exception {
+        if (!isColumn && !parser.stack.peek().lexeme.equals("HAVING")) {
 
-        if (!isColumn && !stack.peek().lexeme.equals("HAVING")) {
-
-            throw new Exception(String.format("Aggregate function in incorrect section on %d!", curTokenPos));
+            throw new Exception(String.format("Aggregate function in incorrect section on %d!", parser.curTokenPos));
 
         }
 
-        stack.push(curToken);
+        parser.stack.push(parser.curToken);
 
         List<Node> aggregateChildren = new ArrayList<>();
-        aggregateChildren.add(new Node(NodeType.TERMINAL, curToken));
+        aggregateChildren.add(new Node(NodeType.TERMINAL, parser.curToken));
 
-        getNextToken();
+        parser.getNextToken();
 
-        checkToken(t -> t.lexeme.equals("("), "(");
+        parser.checkToken(t -> t.lexeme.equals("("), "(");
 
-        if (stack.pop().lexeme.equals("COUNT") && curToken.category == Category.ALL) {
+        if (parser.stack.pop().lexeme.equals("COUNT") && parser.curToken.category == Category.ALL) {
 
-            aggregateChildren.add(new Node(NodeType.TERMINAL, curToken));
-            getNextToken();
+            aggregateChildren.add(new Node(NodeType.TERMINAL, parser.curToken));
+            parser.getNextToken();
 
-        } else if (!analyseOperand(aggregateChildren,
+        } else if (!parser.analyseOperand(aggregateChildren,
                 null,
                 t -> false,
                 isColumn)) {
 
-            throw new Exception(String.format("Incorrect attribute of aggregate function on %d!", curTokenPos));
+            throw new Exception(String.format("Incorrect attribute of aggregate function on %d!", parser.curTokenPos));
 
         }
 
-        checkToken(t -> t.lexeme.equals(")"), ")");
+        parser.checkToken(t -> t.lexeme.equals(")"), ")");
 
         children.add(new Node(NodeType.AGGREGATE, aggregateChildren));
     }

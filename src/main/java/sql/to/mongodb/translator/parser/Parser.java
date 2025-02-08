@@ -19,12 +19,12 @@ import java.util.Stack;
 
 public class Parser {
 
-    protected static List<Token> tokens;
-    protected static int curTokenPos = 0;
-    protected static Token curToken;
+    public List<Token> tokens;
+    public int curTokenPos = 0;
+    public Token curToken;
     protected List<String> errors;
 
-    protected static Stack<Token> stack = new Stack<>();
+    public Stack<Token> stack = new Stack<>();
 
     public Parser(List<Token> tokens, List<String> errors) {
 
@@ -32,7 +32,7 @@ public class Parser {
         this.errors = errors;
     }
 
-    protected static void getNextToken() {
+    public void getNextToken() {
 
         if (curTokenPos != tokens.size()) {
 
@@ -46,14 +46,14 @@ public class Parser {
         }
     }
 
-    protected static void getPrevToken() {
+    public void getPrevToken() {
 
         --curTokenPos;
         curToken = tokens.get(curTokenPos - 1);
 
     }
 
-    public static Node tryAnalyse(boolean isSubQuery) throws Exception {
+    public Node tryAnalyse(boolean isSubQuery) throws Exception {
 
         List<Node> children = new ArrayList<>();
         getNextToken();
@@ -87,19 +87,19 @@ public class Parser {
         return new Node(NodeType.QUERY, children);
     }
 
-    private static void analyseSelect(List<Node> children, boolean isSubQuery) throws Exception {
+    private void analyseSelect(List<Node> children, boolean isSubQuery) throws Exception {
 
         children.add(new Node(NodeType.TERMINAL, curToken));
         getNextToken();
 
         List<Node> colNamesChildren = new ArrayList<>();
-        children.add(ColumnNamesParser.analyseColumnNames(colNamesChildren));
+        children.add(ColumnNamesParser.analyseColumnNames(this, colNamesChildren));
 
         children.add(new Node(NodeType.TERMINAL, curToken));
         getNextToken();
 
         List<Node> tableNamesChildren = new ArrayList<>();
-        children.add(TableNamesParser.analyseTableNames(tableNamesChildren, true, isSubQuery));
+        children.add(TableNamesParser.analyseTableNames(this, tableNamesChildren, true, isSubQuery));
 
         if (curToken.lexeme.equals("WHERE")) {
 
@@ -108,7 +108,7 @@ public class Parser {
             children.add(new Node(NodeType.TERMINAL, curToken));
 
             List<Node> whereChildren = new ArrayList<>();
-            LogicalConditionParser.analyseLogicalCondition(whereChildren, isSubQuery);
+            LogicalConditionParser.analyseLogicalCondition(this, whereChildren, isSubQuery);
             children.add(new Node(NodeType.LOGICAL_CONDITION, whereChildren));
 
             stack.pop();
@@ -121,7 +121,7 @@ public class Parser {
             children.add(terminal(t -> t.lexeme.equals("BY"), "BY"));
 
             List<Node> groupByChildren = new ArrayList<>();
-            children.add(GroupByParser.analyseGroupBy(groupByChildren, isSubQuery));
+            children.add(GroupByParser.analyseGroupBy(this, groupByChildren, isSubQuery));
         }
 
         if (curToken.lexeme.equals("HAVING")) {
@@ -131,7 +131,7 @@ public class Parser {
             children.add(new Node(NodeType.TERMINAL, curToken));
 
             List<Node> havingChildren = new ArrayList<>();
-            LogicalConditionParser.analyseLogicalCondition(havingChildren, isSubQuery);
+            LogicalConditionParser.analyseLogicalCondition(this, havingChildren, isSubQuery);
             children.add(new Node(NodeType.LOGICAL_CONDITION, havingChildren));
 
             stack.pop();
@@ -144,12 +144,12 @@ public class Parser {
             children.add(terminal(t -> t.lexeme.equals("BY"), "BY"));
 
             List<Node> orderByChildren = new ArrayList<>();
-            children.add(OrderByParser.analyseOrderBy(orderByChildren, isSubQuery));
+            children.add(OrderByParser.analyseOrderBy(this, orderByChildren, isSubQuery));
 
         }
     }
 
-    protected static void processColumnThroughStack(Token token) {
+    public void processColumnThroughStack(Token token) {
 
         Token prevToken = stack.pop();
 
@@ -174,7 +174,7 @@ public class Parser {
         }
     }
 
-    protected static void releaseColumnThroughStack() {
+    public void releaseColumnThroughStack() {
 
         Token prevToken = stack.pop();
 
@@ -191,7 +191,7 @@ public class Parser {
         }
     }
 
-    protected static boolean analyseOperand(List<Node> children,
+    public boolean analyseOperand(List<Node> children,
                                             LambdaProcessable processToken,
                                             LambdaComparable subQueryCheck,
                                             boolean isColumn) throws Exception {
@@ -254,7 +254,7 @@ public class Parser {
         return isFound;
     }
 
-    protected static void analyseAlias(List<Node> children) throws Exception {
+    public void analyseAlias(List<Node> children) throws Exception {
 
         if (curToken.lexeme.equals("AS")) {
 
@@ -275,7 +275,7 @@ public class Parser {
 
     }
 
-    protected static void analyseArithmeticExpression(
+    public void analyseArithmeticExpression(
             List<Node> children,
             boolean isColumn,
             LambdaProcessable processToken,
@@ -296,7 +296,7 @@ public class Parser {
         }
     }
 
-    protected static void analyseArithmeticRec(List<Node> children, boolean isColumn) throws Exception {
+    private void analyseArithmeticRec(List<Node> children, boolean isColumn) throws Exception {
 
         if (curToken.category == Category.ARITHMETIC_OPERATOR || curToken.category == Category.ALL) {
 
@@ -316,7 +316,7 @@ public class Parser {
 
             } else if (curToken.category == Category.AGGREGATE) {
 
-                FunctionsParser.analyseAggregate(children, isColumn);
+                FunctionsParser.analyseAggregate(this, children, isColumn);
 
             } else {
 
@@ -331,7 +331,7 @@ public class Parser {
         }
     }
 
-    protected static void checkToken(LambdaComparable comparator, String expectedToken) throws Exception {
+    public void checkToken(LambdaComparable comparator, String expectedToken) throws Exception {
 
         if (comparator.execute(curToken)) {
 
@@ -347,7 +347,7 @@ public class Parser {
         }
     }
 
-    protected static Node terminal(LambdaComparable comparator, String expectedToken) throws Exception {
+    public Node terminal(LambdaComparable comparator, String expectedToken) throws Exception {
 
         if (comparator.execute(curToken)) {
 

@@ -8,73 +8,69 @@ import sql.to.mongodb.translator.enums.NodeType;
 
 import java.util.List;
 
-public class ColumnNamesParser extends Parser {
+public class ColumnNamesParser {
 
-    public ColumnNamesParser(List<Token> tokens, List<String> errors) {
-        super(tokens, errors);
-    }
+    public static Node analyseColumnNames(Parser parser, List<Node> children) throws Exception {
 
-    public static Node analyseColumnNames(List<Node> children) throws Exception {
+        if (parser.curToken.category == Category.ALL) {
 
-        if (curToken.category == Category.ALL) {
+            parser.stack.push(new Token("2", Category.PROC_NUMBER));
 
-            stack.push(new Token("2", Category.PROC_NUMBER));
+            children.add(new Node(NodeType.TERMINAL, parser.curToken));
+            parser.getNextToken();
 
-            children.add(new Node(NodeType.TERMINAL, curToken));
-            getNextToken();
-
-            if (!curToken.lexeme.equals("FROM")) {
+            if (!parser.curToken.lexeme.equals("FROM")) {
 
                 throw new Exception(String.format("Expected \"FROM\" instead of %s on %d!",
-                        curToken,
-                        curTokenPos));
+                        parser.curToken,
+                        parser.curTokenPos));
 
             }
 
             return new Node(NodeType.COLUMN_NAMES, children);
 
-        } else if (curToken.category == Category.AGGREGATE) {
+        } else if (parser.curToken.category == Category.AGGREGATE) {
 
-            processColumnThroughStack(curToken);
+            parser.processColumnThroughStack(parser.curToken);
 
-            FunctionsParser.analyseAggregate(children, true);
+            FunctionsParser.analyseAggregate(parser, children, true);
 
-            analyseArithmeticExpression(children,
+            parser.analyseArithmeticExpression(children,
                     true,
-                    Parser::processColumnThroughStack,
-                    Parser::releaseColumnThroughStack);
+                    parser::processColumnThroughStack,
+                    parser::releaseColumnThroughStack);
 
         } else {
 
-            if (!analyseOperand(children,
-                    Parser::processColumnThroughStack,
+            if (!parser.analyseOperand(children,
+                    parser::processColumnThroughStack,
                     t -> t.category != Category.PROC_NUMBER,
                     true)) {
 
-                throw new Exception(String.format("Incorrect attribute on %d!", curTokenPos));
+                throw new Exception(String.format("Incorrect attribute on %d!", parser.curTokenPos));
 
             } else {
 
-                analyseArithmeticExpression(children,
+                parser.analyseArithmeticExpression(children,
                         true,
-                        Parser::processColumnThroughStack,
-                        Parser::releaseColumnThroughStack);
+                        parser::processColumnThroughStack,
+                        parser::releaseColumnThroughStack);
 
             }
         }
 
-        analyseAlias(children);
+        parser.analyseAlias(children);
 
-        return switch (curToken.lexeme) {
+        return switch (parser.curToken.lexeme) {
 
             case "," -> {
 
-                getNextToken();
-                yield analyseColumnNames(children);
+                parser.getNextToken();
+                yield analyseColumnNames(parser, children);
 
             }
             case "FROM" -> new Node(NodeType.COLUMN_NAMES, children);
-            default -> throw new Exception(String.format("Invalid link between attributes on %d!", curTokenPos));
+            default -> throw new Exception(String.format("Invalid link between attributes on %d!", parser.curTokenPos));
 
         };
     }

@@ -10,166 +10,167 @@ import sql.to.mongodb.translator.interfaces.LambdaComparable;
 import java.util.ArrayList;
 import java.util.List;
 
-public class LogicalConditionParser extends Parser {
+public class LogicalConditionParser {
 
-    public  LogicalConditionParser(List<Token> tokens, List<String> errors) {
-        super(tokens, errors);
-    }
-
-    public static void analyseLogicalCondition(List<Node> children, boolean isSubQuery) throws Exception {
+    public static void analyseLogicalCondition(Parser parser,
+                                               List<Node> children,
+                                               boolean isSubQuery) throws Exception {
 
         List<Node> logicalCheckChildren = new ArrayList<>();
 
-        getNextToken();
+        parser.getNextToken();
 
-        while (curToken.lexeme.equals("(")) {
+        while (parser.curToken.lexeme.equals("(")) {
 
-            stack.push(curToken);
-            children.add(new Node(NodeType.TERMINAL, curToken));
-            getNextToken();
+            parser.stack.push(parser.curToken);
+            children.add(new Node(NodeType.TERMINAL, parser.curToken));
+            parser.getNextToken();
 
         }
 
-        if (curToken.lexeme.equals("SELECT")) {
+        if (parser.curToken.lexeme.equals("SELECT")) {
 
-            stack.pop();
+            parser.stack.pop();
             children.removeLast();
-            getPrevToken();
+            parser.getPrevToken();
 
         }
 
-        if (analyseOperand(logicalCheckChildren,
-                t -> stack.push(t),
+        if (parser.analyseOperand(logicalCheckChildren,
+                t -> parser.stack.push(t),
                 t -> t.category != Category.PROC_NUMBER,
                 false)) {
 
-            analyseArithmeticExpression(logicalCheckChildren,
+            parser.analyseArithmeticExpression(logicalCheckChildren,
                     false,
-                    t -> stack.push(t),
-                    () -> stack.pop());
+                    t -> parser.stack.push(t),
+                    () -> parser.stack.pop());
 
-            analyseOperation(logicalCheckChildren);
+            analyseOperation(parser, logicalCheckChildren);
 
-        } else if (curToken.lexeme.equals("NOT")) {
+        } else if (parser.curToken.lexeme.equals("NOT")) {
 
-            getNextToken();
-            logicalCheckChildren.add(terminal(t -> t.lexeme.equals("EXISTS"), "EXISTS"));
+            parser.getNextToken();
+            logicalCheckChildren.add(parser.terminal(t -> t.lexeme.equals("EXISTS"), "EXISTS"));
 
-            if (!curToken.lexeme.equals("(")) {
+            if (!parser.curToken.lexeme.equals("(")) {
 
-                throw new Exception(String.format("Expected \"(\" after EXISTS on %d!", curTokenPos));
+                throw new Exception(String.format("Expected \"(\" after EXISTS on %d!", parser.curTokenPos));
 
             }
 
-            logicalCheckChildren.add(tryAnalyse(true));
+            logicalCheckChildren.add(parser.tryAnalyse(true));
 
-            checkToken(t -> t.lexeme.equals(")"), ")");
+            parser.checkToken(t -> t.lexeme.equals(")"), ")");
 
-        } else if (curToken.lexeme.equals("EXISTS")) {
+        } else if (parser.curToken.lexeme.equals("EXISTS")) {
 
-            getNextToken();
-            logicalCheckChildren.add(terminal(t -> t.lexeme.equals("("), "("));
-            logicalCheckChildren.add(tryAnalyse(true));
+            parser.getNextToken();
+            logicalCheckChildren.add(parser.terminal(t -> t.lexeme.equals("("), "("));
+            logicalCheckChildren.add(parser.tryAnalyse(true));
 
-        } else if (curToken.category == Category.AGGREGATE) {
+        } else if (parser.curToken.category == Category.AGGREGATE) {
 
-            FunctionsParser.analyseAggregate(logicalCheckChildren, false);
+            FunctionsParser.analyseAggregate(parser, logicalCheckChildren, false);
 
-            analyseArithmeticExpression(logicalCheckChildren,
+            parser.analyseArithmeticExpression(logicalCheckChildren,
                     false,
-                    t -> stack.push(t),
-                    () -> stack.pop());
+                    t -> parser.stack.push(t),
+                    () -> parser.stack.pop());
 
-            analyseOperation(logicalCheckChildren);
+            analyseOperation(parser, logicalCheckChildren);
 
         } else {
 
-            throw new Exception(String.format("Invalid left operand of logical expression on %d!", curTokenPos));
+            throw new Exception(String.format("Invalid left operand of logical expression on %d!", parser.curTokenPos));
 
         }
 
         children.add(new Node(NodeType.LOGICAL_CHECK, logicalCheckChildren));
 
-        clearLogicalExpInStack();
+        clearLogicalExpInStack(parser);
 
-        Token bracketToken = stack.peek();
+        Token bracketToken = parser.stack.peek();
 
-        while (curToken.lexeme.equals(")") && bracketToken.lexeme.equals("(")) {
+        while (parser.curToken.lexeme.equals(")") && bracketToken.lexeme.equals("(")) {
 
-            stack.pop();
-            bracketToken = stack.peek();
+            parser.stack.pop();
+            bracketToken = parser.stack.peek();
 
-            children.add(new Node(NodeType.TERMINAL, curToken));
-            getNextToken();
-
-        }
-
-        if (!isSubQuery && curToken.lexeme.equals(")")) {
-
-            throw new Exception(String.format("Invalid brackets of logical expression on %d!", curTokenPos));
+            children.add(new Node(NodeType.TERMINAL, parser.curToken));
+            parser.getNextToken();
 
         }
 
-        if (curToken.category == Category.LOGICAL_COMBINE) {
+        if (!isSubQuery && parser.curToken.lexeme.equals(")")) {
 
-            children.add(new Node(NodeType.TERMINAL, curToken));
-            analyseLogicalCondition(children, isSubQuery);
+            throw new Exception(String.format("Invalid brackets of logical expression on %d!", parser.curTokenPos));
 
-        } else if (curTokenPos == tokens.size() || curToken.category == Category.KEYWORD) {
+        }
 
-            if (stack.peek().lexeme.equals("(")) {
+        if (parser.curToken.category == Category.LOGICAL_COMBINE) {
 
-                throw new Exception(String.format("Invalid brackets of logical expression on %d!", curTokenPos));
+            children.add(new Node(NodeType.TERMINAL, parser.curToken));
+            analyseLogicalCondition(parser, children, isSubQuery);
+
+        } else if (parser.curTokenPos == parser.tokens.size() || parser.curToken.category == Category.KEYWORD) {
+
+            if ( parser.stack.peek().lexeme.equals("(")) {
+
+                throw new Exception(String.format("Invalid brackets of logical expression on %d!",  parser.curTokenPos));
 
             }
 
-        } else if (!(isSubQuery && curToken.lexeme.equals(")"))) {
+        } else if (!(isSubQuery &&  parser.curToken.lexeme.equals(")"))) {
 
-            throw new Exception(String.format("Invalid link between logical expressions on %d!", curTokenPos));
+            throw new Exception(String.format("Invalid link between logical expressions on %d!",  parser.curTokenPos));
 
         }
     }
 
-    public static void analyseLogicalOperator(List<Node> children,
+    public static void analyseLogicalOperator(Parser parser,
+                                              List<Node> children,
                                               LambdaComparable comparator,
                                               String expectedToken) throws Exception {
 
-        stack.push(curToken);
+        parser.stack.push( parser.curToken);
 
-        children.add(new Node(NodeType.TERMINAL, curToken));
-        getNextToken();
+        children.add(new Node(NodeType.TERMINAL,  parser.curToken));
+        parser.getNextToken();
 
-        if (!stack.pop().lexeme.equals("=") && curToken.category == Category.LOGICAL_OPERATOR) {
+        if (!parser.stack.pop().lexeme.equals("=") &&  parser.curToken.category == Category.LOGICAL_OPERATOR) {
 
-            children.add(terminal(comparator, expectedToken));
+            children.add(parser.terminal(comparator, expectedToken));
 
         }
 
-        if (!analyseOperand(children,
-                t -> stack.push(t),
+        if (!parser.analyseOperand(children,
+                t -> parser.stack.push(t),
                 t -> t.category != Category.PROC_NUMBER,
                 false)) {
 
-            if (curToken.lexeme.equals("ANY") || curToken.lexeme.equals("SOME") || curToken.lexeme.equals("ALL")) {
+            if (parser.curToken.lexeme.equals("ANY")
+                    || parser.curToken.lexeme.equals("SOME")
+                    || parser.curToken.lexeme.equals("ALL")) {
 
-                children.add(new Node(NodeType.TERMINAL, curToken));
-                getNextToken();
+                children.add(new Node(NodeType.TERMINAL, parser.curToken));
+                parser.getNextToken();
 
-                if (!curToken.lexeme.equals("(")) {
+                if (!parser.curToken.lexeme.equals("(")) {
 
                     throw new Exception(String.format("Expected \"(\" after %s on %d",
-                            tokens.get(curTokenPos - 2),
-                            curTokenPos));
+                            parser.tokens.get(parser.curTokenPos - 2),
+                            parser.curTokenPos));
 
                 }
 
-                children.add(tryAnalyse(true));
+                children.add(parser.tryAnalyse(true));
 
-                checkToken(t -> t.lexeme.equals(")"), ")");
+                parser.checkToken(t -> t.lexeme.equals(")"), ")");
 
-                if (stack.peek().category == Category.PROC_NUMBER) {
+                if (parser.stack.peek().category == Category.PROC_NUMBER) {
 
-                    throw new Exception(String.format("Invalid type of subquery on %d!", curTokenPos));
+                    throw new Exception(String.format("Invalid type of subquery on %d!", parser.curTokenPos));
 
                 }
 
@@ -177,116 +178,116 @@ public class LogicalConditionParser extends Parser {
 
                 throw new Exception(String.format("Expected %s instead of %s on %d",
                         "[ANY, SOME, ALL]",
-                        curToken.lexeme,
-                        curTokenPos));
+                        parser.curToken.lexeme,
+                        parser.curTokenPos));
 
             }
         }
     }
 
-    public static void analyseLike(List<Node> children) throws Exception {
+    public static void analyseLike(Parser parser, List<Node> children) throws Exception {
 
-        Token operandToken = stack.pop();
+        Token operandToken = parser.stack.pop();
 
         if (operandToken.category != Category.IDENTIFIER
                 && operandToken.category != Category.LITERAL) {
 
-            throw new Exception(String.format("Invalid left operand of LIKE on %d!", curTokenPos));
+            throw new Exception(String.format("Invalid left operand of LIKE on %d!", parser.curTokenPos));
 
         }
 
-        children.add(new Node(NodeType.TERMINAL, curToken));
-        getNextToken();
+        children.add(new Node(NodeType.TERMINAL, parser.curToken));
+        parser.getNextToken();
 
-        if (!analyseOperand(children,
-                t -> stack.push(t),
+        if (!parser.analyseOperand(children,
+                t -> parser.stack.push(t),
                 t -> t.category != Category.PROC_NUMBER,
                 false)
-                || stack.pop().category == Category.NUMBER) {
+                || parser.stack.pop().category == Category.NUMBER) {
 
-            throw new Exception(String.format("Invalid right operand of LIKE on on %d!", curTokenPos));
+            throw new Exception(String.format("Invalid right operand of LIKE on on %d!", parser.curTokenPos));
 
         }
     }
 
-    public static Node analyseIn(List<Node> children, boolean isCheckStack) throws Exception {
+    public static Node analyseIn(Parser parser, List<Node> children, boolean isCheckStack) throws Exception {
 
         boolean newIsCheckStack = isCheckStack;
 
-        if (!analyseOperand(children,
-                t -> stack.push(t),
+        if (!parser.analyseOperand(children,
+                t -> parser.stack.push(t),
                 t -> t.category != Category.PROC_NUMBER,
                 false)) {
 
-            throw new Exception(String.format("Invalid member of IN on %d!", curTokenPos));
+            throw new Exception(String.format("Invalid member of IN on %d!", parser.curTokenPos));
 
         }
 
-        Token curAttribute = stack.pop();
+        Token curAttribute = parser.stack.pop();
 
         if (curAttribute.category == Category.AGGREGATE) {
 
-            throw new Exception(String.format("Aggregate function in IN on %d!", curTokenPos));
+            throw new Exception(String.format("Aggregate function in IN on %d!", parser.curTokenPos));
 
         }
 
         if (isCheckStack) {
 
-            Token prevAttribute = stack.peek();
+            Token prevAttribute = parser.stack.peek();
 
             if ((curAttribute.category == Category.NUMBER || curAttribute.category == Category.LITERAL)
             && curAttribute.category != prevAttribute.category) {
 
-                throw new Exception(String.format("Invalid attribute of IN on %d!", curTokenPos));
+                throw new Exception(String.format("Invalid attribute of IN on %d!", parser.curTokenPos));
 
             }
 
         } else if (curAttribute.category == Category.NUMBER || curAttribute.category == Category.LITERAL) {
 
-            stack.push(curAttribute);
+            parser.stack.push(curAttribute);
             newIsCheckStack = true;
             
         }
 
-        return switch (curToken.lexeme) {
+        return switch (parser.curToken.lexeme) {
 
             case "," -> {
 
-                getNextToken();
-                yield analyseIn(children, newIsCheckStack);
+                parser.getNextToken();
+                yield analyseIn(parser, children, newIsCheckStack);
 
             }
 
             case ")" -> {
 
                 if (isCheckStack) {
-                    stack.pop();
+                    parser.stack.pop();
                 }
                 yield new Node(NodeType.ATTRIBUTES, children);
 
             }
 
-            default -> throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+            default -> throw new Exception(String.format("Wrong first of column_names on %s", parser.curTokenPos));
         };
     }
 
-    public static boolean analyseInOfSubquery(List<Node> children, LambdaComparable subQueryCheck) throws Exception {
+    public static boolean analyseInOfSubquery(Parser parser, List<Node> children, LambdaComparable subQueryCheck) throws Exception {
 
         boolean isFound = true;
 
-        if (curToken.lexeme.equals("SELECT")) {
+        if (parser.curToken.lexeme.equals("SELECT")) {
 
-            getPrevToken();
-            Node subQueryIn = tryAnalyse(true);
+            parser.getPrevToken();
+            Node subQueryIn = parser.tryAnalyse(true);
 
-            if (!subQueryCheck.execute(stack.peek())) {
+            if (!subQueryCheck.execute(parser.stack.peek())) {
 
-                throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+                throw new Exception(String.format("Wrong first of column_names on %s", parser.curTokenPos));
 
-            } else if (curToken.lexeme.equals(")")) {
+            } else if (parser.curToken.lexeme.equals(")")) {
 
                 children.add(new Node(NodeType.ATTRIBUTES, List.of(subQueryIn)));
-                getNextToken();
+                parser.getNextToken();
             }
 
         } else {
@@ -299,122 +300,125 @@ public class LogicalConditionParser extends Parser {
 
     }
 
-    public static void analyseBetween(List<Node> children) throws Exception {
+    public static void analyseBetween(Parser parser, List<Node> children) throws Exception {
 
-        if (!analyseOperand(children,
+        if (!parser.analyseOperand(children,
                 null,
                 t -> t.category != Category.PROC_NUMBER,
                 false)) {
 
-            throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+            throw new Exception(String.format("Wrong first of column_names on %s", parser.curTokenPos));
 
         }
 
 
-        children.add(terminal(t -> t.lexeme.equals("AND"), "AND"));
-        getNextToken();
+        children.add(parser.terminal(t -> t.lexeme.equals("AND"), "AND"));
+        parser.getNextToken();
 
-        if (!analyseOperand(children,
+        if (!parser.analyseOperand(children,
                 null,
                 t -> t.category != Category.PROC_NUMBER,
                 false)) {
 
-            throw new Exception(String.format("Wrong first of column_names on %s", curTokenPos));
+            throw new Exception(String.format("Wrong first of column_names on %s", parser.curTokenPos));
 
         }
 
     }
 
-    public static void analyseOperation(List<Node> children) throws Exception {
+    public static void analyseOperation(Parser parser, List<Node> children) throws Exception {
 
-        switch (curToken.lexeme) {
+        switch (parser.curToken.lexeme) {
 
-            case "=" -> analyseLogicalOperator(children,
+            case "=" -> analyseLogicalOperator(parser,
+                    children,
                     t -> true,
                     "");
 
-            case "<" -> analyseLogicalOperator(children,
+            case "<" -> analyseLogicalOperator(parser,
+                    children,
                     t -> t.lexeme.equals(">") || t.lexeme.equals("="),
                     "[>, =]");
 
-            case ">" -> analyseLogicalOperator(children,
+            case ">" -> analyseLogicalOperator(parser,
+                    children,
                     t -> t.lexeme.equals("="),
                     "=");
 
             case "IS" -> {
 
-                children.add(new Node(NodeType.TERMINAL, curToken));
-                getNextToken();
+                children.add(new Node(NodeType.TERMINAL, parser.curToken));
+                parser.getNextToken();
 
-                if (curToken.lexeme.equals("NOT")) {
+                if (parser.curToken.lexeme.equals("NOT")) {
 
-                    children.add(new Node(NodeType.TERMINAL, curToken));
-                    getNextToken();
+                    children.add(new Node(NodeType.TERMINAL, parser.curToken));
+                    parser.getNextToken();
 
                 }
 
-                children.add(terminal(t -> t.category == Category.NULL, "NULL"));
+                children.add(parser.terminal(t -> t.category == Category.NULL, "NULL"));
 
             }
             case "NOT" -> {
-                children.add(new Node(NodeType.TERMINAL, curToken));
-                getNextToken();
+                children.add(new Node(NodeType.TERMINAL, parser.curToken));
+                parser.getNextToken();
 
-                switch (curToken.lexeme) {
+                switch (parser.curToken.lexeme) {
                     case "LIKE" -> {
-                        children.add(new Node(NodeType.TERMINAL, curToken));
-                        getNextToken();
-                        analyseLike(children);
+                        children.add(new Node(NodeType.TERMINAL, parser.curToken));
+                        parser.getNextToken();
+                        analyseLike(parser, children);
                     }
                     case "IN" -> {
-                        children.add(new Node(NodeType.TERMINAL, curToken));
-                        getNextToken();
-                        checkToken(t -> t.lexeme.equals("("), "(");
+                        children.add(new Node(NodeType.TERMINAL, parser.curToken));
+                        parser.getNextToken();
+                        parser.checkToken(t -> t.lexeme.equals("("), "(");
 
-                        if (!analyseInOfSubquery(children, t -> t.category != Category.PROC_NUMBER)) {
+                        if (!analyseInOfSubquery(parser, children, t -> t.category != Category.PROC_NUMBER)) {
 
                             List<Node> inChildren = new ArrayList<>();
-                            analyseIn(inChildren, false);
+                            analyseIn(parser, inChildren, false);
 
                         }
                     }
-                    case "BETWEEN" -> analyseBetween(children);
+                    case "BETWEEN" -> analyseBetween(parser, children);
                     default -> throw new Exception(String.format("%s expected instead of %s on %d!",
                             "[LIKE, IN, BETWEEN]",
-                            curToken.lexeme,
-                            curTokenPos));
+                            parser.curToken.lexeme,
+                            parser.curTokenPos));
                 }
             }
             case "LIKE" -> {
-                children.add(new Node(NodeType.TERMINAL, curToken));
-                getNextToken();
-                analyseLike(children);
+                children.add(new Node(NodeType.TERMINAL, parser.curToken));
+                parser.getNextToken();
+                analyseLike(parser, children);
             }
             case "IN" -> {
-                children.add(new Node(NodeType.TERMINAL, curToken));
-                getNextToken();
-                checkToken(t -> t.lexeme.equals("("), "(");
+                children.add(new Node(NodeType.TERMINAL, parser.curToken));
+                parser.getNextToken();
+                parser.checkToken(t -> t.lexeme.equals("("), "(");
 
-                if (!analyseInOfSubquery(children, t -> t.category != Category.PROC_NUMBER)) {
+                if (!analyseInOfSubquery(parser, children, t -> t.category != Category.PROC_NUMBER)) {
 
                     List<Node> inChildren = new ArrayList<>();
-                    analyseIn(inChildren, false);
+                    analyseIn(parser, inChildren, false);
 
                 }
             }
-            case "BETWEEN" -> analyseBetween(children);
-            default -> throw new Exception(String.format("Invalid logical operation on %d!", curTokenPos));
+            case "BETWEEN" -> analyseBetween(parser, children);
+            default -> throw new Exception(String.format("Invalid logical operation on %d!", parser.curTokenPos));
         }
     }
 
-    public static void clearLogicalExpInStack() {
+    public static void clearLogicalExpInStack(Parser parser) {
 
-        Token curStackToken = stack.peek();
+        Token curStackToken = parser.stack.peek();
 
         while (curStackToken.category != Category.KEYWORD && !curStackToken.lexeme.equals("(")) {
 
-            stack.pop();
-            curStackToken = stack.peek();
+            parser.stack.pop();
+            curStackToken = parser.stack.peek();
 
         }
 

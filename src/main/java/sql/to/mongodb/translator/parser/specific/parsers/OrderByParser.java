@@ -8,51 +8,47 @@ import sql.to.mongodb.translator.scanner.Token;
 
 import java.util.List;
 
-public class OrderByParser extends Parser {
+public class OrderByParser {
 
-    public OrderByParser(List<Token> tokens, List<String> errors) {
-        super(tokens, errors);
-    }
+    public static Node analyseOrderBy(Parser parser, List<Node> children, boolean isSubQuery) throws Exception {
 
-    public static Node analyseOrderBy(List<Node> children, boolean isSubQuery) throws Exception {
-
-        if (analyseOperand(children,
-                t -> stack.push(t),
+        if (parser.analyseOperand(children,
+                t -> parser.stack.push(t),
                 t -> t.category != Category.PROC_NUMBER,
                 false)) {
 
-            analyseArithmeticExpression(children,
+            parser.analyseArithmeticExpression(children,
                     false,
-                    t -> stack.push(t),
-                    () -> stack.pop());
+                    t -> parser.stack.push(t),
+                    () -> parser.stack.pop());
 
-            Token token = stack.pop();
+            Token token = parser.stack.pop();
 
             if (token.category == Category.LITERAL) {
 
-                throw new Exception(String.format("Invalid member of ORDER BY on %d!", curTokenPos));
+                throw new Exception(String.format("Invalid member of ORDER BY on %d!", parser.curTokenPos));
 
             } else if (token.category == Category.NUMBER && !token.lexeme.equals("NON")) {
 
                 int curNum = Integer.parseInt(token.lexeme);
 
-                if (curNum <= 0 || Integer.parseInt(stack.peek().lexeme) < curNum) {
+                if (curNum <= 0 || Integer.parseInt(parser.stack.peek().lexeme) < curNum) {
 
-                    throw new Exception(String.format("Invalid constant number in ORDER BY on %d!", curTokenPos));
+                    throw new Exception(String.format("Invalid constant number in ORDER BY on %d!", parser.curTokenPos));
 
                 }
             }
 
         } else {
 
-            throw new Exception(String.format("Invalid member of ORDER BY on %d!", curTokenPos));
+            throw new Exception(String.format("Invalid member of ORDER BY on %d!", parser.curTokenPos));
 
         }
 
-        if (curToken.lexeme.equals("DESC") || curToken.lexeme.equals("ASC")) {
+        if (parser.curToken.lexeme.equals("DESC") || parser.curToken.lexeme.equals("ASC")) {
 
-            children.add(new Node(NodeType.TERMINAL, curToken));
-            getNextToken();
+            children.add(new Node(NodeType.TERMINAL, parser.curToken));
+            parser.getNextToken();
 
         } else {
 
@@ -60,19 +56,19 @@ public class OrderByParser extends Parser {
 
         }
 
-        if (curToken.lexeme.equals(",")) {
+        if (parser.curToken.lexeme.equals(",")) {
 
-            getNextToken();
-            return analyseOrderBy(children, isSubQuery);
+            parser.getNextToken();
+            return analyseOrderBy(parser, children, isSubQuery);
 
-        } else if (curTokenPos == tokens.size() || curToken.category == Category.KEYWORD
-                || isSubQuery && curToken.lexeme.equals(")")) {
+        } else if (parser.curTokenPos == parser.tokens.size() || parser.curToken.category == Category.KEYWORD
+                || isSubQuery && parser.curToken.lexeme.equals(")")) {
 
             return new Node(NodeType.ORDER_BY, children);
 
         } else {
 
-            throw new Exception(String.format("Invalid link between members of ORDER BY on %d!", curTokenPos));
+            throw new Exception(String.format("Invalid link between members of ORDER BY on %d!", parser.curTokenPos));
 
         }
     }
