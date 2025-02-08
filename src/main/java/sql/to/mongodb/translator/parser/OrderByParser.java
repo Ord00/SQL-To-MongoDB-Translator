@@ -1,9 +1,7 @@
-package sql.to.mongodb.translator.parser.specific.parsers;
+package sql.to.mongodb.translator.parser;
 
 import sql.to.mongodb.translator.enums.Category;
 import sql.to.mongodb.translator.enums.NodeType;
-import sql.to.mongodb.translator.parser.Node;
-import sql.to.mongodb.translator.parser.Parser;
 import sql.to.mongodb.translator.scanner.Token;
 
 import java.util.List;

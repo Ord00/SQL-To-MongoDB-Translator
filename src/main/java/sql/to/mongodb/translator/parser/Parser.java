@@ -1,12 +1,6 @@
 package sql.to.mongodb.translator.parser;
 
 import sql.to.mongodb.translator.interfaces.LambdaReleasable;
-import sql.to.mongodb.translator.parser.specific.parsers.ColumnNamesParser;
-import sql.to.mongodb.translator.parser.specific.parsers.FunctionsParser;
-import sql.to.mongodb.translator.parser.specific.parsers.GroupByParser;
-import sql.to.mongodb.translator.parser.specific.parsers.LogicalConditionParser;
-import sql.to.mongodb.translator.parser.specific.parsers.OrderByParser;
-import sql.to.mongodb.translator.parser.specific.parsers.TableNamesParser;
 import sql.to.mongodb.translator.scanner.Token;
 import sql.to.mongodb.translator.enums.Category;
 import sql.to.mongodb.translator.enums.NodeType;
@@ -19,12 +13,12 @@ import java.util.Stack;
 
 public class Parser {
 
-    public List<Token> tokens;
-    public int curTokenPos = 0;
-    public Token curToken;
-    protected List<String> errors;
+    List<Token> tokens;
+    int curTokenPos = 0;
+    Token curToken;
+    List<String> errors;
 
-    public Stack<Token> stack = new Stack<>();
+    Stack<Token> stack = new Stack<>();
 
     public Parser(List<Token> tokens, List<String> errors) {
 
@@ -32,7 +26,7 @@ public class Parser {
         this.errors = errors;
     }
 
-    public void getNextToken() {
+    void getNextToken() {
 
         if (curTokenPos != tokens.size()) {
 
@@ -46,7 +40,7 @@ public class Parser {
         }
     }
 
-    public void getPrevToken() {
+    void getPrevToken() {
 
         --curTokenPos;
         curToken = tokens.get(curTokenPos - 1);
@@ -149,7 +143,7 @@ public class Parser {
         }
     }
 
-    public void processColumnThroughStack(Token token) {
+    void processColumnThroughStack(Token token) {
 
         Token prevToken = stack.pop();
 
@@ -174,7 +168,7 @@ public class Parser {
         }
     }
 
-    public void releaseColumnThroughStack() {
+    void releaseColumnThroughStack() {
 
         Token prevToken = stack.pop();
 
@@ -191,7 +185,7 @@ public class Parser {
         }
     }
 
-    public boolean analyseOperand(List<Node> children,
+    boolean analyseOperand(List<Node> children,
                                             LambdaProcessable processToken,
                                             LambdaComparable subQueryCheck,
                                             boolean isColumn) throws Exception {
@@ -254,7 +248,7 @@ public class Parser {
         return isFound;
     }
 
-    public void analyseAlias(List<Node> children) throws Exception {
+    void analyseAlias(List<Node> children) throws Exception {
 
         if (curToken.lexeme.equals("AS")) {
 
@@ -275,7 +269,7 @@ public class Parser {
 
     }
 
-    public void analyseArithmeticExpression(
+    void analyseArithmeticExpression(
             List<Node> children,
             boolean isColumn,
             LambdaProcessable processToken,
@@ -331,7 +325,7 @@ public class Parser {
         }
     }
 
-    public void checkToken(LambdaComparable comparator, String expectedToken) throws Exception {
+    void checkToken(LambdaComparable comparator, String expectedToken) throws Exception {
 
         if (comparator.execute(curToken)) {
 
@@ -347,7 +341,7 @@ public class Parser {
         }
     }
 
-    public Node terminal(LambdaComparable comparator, String expectedToken) throws Exception {
+    Node terminal(LambdaComparable comparator, String expectedToken) throws Exception {
 
         if (comparator.execute(curToken)) {
 
