@@ -30,13 +30,23 @@ public class FunctionsParser {
             aggregateChildren.add(new Node(NodeType.TERMINAL, parser.curToken));
             parser.getNextToken();
 
-        } else if (!parser.analyseOperand(aggregateChildren,
-                null,
-                t -> false,
-                isColumn)) {
+        } else {
 
-            throw new Exception(String.format("Incorrect attribute of aggregate function on %d!", parser.curTokenPos));
+            if (parser.curToken.lexeme.equals("DISTINCT")) {
 
+                aggregateChildren.add(new Node(NodeType.TERMINAL, parser.curToken));
+                parser.getNextToken();
+
+            }
+
+            if (!parser.analyseOperand(aggregateChildren,
+                    null,
+                    t -> false,
+                    isColumn)) {
+
+                throw new Exception(String.format("Incorrect attribute of aggregate function on %d!", parser.curTokenPos));
+
+            }
         }
 
         parser.checkToken(t -> t.lexeme.equals(")"), ")");

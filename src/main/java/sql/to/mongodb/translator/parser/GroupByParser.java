@@ -23,7 +23,7 @@ public class GroupByParser {
             Token token = parser.stack.pop();
 
             if (token.category == Category.LITERAL
-                    || !(token.category == Category.NUMBER && token.lexeme.equals("NON"))) {
+                    || token.category == Category.NUMBER && !token.lexeme.equals("NON")) {
 
                 throw new Exception(String.format("Invalid member of GROUP BY on %d!", parser.curTokenPos));
 

@@ -63,9 +63,18 @@ public class LogicalConditionParser {
 
         } else if (parser.curToken.lexeme.equals("EXISTS")) {
 
+            logicalCheckChildren.add(new Node(NodeType.TERMINAL, parser.curToken));
             parser.getNextToken();
-            logicalCheckChildren.add(parser.terminal(t -> t.lexeme.equals("("), "("));
+
+            if (!parser.curToken.lexeme.equals("(")) {
+
+                throw new Exception(String.format("Expected \"(\" after EXISTS on %d!", parser.curTokenPos));
+
+            }
+
             logicalCheckChildren.add(parser.tryAnalyse(true));
+
+            parser.checkToken(t -> t.lexeme.equals(")"), ")");
 
         } else if (parser.curToken.category == Category.AGGREGATE) {
 
@@ -131,12 +140,12 @@ public class LogicalConditionParser {
                                               LambdaComparable comparator,
                                               String expectedToken) throws Exception {
 
-        parser.stack.push( parser.curToken);
+        parser.stack.push(parser.curToken);
 
-        children.add(new Node(NodeType.TERMINAL,  parser.curToken));
+        children.add(new Node(NodeType.TERMINAL, parser.curToken));
         parser.getNextToken();
 
-        if (!parser.stack.pop().lexeme.equals("=") &&  parser.curToken.category == Category.LOGICAL_OPERATOR) {
+        if (!parser.stack.pop().lexeme.equals("=") && parser.curToken.category == Category.LOGICAL_OPERATOR) {
 
             children.add(parser.terminal(comparator, expectedToken));
 

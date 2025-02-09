@@ -98,4 +98,45 @@ public class ParserTest {
         Parser parser = new Parser(tokens, errors);
         Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(false));
     }
+
+    @Test
+    public void testDistinct() {
+
+        SCANNER.tryAnalyse("""
+                SELECT DISTINCT Cn.*
+                FROM Team Tm JOIN Country Cn
+                   ON Tm.Country = Cn.Id_country
+                WHERE EXISTS (SELECT 1
+                             FROM Race R2 JOIN StaffRace SR2
+                               ON R2.Id_race = SR2.Race
+                               JOIN Staff S2
+                               ON SR2.Staff = S2.Id_staff
+                               JOIN TeamStaff TS2
+                               ON S2.Id_staff = TS2.Staff
+                               JOIN Team Tm2
+                               ON TS2.Team = Tm2.Id_team
+                             WHERE Cn.Id_country = Tm2.Country
+                                 AND R2.RaceDate >= TS2.EntryDate
+                                 AND (TS2.ExitDate IS NULL
+                                     OR R2.RaceDate <= TS2.ExitDate)
+                             GROUP BY Tm2.Id_team, Tm2.TeamName
+                             HAVING COUNT(DISTINCT R2.Competition) = (SELECT COUNT(*)
+                                                                      FROM Competition
+                                                                     )	
+                             )
+                    AND NOT EXISTS (SELECT 1
+                                FROM Race R3 JOIN StaffRace SR3
+                                    ON R3.Id_race = SR3.Race
+                                    JOIN Staff S3
+                                    ON SR3.Staff = S3.Id_staff
+                                    JOIN TeamStaff TS3
+                                    ON S3.Id_staff = TS3.Staff
+                                    JOIN Team Tm3
+                                    ON TS3.Team = Tm3.Id_team
+                                WHERE Tm.Id_team = Tm3.Id_team
+                                )""", tokens, errors);
+
+        Parser parser = new Parser(tokens, errors);
+        Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(false));
+    }
 }

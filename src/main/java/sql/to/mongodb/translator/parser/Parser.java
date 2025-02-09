@@ -86,6 +86,13 @@ public class Parser {
         children.add(new Node(NodeType.TERMINAL, curToken));
         getNextToken();
 
+        if (curToken.lexeme.equals("DISTINCT")) {
+
+            children.add(new Node(NodeType.TERMINAL, curToken));
+            getNextToken();
+
+        }
+
         List<Node> colNamesChildren = new ArrayList<>();
         children.add(ColumnNamesParser.analyseColumnNames(this, colNamesChildren));
 
