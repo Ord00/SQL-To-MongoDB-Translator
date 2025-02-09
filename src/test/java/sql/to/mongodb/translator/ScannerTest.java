@@ -2,8 +2,8 @@ package sql.to.mongodb.translator;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
-import sql.to.mongodb.translator.entities.Scanner;
-import sql.to.mongodb.translator.entities.Token;
+import sql.to.mongodb.translator.scanner.Scanner;
+import sql.to.mongodb.translator.scanner.Token;
 import sql.to.mongodb.translator.enums.Category;
 
 import java.util.ArrayList;
@@ -16,7 +16,7 @@ public class ScannerTest {
     public void testSubqueryWithIn() {
 
         List<Token> expectedTokens = new ArrayList<>(List.of(
-                new Token("SELECT", Category.KEYWORD),
+                new Token("SELECT", Category.DML),
                 new Token("id", Category.IDENTIFIER),
                 new Token(",", Category.PUNCTUATION),
                 new Token("name", Category.IDENTIFIER),
@@ -26,9 +26,9 @@ public class ScannerTest {
                 new Token("products", Category.IDENTIFIER),
                 new Token("WHERE", Category.KEYWORD),
                 new Token("id", Category.IDENTIFIER),
-                new Token("IN", Category.KEYWORD),
+                new Token("IN", Category.LOGICAL_EXPRESSION),
                 new Token("(", Category.PUNCTUATION),
-                new Token("SELECT", Category.KEYWORD),
+                new Token("SELECT", Category.DML),
                 new Token("product_id", Category.IDENTIFIER),
                 new Token("FROM", Category.KEYWORD),
                 new Token("sales", Category.IDENTIFIER),
@@ -45,23 +45,26 @@ public class ScannerTest {
     public void testConditionWhereWithNumbersAndStrings() {
 
         List<Token> expectedTokens = new ArrayList<>(List.of(
-                new Token("SELECT", Category.KEYWORD),
+                new Token("SELECT", Category.DML),
                 new Token("*", Category.ALL),
                 new Token("FROM", Category.KEYWORD),
                 new Token("Students", Category.IDENTIFIER),
                 new Token("WHERE", Category.KEYWORD),
                 new Token("Id", Category.IDENTIFIER),
-                new Token(">", Category.OPERATOR),
+                new Token(">", Category.LOGICAL_OPERATOR),
+                new Token("=", Category.LOGICAL_OPERATOR),
                 new Token("2", Category.NUMBER),
-                new Token("AND", Category.KEYWORD),
+                new Token("/", Category.ARITHMETIC_OPERATOR),
+                new Token("7", Category.NUMBER),
+                new Token("AND", Category.LOGICAL_COMBINE),
                 new Token("K", Category.IDENTIFIER),
-                new Token("LIKE", Category.OPERATOR),
+                new Token("LIKE", Category.LOGICAL_EXPRESSION),
                 new Token("'mou%_se'", Category.LITERAL)
         ));
 
         List<Token> tokens = new ArrayList<>();
         List<String> errors = new ArrayList<>();
-        SCANNER.tryAnalyse("SELECT * FROM Students WHERE Id > 2 AND K LIKE 'mou%_se'", tokens, errors);
+        SCANNER.tryAnalyse("SELECT * FROM Students WHERE Id >= 2 / 7 AND K LIKE 'mou%_se'", tokens, errors);
         Assertions.assertEquals(expectedTokens, tokens);
     }
 
@@ -69,7 +72,7 @@ public class ScannerTest {
     public void testAggregateFunctions() {
 
         List<Token> expectedTokens = new ArrayList<>(List.of(
-                new Token("SELECT", Category.KEYWORD),
+                new Token("SELECT", Category.DML),
                 new Token("COUNT", Category.AGGREGATE),
                 new Token("(", Category.PUNCTUATION),
                 new Token("DISTINCT", Category.KEYWORD),
@@ -79,7 +82,7 @@ public class ScannerTest {
                 new Token("Library", Category.IDENTIFIER),
                 new Token("WHERE", Category.KEYWORD),
                 new Token("Id_book", Category.IDENTIFIER),
-                new Token("IN", Category.KEYWORD),
+                new Token("IN", Category.LOGICAL_EXPRESSION),
                 new Token("(", Category.PUNCTUATION),
                 new Token("7", Category.NUMBER),
                 new Token(",", Category.PUNCTUATION),
@@ -97,17 +100,17 @@ public class ScannerTest {
     public void testLiteralsRecognition() {
 
         List<Token> expectedTokens = new ArrayList<>(List.of(
-                new Token("SELECT", Category.KEYWORD),
+                new Token("SELECT", Category.DML),
                 new Token("*", Category.ALL),
                 new Token("FROM", Category.KEYWORD),
                 new Token("Students", Category.IDENTIFIER),
                 new Token("WHERE", Category.KEYWORD),
                 new Token("Id", Category.IDENTIFIER),
-                new Token(">", Category.OPERATOR),
+                new Token(">", Category.LOGICAL_OPERATOR),
                 new Token("'.2#, '", Category.LITERAL),
-                new Token("AND", Category.KEYWORD),
+                new Token("AND", Category.LOGICAL_COMBINE),
                 new Token("K", Category.IDENTIFIER),
-                new Token("LIKE", Category.OPERATOR),
+                new Token("LIKE", Category.LOGICAL_EXPRESSION),
                 new Token("'mou %_se'", Category.LITERAL)
         ));
 
