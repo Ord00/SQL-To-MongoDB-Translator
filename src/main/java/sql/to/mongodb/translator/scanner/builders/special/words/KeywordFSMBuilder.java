@@ -27,7 +27,9 @@ public class KeywordFSMBuilder extends SpecialWordsFSMBuilder {
                 "USING",
                 "AS",
                 "ASC",
-                "DESC"
+                "DESC",
+                "LIMIT",
+                "OFFSET"
         ));
         return super.build();
     }

@@ -132,6 +132,60 @@ public class Parser {
 
         }
 
+        if (curToken.lexeme.equals("LIMIT")) {
+
+            children.add(new Node(NodeType.TERMINAL, curToken));
+            getNextToken();
+
+            if (curToken.category == Category.NUMBER) {
+
+                int num = Integer.parseInt(curToken.lexeme);
+
+                if (num <= 0) {
+
+                    throw new Exception(String.format("Invalid number in \"LIMIT\" on %d!",
+                            curTokenPos));
+
+                }
+
+            } else {
+
+                throw new Exception(String.format("Invalid member of \"LIMIT\" on %d!",
+                        curTokenPos));
+
+            }
+
+            getNextToken();
+
+        }
+
+        if (curToken.lexeme.equals("OFFSET")) {
+
+            children.add(new Node(NodeType.TERMINAL, curToken));
+            getNextToken();
+
+            if (curToken.category == Category.NUMBER) {
+
+                int num = Integer.parseInt(curToken.lexeme);
+
+                if (num <= 0) {
+
+                    throw new Exception(String.format("Invalid number in \"OFFSET\" on %d!",
+                            curTokenPos));
+
+                }
+
+            } else {
+
+                throw new Exception(String.format("Invalid member of \"OFFSET\" on %d!",
+                        curTokenPos));
+
+            }
+
+            getNextToken();
+
+        }
+
         if (isSubQuery && !curToken.lexeme.equals(")")) {
 
             getNextToken();
@@ -310,7 +364,8 @@ public class Parser {
 
                 if (stack.peek().category == Category.LITERAL) {
 
-                    throw new Exception(String.format("Literal is involved in arithmetic operations on %d!", curTokenPos));
+                    throw new Exception(String.format("Literal is involved in arithmetic operations on %d!",
+                            curTokenPos));
 
                 }
 

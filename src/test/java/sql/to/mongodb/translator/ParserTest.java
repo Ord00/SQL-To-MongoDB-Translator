@@ -139,4 +139,30 @@ public class ParserTest {
         Parser parser = new Parser(tokens, errors);
         Assertions.assertDoesNotThrow(parser::tryAnalyse);
     }
+
+    @Test
+    public void testLimit() {
+
+        SCANNER.tryAnalyse("""
+                SELECT DISTINCT Cn.Id_country, Cn.CountryName
+                FROM Race R RIGHT JOIN StaffRace SR
+                	ON R.Id_race = SR.Race
+                	RIGHT JOIN Staff S
+                	ON SR.Staff = S.Id_staff
+                	RIGHT JOIN TeamStaff TS
+                	ON S.Id_staff = TS.Staff
+                	RIGHT JOIN Team Tm
+                	ON TS.Team = Tm.Id_team
+                	RIGHT JOIN Country Cn
+                	ON Tm.Country = Cn.Id_country
+                WHERE R.RaceDate >= TS.EntryDate
+                	AND (TS.ExitDate IS NULL OR R.RaceDate <= TS.ExitDate)
+                	AND R.TicketPrice * R.SoldTickets IN (SELECT R.TicketPrice * R.SoldTickets AS Profit
+                										  FROM Race R
+                										  ORDER BY Profit DESC
+                										  LIMIT 3)""", tokens, errors);
+
+        Parser parser = new Parser(tokens, errors);
+        Assertions.assertDoesNotThrow(parser::tryAnalyse);
+    }
 }
