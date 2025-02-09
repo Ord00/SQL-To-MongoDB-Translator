@@ -1,6 +1,6 @@
 package sql.to.mongodb.translator.interfaces;
 
-import sql.to.mongodb.translator.entities.Token;
+import sql.to.mongodb.translator.scanner.Token;
 
 import java.util.List;
 
