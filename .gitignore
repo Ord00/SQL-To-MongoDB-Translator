@@ -12,6 +12,11 @@ target/
 *.iml
 *.ipr
 
+### GRADLE ###
+.gradle
+gradlew*
+build
+
 ### Eclipse ###
 .apt_generated
 .classpath
