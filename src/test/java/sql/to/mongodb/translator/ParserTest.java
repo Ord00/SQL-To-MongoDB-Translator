@@ -31,7 +31,7 @@ public class ParserTest {
                              FROM sales)""", tokens, errors);
 
         Parser parser = new Parser(tokens, errors);
-        Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(false));
+        Assertions.assertDoesNotThrow(parser::tryAnalyse);
     }
 
     @Test
@@ -59,7 +59,7 @@ public class ParserTest {
                 				)""", tokens, errors);
 
         Parser parser = new Parser(tokens, errors);
-        Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(false));
+        Assertions.assertDoesNotThrow(parser::tryAnalyse);
     }
 
     @Test
@@ -71,7 +71,7 @@ public class ParserTest {
                 	 ON Id_competition = Competition""", tokens, errors);
 
         Parser parser = new Parser(tokens, errors);
-        Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(false));
+        Assertions.assertDoesNotThrow(parser::tryAnalyse);
     }
 
     @Test
@@ -84,7 +84,7 @@ public class ParserTest {
                                        FROM TeamProfit TP2)""", tokens, errors);
 
         Parser parser = new Parser(tokens, errors);
-        Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(false));
+        Assertions.assertDoesNotThrow(parser::tryAnalyse);
     }
 
     @Test
@@ -96,7 +96,7 @@ public class ParserTest {
                 ORDER BY R.TicketPrice * R.SoldTickets DESC""", tokens, errors);
 
         Parser parser = new Parser(tokens, errors);
-        Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(false));
+        Assertions.assertDoesNotThrow(parser::tryAnalyse);
     }
 
     @Test
@@ -122,7 +122,7 @@ public class ParserTest {
                              GROUP BY Tm2.Id_team, Tm2.TeamName
                              HAVING COUNT(DISTINCT R2.Competition) = (SELECT COUNT(*)
                                                                       FROM Competition
-                                                                     )	
+                                                                     )
                              )
                     AND NOT EXISTS (SELECT 1
                                 FROM Race R3 JOIN StaffRace SR3
@@ -137,6 +137,6 @@ public class ParserTest {
                                 )""", tokens, errors);
 
         Parser parser = new Parser(tokens, errors);
-        Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(false));
+        Assertions.assertDoesNotThrow(parser::tryAnalyse);
     }
 }

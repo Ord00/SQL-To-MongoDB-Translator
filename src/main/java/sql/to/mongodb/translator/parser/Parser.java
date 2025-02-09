@@ -47,41 +47,24 @@ public class Parser {
 
     }
 
-    public Node tryAnalyse(boolean isSubQuery) throws Exception {
+    public Node tryAnalyse() throws Exception {
 
         List<Node> children = new ArrayList<>();
         getNextToken();
 
-        if (isSubQuery && curToken.lexeme.equals("SELECT")) {
+        switch (curToken.lexeme) {
 
-            stack.push(new Token("0", Category.PROC_NUMBER));
-            analyseSelect(children, true);
+            case "SELECT" -> analyseSelect(children, false);
 
-            if (!curToken.lexeme.equals(")")) {
-
-                getNextToken();
-
-            }
-
-        } else if (!isSubQuery) {
-
-            switch (curToken.lexeme) {
-
-                case "SELECT" -> {
-
-                    stack.push(new Token("0", Category.PROC_NUMBER));
-                    analyseSelect(children, false);
-
-                }
-
-                default -> throw new Exception("Invalid query keyword!");
-            }
+            default -> throw new Exception("Invalid query keyword!");
         }
 
         return new Node(NodeType.QUERY, children);
     }
 
     private void analyseSelect(List<Node> children, boolean isSubQuery) throws Exception {
+
+        stack.push(new Token("0", Category.PROC_NUMBER));
 
         children.add(new Node(NodeType.TERMINAL, curToken));
         getNextToken();
@@ -148,6 +131,22 @@ public class Parser {
             children.add(OrderByParser.analyseOrderBy(this, orderByChildren, isSubQuery));
 
         }
+
+        if (isSubQuery && !curToken.lexeme.equals(")")) {
+
+            getNextToken();
+
+        }
+
+    }
+
+    void analyseSubquery(List<Node> children) throws Exception {
+
+        getNextToken();
+        List<Node> subqueryChildren = new ArrayList<>();
+        analyseSelect(subqueryChildren, true);
+        children.add(new Node(NodeType.QUERY, subqueryChildren));
+
     }
 
     void processColumnThroughStack(Token token) {
@@ -236,7 +235,7 @@ public class Parser {
 
         } else if (curToken.lexeme.equals("(")) {
 
-            children.add(tryAnalyse(true));
+            analyseSubquery(children);
 
             checkToken(t -> t.lexeme.equals(")"), ")");
 

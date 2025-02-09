@@ -59,7 +59,7 @@ public class TableNamesParser {
 
         } else if (parser.curToken.lexeme.equals("(")) {
 
-            children.add(parser.tryAnalyse(true));
+            parser.analyseSubquery(children);
 
         } else {
 

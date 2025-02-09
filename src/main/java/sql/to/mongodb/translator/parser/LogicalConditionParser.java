@@ -57,7 +57,7 @@ public class LogicalConditionParser {
 
             }
 
-            logicalCheckChildren.add(parser.tryAnalyse(true));
+            parser.analyseSubquery(logicalCheckChildren);
 
             parser.checkToken(t -> t.lexeme.equals(")"), ")");
 
@@ -72,7 +72,7 @@ public class LogicalConditionParser {
 
             }
 
-            logicalCheckChildren.add(parser.tryAnalyse(true));
+            parser.analyseSubquery(logicalCheckChildren);
 
             parser.checkToken(t -> t.lexeme.equals(")"), ")");
 
@@ -171,7 +171,7 @@ public class LogicalConditionParser {
 
                 }
 
-                children.add(parser.tryAnalyse(true));
+                parser.analyseSubquery(children);
 
                 parser.checkToken(t -> t.lexeme.equals(")"), ")");
 
@@ -285,7 +285,7 @@ public class LogicalConditionParser {
         if (parser.curToken.lexeme.equals("SELECT")) {
 
             parser.getPrevToken();
-            Node subQueryIn = parser.tryAnalyse(true);
+            parser.analyseSubquery(children);
 
             if (!subQueryCheck.execute(parser.stack.peek())) {
 
@@ -293,7 +293,7 @@ public class LogicalConditionParser {
 
             } else if (parser.curToken.lexeme.equals(")")) {
 
-                children.add(new Node(NodeType.ATTRIBUTES, List.of(subQueryIn)));
+                children.add(new Node(NodeType.ATTRIBUTES, List.of(children.removeLast())));
                 parser.getNextToken();
             }
 

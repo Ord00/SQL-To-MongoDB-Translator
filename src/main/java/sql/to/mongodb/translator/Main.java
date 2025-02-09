@@ -43,7 +43,7 @@ public class Main {
         System.out.println("\nResult of parser:\n");
 
         Parser parser = new Parser(tokens, errors);
-        Node parserRes = parser.tryAnalyse(false);
+        Node parserRes = parser.tryAnalyse();
         System.out.println(parserRes);
 
     }
