@@ -76,7 +76,7 @@ public class CaseParser {
                         newIsCheckStack,
                         returnValueCheck,
                         isColumn);
-                
+
                 children.add(parser.terminal(t -> t.lexeme.equals("END"), "END"));
                 parser.stack.pop();
 
@@ -113,7 +113,8 @@ public class CaseParser {
 
             if (isCheckStack && parser.stack.pop().category != Category.NUMBER) {
 
-                throw new Exception(String.format("Invalid member of \"CASE\" on %d!", parser.curTokenPos));
+                throw new Exception(String.format("Invalid member of \"CASE\" on %d!",
+                        parser.curTokenPos));
 
             }
 
@@ -131,7 +132,8 @@ public class CaseParser {
 
         } else {
 
-            throw new Exception(String.format("Invalid member of \"CASE\" on %d!", parser.curTokenPos));
+            throw new Exception(String.format("Invalid member of \"CASE\" on %d!",
+                    parser.curTokenPos));
 
         }
 
@@ -146,9 +148,11 @@ public class CaseParser {
 
         Token curAttribute = parser.stack.pop();
 
-        if (returnValueCheck != null && !returnValueCheck.execute(curAttribute)) {
+        if (returnValueCheck != null
+                && !returnValueCheck.execute(curAttribute)) {
 
-            throw new Exception(String.format("Invalid member of \"CASE\" on %d!", parser.curTokenPos));
+            throw new Exception(String.format("Invalid member of \"CASE\" on %d!",
+                    parser.curTokenPos));
 
         }
 
@@ -159,7 +163,8 @@ public class CaseParser {
             if ((curAttribute.category == Category.NUMBER || curAttribute.category == Category.LITERAL)
                     && curAttribute.category != prevAttribute.category) {
 
-                throw new Exception(String.format("Invalid return value of \"CASE\" on %d!", parser.curTokenPos));
+                throw new Exception(String.format("Invalid return value of \"CASE\" on %d!",
+                        parser.curTokenPos));
 
             }
 

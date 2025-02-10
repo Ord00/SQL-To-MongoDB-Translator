@@ -15,7 +15,8 @@ public class FunctionsParser {
 
         if (!isColumn && !parser.stack.peek().lexeme.equals("HAVING")) {
 
-            throw new Exception(String.format("Aggregate function in incorrect section on %d!", parser.curTokenPos));
+            throw new Exception(String.format("Aggregate function in incorrect section on %d!",
+                    parser.curTokenPos));
 
         }
 

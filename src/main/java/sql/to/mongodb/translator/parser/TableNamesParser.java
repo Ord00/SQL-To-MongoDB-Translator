@@ -67,7 +67,8 @@ public class TableNamesParser {
 
         } else {
 
-            throw new Exception(String.format("Invalid table on %d!", parser.curTokenPos));
+            throw new Exception(String.format("Invalid table on %d!",
+                    parser.curTokenPos));
         }
 
         parser.analyseAlias(children);
@@ -112,7 +113,8 @@ public class TableNamesParser {
         return new Node(NodeType.JOIN, children);
     }
 
-    public static Node analyseLogicalCondition(Parser parser, boolean isSubQuery) throws Exception {
+    public static Node analyseLogicalCondition(Parser parser,
+                                               boolean isSubQuery) throws Exception {
 
         List<Node> children = new ArrayList<>();
 

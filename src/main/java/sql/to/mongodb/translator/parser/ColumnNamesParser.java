@@ -57,7 +57,8 @@ public class ColumnNamesParser {
 
         } else {
 
-            throw new Exception(String.format("Incorrect attribute on %d!", parser.curTokenPos));
+            throw new Exception(String.format("Incorrect attribute on %d!",
+                    parser.curTokenPos));
 
         }
 
@@ -72,7 +73,8 @@ public class ColumnNamesParser {
 
             }
             case "FROM" -> new Node(NodeType.COLUMN_NAMES, children);
-            default -> throw new Exception(String.format("Invalid link between attributes on %d!", parser.curTokenPos));
+            default -> throw new Exception(String.format("Invalid link between attributes on %d!",
+                    parser.curTokenPos));
 
         };
     }
