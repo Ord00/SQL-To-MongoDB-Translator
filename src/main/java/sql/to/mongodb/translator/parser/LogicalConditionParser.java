@@ -53,7 +53,8 @@ public class LogicalConditionParser {
 
             if (!parser.curToken.lexeme.equals("(")) {
 
-                throw new Exception(String.format("Expected \"(\" after EXISTS on %d!", parser.curTokenPos));
+                throw new Exception(String.format("Expected \"(\" after EXISTS on %d!",
+                        parser.curTokenPos));
 
             }
 
@@ -68,7 +69,8 @@ public class LogicalConditionParser {
 
             if (!parser.curToken.lexeme.equals("(")) {
 
-                throw new Exception(String.format("Expected \"(\" after EXISTS on %d!", parser.curTokenPos));
+                throw new Exception(String.format("Expected \"(\" after EXISTS on %d!",
+                        parser.curTokenPos));
 
             }
 
@@ -89,7 +91,8 @@ public class LogicalConditionParser {
 
         } else {
 
-            throw new Exception(String.format("Invalid left operand of logical expression on %d!", parser.curTokenPos));
+            throw new Exception(String.format("Invalid left operand of logical expression on %d!",
+                    parser.curTokenPos));
 
         }
 
@@ -111,7 +114,8 @@ public class LogicalConditionParser {
 
         if (!isSubQuery && parser.curToken.lexeme.equals(")")) {
 
-            throw new Exception(String.format("Invalid brackets of logical expression on %d!", parser.curTokenPos));
+            throw new Exception(String.format("Invalid brackets of logical expression on %d!",
+                    parser.curTokenPos));
 
         }
 
@@ -120,17 +124,20 @@ public class LogicalConditionParser {
             children.add(new Node(NodeType.TERMINAL, parser.curToken));
             analyseLogicalCondition(parser, children, isSubQuery);
 
-        } else if (parser.curTokenPos == parser.tokens.size() || parser.curToken.category == Category.KEYWORD) {
+        } else if (parser.curTokenPos == parser.tokens.size()
+                || parser.curToken.category == Category.KEYWORD) {
 
             if ( parser.stack.peek().lexeme.equals("(")) {
 
-                throw new Exception(String.format("Invalid brackets of logical expression on %d!",  parser.curTokenPos));
+                throw new Exception(String.format("Invalid brackets of logical expression on %d!",
+                        parser.curTokenPos));
 
             }
 
-        } else if (!(isSubQuery &&  parser.curToken.lexeme.equals(")"))) {
+        } else if (!(isSubQuery && parser.curToken.lexeme.equals(")"))) {
 
-            throw new Exception(String.format("Invalid link between logical expressions on %d!",  parser.curTokenPos));
+            throw new Exception(String.format("Invalid link between logical expressions on %d!",
+                    parser.curTokenPos));
 
         }
     }
@@ -145,7 +152,8 @@ public class LogicalConditionParser {
         children.add(new Node(NodeType.TERMINAL, parser.curToken));
         parser.getNextToken();
 
-        if (!parser.stack.pop().lexeme.equals("=") && parser.curToken.category == Category.LOGICAL_OPERATOR) {
+        if (!parser.stack.pop().lexeme.equals("=")
+                && parser.curToken.category == Category.LOGICAL_OPERATOR) {
 
             children.add(parser.terminal(comparator, expectedToken));
 
@@ -177,7 +185,8 @@ public class LogicalConditionParser {
 
                 if (parser.stack.peek().category == Category.PROC_NUMBER) {
 
-                    throw new Exception(String.format("Invalid type of subquery on %d!", parser.curTokenPos));
+                    throw new Exception(String.format("Invalid type of subquery on %d!",
+                            parser.curTokenPos));
 
                 }
 
@@ -192,14 +201,16 @@ public class LogicalConditionParser {
         }
     }
 
-    public static void analyseLike(Parser parser, List<Node> children) throws Exception {
+    public static void analyseLike(Parser parser,
+                                   List<Node> children) throws Exception {
 
         Token operandToken = parser.stack.pop();
 
         if (operandToken.category != Category.IDENTIFIER
                 && operandToken.category != Category.LITERAL) {
 
-            throw new Exception(String.format("Invalid left operand of LIKE on %d!", parser.curTokenPos));
+            throw new Exception(String.format("Invalid left operand of \"LIKE\" on %d!",
+                    parser.curTokenPos));
 
         }
 
@@ -212,12 +223,15 @@ public class LogicalConditionParser {
                 false)
                 || parser.stack.pop().category == Category.NUMBER) {
 
-            throw new Exception(String.format("Invalid right operand of LIKE on on %d!", parser.curTokenPos));
+            throw new Exception(String.format("Invalid right operand of \"LIKE\" on on %d!",
+                    parser.curTokenPos));
 
         }
     }
 
-    public static Node analyseIn(Parser parser, List<Node> children, boolean isCheckStack) throws Exception {
+    public static Node analyseIn(Parser parser,
+                                 List<Node> children,
+                                 boolean isCheckStack) throws Exception {
 
         boolean newIsCheckStack = isCheckStack;
 
@@ -226,17 +240,12 @@ public class LogicalConditionParser {
                 t -> t.category != Category.PROC_NUMBER,
                 false)) {
 
-            throw new Exception(String.format("Invalid member of IN on %d!", parser.curTokenPos));
+            throw new Exception(String.format("Invalid member of \"IN\" on %d!",
+                    parser.curTokenPos));
 
         }
 
         Token curAttribute = parser.stack.pop();
-
-        if (curAttribute.category == Category.AGGREGATE) {
-
-            throw new Exception(String.format("Aggregate function in IN on %d!", parser.curTokenPos));
-
-        }
 
         if (isCheckStack) {
 
@@ -245,11 +254,13 @@ public class LogicalConditionParser {
             if ((curAttribute.category == Category.NUMBER || curAttribute.category == Category.LITERAL)
             && curAttribute.category != prevAttribute.category) {
 
-                throw new Exception(String.format("Invalid attribute of IN on %d!", parser.curTokenPos));
+                throw new Exception(String.format("Invalid attribute of \"IN\" on %d!",
+                        parser.curTokenPos));
 
             }
 
-        } else if (curAttribute.category == Category.NUMBER || curAttribute.category == Category.LITERAL) {
+        } else if (curAttribute.category == Category.NUMBER
+                || curAttribute.category == Category.LITERAL) {
 
             parser.stack.push(curAttribute);
             newIsCheckStack = true;
@@ -274,11 +285,14 @@ public class LogicalConditionParser {
 
             }
 
-            default -> throw new Exception(String.format("Wrong first of column_names on %s", parser.curTokenPos));
+            default -> throw new Exception(String.format("Invalid link between members of \"IN\" on %d",
+                    parser.curTokenPos));
         };
     }
 
-    public static boolean analyseInOfSubquery(Parser parser, List<Node> children, LambdaComparable subQueryCheck) throws Exception {
+    public static boolean analyseInOfSubquery(Parser parser,
+                                              List<Node> children,
+                                              LambdaComparable subQueryCheck) throws Exception {
 
         boolean isFound = true;
 
@@ -289,7 +303,8 @@ public class LogicalConditionParser {
 
             if (!subQueryCheck.execute(parser.stack.peek())) {
 
-                throw new Exception(String.format("Wrong first of column_names on %s", parser.curTokenPos));
+                throw new Exception(String.format("Wrong first of column_names on %s",
+                        parser.curTokenPos));
 
             } else if (parser.curToken.lexeme.equals(")")) {
 
@@ -307,14 +322,16 @@ public class LogicalConditionParser {
 
     }
 
-    public static void analyseBetween(Parser parser, List<Node> children) throws Exception {
+    public static void analyseBetween(Parser parser,
+                                      List<Node> children) throws Exception {
 
         if (!parser.analyseOperand(children,
                 null,
                 t -> t.category != Category.PROC_NUMBER,
                 false)) {
 
-            throw new Exception(String.format("Wrong first of column_names on %s", parser.curTokenPos));
+            throw new Exception(String.format("Invalid left border of \"BETWEEN\" range on %d",
+                    parser.curTokenPos));
 
         }
 
@@ -327,13 +344,15 @@ public class LogicalConditionParser {
                 t -> t.category != Category.PROC_NUMBER,
                 false)) {
 
-            throw new Exception(String.format("Wrong first of column_names on %s", parser.curTokenPos));
+            throw new Exception(String.format("Invalid right border of \"BETWEEN\" range on %d",
+                    parser.curTokenPos));
 
         }
 
     }
 
-    public static void analyseOperation(Parser parser, List<Node> children) throws Exception {
+    public static void analyseOperation(Parser parser,
+                                        List<Node> children) throws Exception {
 
         switch (parser.curToken.lexeme) {
 
@@ -414,7 +433,8 @@ public class LogicalConditionParser {
                 }
             }
             case "BETWEEN" -> analyseBetween(parser, children);
-            default -> throw new Exception(String.format("Invalid logical operation on %d!", parser.curTokenPos));
+            default -> throw new Exception(String.format("Invalid logical operation on %d!",
+                    parser.curTokenPos));
         }
     }
 
@@ -422,7 +442,8 @@ public class LogicalConditionParser {
 
         Token curStackToken = parser.stack.peek();
 
-        while (curStackToken.category != Category.KEYWORD && !curStackToken.lexeme.equals("(")) {
+        while (curStackToken.category != Category.KEYWORD
+                && !curStackToken.lexeme.equals("(")) {
 
             parser.stack.pop();
             curStackToken = parser.stack.peek();

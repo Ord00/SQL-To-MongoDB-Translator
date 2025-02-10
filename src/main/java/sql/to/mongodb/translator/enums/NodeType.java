@@ -16,5 +16,7 @@ public enum NodeType {
     GROUP_BY,
     ARITHMETIC_EXP,
     AGGREGATE,
-    ORDER_BY
+    ORDER_BY,
+    CASE,
+    CASE_PART
 }

@@ -61,6 +61,10 @@ public class TableNamesParser {
 
             parser.analyseSubquery(children);
 
+            parser.stack.pop();
+
+            parser.checkToken(t -> t.lexeme.equals(")"), ")");
+
         } else {
 
             throw new Exception(String.format("Invalid table on %d!", parser.curTokenPos));

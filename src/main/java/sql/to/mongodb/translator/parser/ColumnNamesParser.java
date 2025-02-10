@@ -38,23 +38,27 @@ public class ColumnNamesParser {
                     parser::processColumnThroughStack,
                     parser::releaseColumnThroughStack);
 
+        } else if (parser.analyseOperand(children,
+                parser::processColumnThroughStack,
+                t -> t.category != Category.PROC_NUMBER,
+                true)) {
+
+            parser.analyseArithmeticExpression(children,
+                    true,
+                    parser::processColumnThroughStack,
+                    parser::releaseColumnThroughStack);
+
+        } else if (parser.curToken.lexeme.equals("CASE")) {
+
+            CaseParser.analyseCase(parser,
+                    children,
+                    null,
+                    true);
+
         } else {
 
-            if (!parser.analyseOperand(children,
-                    parser::processColumnThroughStack,
-                    t -> t.category != Category.PROC_NUMBER,
-                    true)) {
+            throw new Exception(String.format("Incorrect attribute on %d!", parser.curTokenPos));
 
-                throw new Exception(String.format("Incorrect attribute on %d!", parser.curTokenPos));
-
-            } else {
-
-                parser.analyseArithmeticExpression(children,
-                        true,
-                        parser::processColumnThroughStack,
-                        parser::releaseColumnThroughStack);
-
-            }
         }
 
         parser.analyseAlias(children);

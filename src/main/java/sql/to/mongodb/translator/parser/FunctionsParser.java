@@ -2,13 +2,16 @@ package sql.to.mongodb.translator.parser;
 
 import sql.to.mongodb.translator.enums.Category;
 import sql.to.mongodb.translator.enums.NodeType;
+import sql.to.mongodb.translator.scanner.Token;
 
 import java.util.ArrayList;
 import java.util.List;
 
 public class FunctionsParser {
 
-    public static void analyseAggregate(Parser parser, List<Node> children, boolean isColumn) throws Exception {
+    public static void analyseAggregate(Parser parser,
+                                        List<Node> children,
+                                        boolean isColumn) throws Exception {
 
         if (!isColumn && !parser.stack.peek().lexeme.equals("HAVING")) {
 
@@ -25,7 +28,10 @@ public class FunctionsParser {
 
         parser.checkToken(t -> t.lexeme.equals("("), "(");
 
-        if (parser.stack.pop().lexeme.equals("COUNT") && parser.curToken.category == Category.ALL) {
+        Token aggregateFunction = parser.stack.pop();
+
+        if (aggregateFunction.lexeme.equals("COUNT")
+                && parser.curToken.category == Category.ALL) {
 
             aggregateChildren.add(new Node(NodeType.TERMINAL, parser.curToken));
             parser.getNextToken();
@@ -40,12 +46,37 @@ public class FunctionsParser {
             }
 
             if (!parser.analyseOperand(aggregateChildren,
-                    null,
+                    t -> parser.stack.push(t),
                     t -> false,
                     isColumn)) {
 
-                throw new Exception(String.format("Incorrect attribute of aggregate function on %d!", parser.curTokenPos));
+                if (parser.curToken.lexeme.equals("CASE")) {
 
+                    parser.stack.push(aggregateFunction);
+
+                    CaseParser.analyseCase(parser,
+                            children,
+                            t -> aggregateFunction.lexeme.equals("COUNT") || t.category != Category.LITERAL,
+                            isColumn);
+
+                    parser.stack.pop();
+
+                } else {
+
+                    throw new Exception(String.format("Incorrect attribute of aggregate function on %d!",
+                            parser.curTokenPos));
+
+                }
+
+            } else {
+
+                if (!aggregateFunction.lexeme.equals("COUNT")
+                        || parser.stack.pop().category == Category.LITERAL) {
+
+                    throw new Exception(String.format("Incorrect attribute of aggregate function on %d!",
+                            parser.curTokenPos));
+
+                }
             }
         }
 

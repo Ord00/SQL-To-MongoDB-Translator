@@ -246,9 +246,9 @@ public class Parser {
     }
 
     boolean analyseOperand(List<Node> children,
-                                            LambdaProcessable processToken,
-                                            LambdaComparable subQueryCheck,
-                                            boolean isColumn) throws Exception {
+                           LambdaProcessable processToken,
+                           LambdaComparable subQueryCheck,
+                           boolean isColumn) throws Exception {
 
         boolean isFound = true;
 
