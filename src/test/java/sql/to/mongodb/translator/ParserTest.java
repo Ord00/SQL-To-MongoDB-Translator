@@ -170,9 +170,9 @@ public class ParserTest {
     public void testCaseAsAggregateAttribute() {
 
         SCANNER.tryAnalyse("""
-                SELECT CalcRes.ChampionshipNum * 100 / CalcRes.Total AS Championship,
-                       CalcRes.CupNum * 100 / CalcRes.Total AS Cup,
-                       CalcRes.PrecedenceNum * 100 / CalcRes.Total AS Precedence
+                SELECT (CalcRes.ChampionshipNum * 100) / CalcRes.Total AS Championship,
+                       (CalcRes.CupNum * 100) / CalcRes.Total AS Cup,
+                       (CalcRes.PrecedenceNum * 100) / CalcRes.Total AS Precedence
                 FROM (SELECT SUM(CASE WHEN CT.CompetitionTypeName = 'Чемпионат' THEN 1 ELSE 0 END) ChampionshipNum,
                              SUM(CASE WHEN CT.CompetitionTypeName = 'Кубок' THEN 1 ELSE 0 END) CupNum,
                              SUM(CASE WHEN CT.CompetitionTypeName = 'Первенство' THEN 1 ELSE 0 END) PrecedenceNum

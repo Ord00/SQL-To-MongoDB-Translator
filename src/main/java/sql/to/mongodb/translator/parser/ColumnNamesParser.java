@@ -10,6 +10,10 @@ public class ColumnNamesParser {
 
     public static Node analyseColumnNames(Parser parser, List<Node> children) throws Exception {
 
+        parser.preProcessBrackets(children);
+
+        final Token[] identifierToken = new Token[1];
+
         if (parser.curToken.category == Category.ALL) {
 
             parser.stack.push(new Token("2", Category.PROC_NUMBER));
@@ -39,14 +43,18 @@ public class ColumnNamesParser {
                     parser::releaseColumnThroughStack);
 
         } else if (parser.analyseOperand(children,
-                parser::processColumnThroughStack,
+                t -> identifierToken[0] = t,
                 t -> t.category != Category.PROC_NUMBER,
                 true)) {
 
-            parser.analyseArithmeticExpression(children,
+            if (!parser.analyseArithmeticExpression(children,
                     true,
                     parser::processColumnThroughStack,
-                    parser::releaseColumnThroughStack);
+                    parser::releaseColumnThroughStack)) {
+
+                parser.processColumnThroughStack(identifierToken[0]);
+
+            }
 
         } else if (parser.curToken.lexeme.equals("CASE")) {
 

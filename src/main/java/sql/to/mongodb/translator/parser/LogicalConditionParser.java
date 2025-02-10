@@ -18,21 +18,7 @@ public class LogicalConditionParser {
 
         parser.getNextToken();
 
-        while (parser.curToken.lexeme.equals("(")) {
-
-            parser.stack.push(parser.curToken);
-            children.add(new Node(NodeType.TERMINAL, parser.curToken));
-            parser.getNextToken();
-
-        }
-
-        if (parser.curToken.lexeme.equals("SELECT")) {
-
-            parser.stack.pop();
-            children.removeLast();
-            parser.getPrevToken();
-
-        }
+        parser.preProcessBrackets(children);
 
         if (parser.analyseOperand(logicalCheckChildren,
                 t -> parser.stack.push(t),
@@ -100,24 +86,7 @@ public class LogicalConditionParser {
 
         clearLogicalExpInStack(parser);
 
-        Token bracketToken = parser.stack.peek();
-
-        while (parser.curToken.lexeme.equals(")") && bracketToken.lexeme.equals("(")) {
-
-            parser.stack.pop();
-            bracketToken = parser.stack.peek();
-
-            children.add(new Node(NodeType.TERMINAL, parser.curToken));
-            parser.getNextToken();
-
-        }
-
-        if (!isSubQuery && parser.curToken.lexeme.equals(")")) {
-
-            throw new Exception(String.format("Invalid brackets of logical expression on %d!",
-                    parser.curTokenPos));
-
-        }
+        parser.postProcessBrackets(children, isSubQuery);
 
         if (parser.curToken.category == Category.LOGICAL_COMBINE) {
 

@@ -329,11 +329,13 @@ public class Parser {
 
     }
 
-    void analyseArithmeticExpression(
+    boolean analyseArithmeticExpression(
             List<Node> children,
             boolean isColumn,
             LambdaProcessable processToken,
             LambdaReleasable releaseToken) throws Exception {
+
+        boolean isArithmetic = false;
 
         List<Node> arithmeticChildren = new ArrayList<>();
         arithmeticChildren.add(children.getLast());
@@ -342,12 +344,15 @@ public class Parser {
 
         if (arithmeticChildren.size() > 1) {
 
+            isArithmetic = true;
             releaseToken.execute();
             processToken.execute(new Token("NON", Category.NUMBER));
             children.removeLast();
             children.add(new Node(NodeType.ARITHMETIC_EXP, arithmeticChildren));
 
         }
+
+        return isArithmetic;
     }
 
     private void analyseArithmeticRec(List<Node> children, boolean isColumn) throws Exception {
@@ -358,11 +363,11 @@ public class Parser {
             getNextToken();
 
             if (analyseOperand(children,
-                    null,
+                    t -> stack.push(t),
                     t -> t.category != Category.PROC_NUMBER && t.category != Category.LITERAL,
                     isColumn)) {
 
-                if (stack.peek().category == Category.LITERAL) {
+                if (stack.pop().category == Category.LITERAL) {
 
                     throw new Exception(String.format("Literal is involved in arithmetic operations on %d!",
                             curTokenPos));
@@ -382,8 +387,54 @@ public class Parser {
 
             }
 
+            postProcessBrackets(children, true);
+
             analyseArithmeticRec(children, isColumn);
         }
+    }
+
+    void preProcessBrackets(List<Node> children) {
+
+        while (curToken.lexeme.equals("(")) {
+
+            stack.push(curToken);
+            children.add(new Node(NodeType.TERMINAL, curToken));
+            getNextToken();
+
+        }
+
+        if (curToken.lexeme.equals("SELECT")) {
+
+            stack.pop();
+            children.removeLast();
+            getPrevToken();
+
+        }
+
+    }
+
+    void postProcessBrackets(List<Node> children,
+                             boolean isSubQuery) throws Exception {
+
+        Token bracketToken = stack.peek();
+
+        while (curToken.lexeme.equals(")") && bracketToken.lexeme.equals("(")) {
+
+            stack.pop();
+            bracketToken = stack.peek();
+
+            children.add(new Node(NodeType.TERMINAL, curToken));
+            getNextToken();
+
+        }
+
+        if (!isSubQuery && curToken.lexeme.equals(")")) {
+
+            throw new Exception(String.format("Invalid brackets on %d!",
+                    curTokenPos));
+
+        }
+
     }
 
     void checkToken(LambdaComparable comparator, String expectedToken) throws Exception {
