@@ -50,7 +50,7 @@ public class ColumnNamesParser {
             if (!parser.analyseArithmeticExpression(children,
                     true,
                     parser::processColumnThroughStack,
-                    parser::releaseColumnThroughStack)) {
+                    null)) {
 
                 parser.processColumnThroughStack(identifierToken[0]);
 

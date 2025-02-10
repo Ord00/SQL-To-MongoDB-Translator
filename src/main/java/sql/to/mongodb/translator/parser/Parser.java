@@ -345,7 +345,13 @@ public class Parser {
         if (arithmeticChildren.size() > 1) {
 
             isArithmetic = true;
-            releaseToken.execute();
+
+            if (releaseToken != null) {
+
+                releaseToken.execute();
+
+            }
+
             processToken.execute(new Token("NON", Category.NUMBER));
             children.removeLast();
             children.add(new Node(NodeType.ARITHMETIC_EXP, arithmeticChildren));
