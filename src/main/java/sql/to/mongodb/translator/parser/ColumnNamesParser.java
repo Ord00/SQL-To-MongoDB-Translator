@@ -56,16 +56,17 @@ public class ColumnNamesParser {
 
             }
 
-        } else if (parser.curToken.lexeme.equals("CASE")) {
-
-            CaseParser.analyseCase(parser,
-                    children,
-                    null,
-                    true);
-
         } else {
 
             throw new Exception(String.format("Incorrect attribute on %d!",
+                    parser.curTokenPos));
+
+        }
+
+        // Проверка на наличие скобок за пределами арифметического выражения
+        if (parser.stack.peek().lexeme.equals("(")) {
+
+            throw new Exception(String.format("Invalid brackets in \"FROM\" on %d!",
                     parser.curTokenPos));
 
         }

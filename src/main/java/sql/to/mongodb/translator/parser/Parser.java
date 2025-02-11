@@ -299,6 +299,17 @@ public class Parser {
 
             }
 
+        } else if (curToken.lexeme.equals("CASE")) {
+
+            if (processToken != null) {
+
+                processToken.execute(CaseParser.analyseCase(this,
+                        children,
+                        null,
+                        true));
+
+            }
+
         } else {
 
             isFound = false;

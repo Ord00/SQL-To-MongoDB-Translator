@@ -16,7 +16,7 @@ public class FunctionsParser {
         if (!isColumn && !parser.stack.peek().lexeme.equals("HAVING")) {
 
             throw new Exception(String.format("Aggregate function in incorrect section on %d!",
-                    parser.curTokenPos));
+                      parser.curTokenPos));
 
         }
 
@@ -46,23 +46,15 @@ public class FunctionsParser {
 
             }
 
-            if (!parser.analyseOperand(aggregateChildren,
+            parser.stack.push(aggregateFunction);
+
+            if (parser.analyseOperand(aggregateChildren,
                     t -> parser.stack.push(t),
                     t -> false,
                     isColumn)) {
 
-                if (parser.curToken.lexeme.equals("CASE")) {
-
-                    parser.stack.push(aggregateFunction);
-
-                    CaseParser.analyseCase(parser,
-                            children,
-                            t -> aggregateFunction.lexeme.equals("COUNT") || t.category != Category.LITERAL,
-                            isColumn);
-
-                    parser.stack.pop();
-
-                } else {
+                if (parser.stack.pop().category == Category.LITERAL
+                        && !parser.stack.pop().lexeme.equals("COUNT")) {
 
                     throw new Exception(String.format("Incorrect attribute of aggregate function on %d!",
                             parser.curTokenPos));
@@ -71,13 +63,9 @@ public class FunctionsParser {
 
             } else {
 
-                if (!aggregateFunction.lexeme.equals("COUNT")
-                        || parser.stack.pop().category == Category.LITERAL) {
+                throw new Exception(String.format("Incorrect attribute of aggregate function on %d!",
+                        parser.curTokenPos));
 
-                    throw new Exception(String.format("Incorrect attribute of aggregate function on %d!",
-                            parser.curTokenPos));
-
-                }
             }
         }
 

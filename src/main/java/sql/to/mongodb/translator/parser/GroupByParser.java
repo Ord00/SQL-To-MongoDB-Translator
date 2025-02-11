@@ -8,7 +8,11 @@ import java.util.List;
 
 public class GroupByParser {
 
-    public static Node analyseGroupBy(Parser parser, List<Node> children, boolean isSubQuery) throws Exception {
+    public static Node analyseGroupBy(Parser parser,
+                                      List<Node> children,
+                                      boolean isSubQuery) throws Exception {
+
+        parser.preProcessBrackets(children);
 
         if (parser.analyseOperand(children,
                 t -> parser.stack.push(t),
@@ -25,13 +29,23 @@ public class GroupByParser {
             if (token.category == Category.LITERAL
                     || token.category == Category.NUMBER && !token.lexeme.equals("NON")) {
 
-                throw new Exception(String.format("Invalid member of GROUP BY on %d!", parser.curTokenPos));
+                throw new Exception(String.format("Invalid member of \"GROUP BY\" on %d!",
+                        parser.curTokenPos));
 
             }
 
         } else {
 
-            throw new Exception(String.format("Invalid member of GROUP BY on %d!", parser.curTokenPos));
+            throw new Exception(String.format("Invalid member of \"GROUP BY\" on %d!",
+                    parser.curTokenPos));
+
+        }
+
+        // Проверка на наличие скобок за пределами арифметического выражения
+        if (parser.stack.peek().lexeme.equals("(")) {
+
+            throw new Exception(String.format("Invalid brackets in \"GROUP BY\" on %d!",
+                    parser.curTokenPos));
 
         }
 
@@ -47,7 +61,8 @@ public class GroupByParser {
 
         } else {
 
-            throw new Exception(String.format("Invalid link between members of GROUP BY on %d!", parser.curTokenPos));
+            throw new Exception(String.format("Invalid link between members of \"GROUP BY\" on %d!",
+                    parser.curTokenPos));
 
         }
     }

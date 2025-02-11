@@ -10,7 +10,7 @@ import java.util.List;
 
 public class CaseParser {
 
-    public static void analyseCase(Parser parser,
+    public static Token analyseCase(Parser parser,
                                    List<Node> children,
                                    LambdaComparable returnValueCheck,
                                    boolean isColumn) throws Exception {
@@ -19,20 +19,24 @@ public class CaseParser {
 
         List<Node> caseChildren = new ArrayList<>();
 
-        analyseCasePart(parser,
+        Token returnValue = analyseCasePart(parser,
                 caseChildren,
                 false,
                 returnValueCheck,
                 isColumn);
 
         children.add(new Node(NodeType.CASE, caseChildren));
+
+        return returnValue;
     }
 
-    private static void analyseCasePart(Parser parser,
+    private static Token analyseCasePart(Parser parser,
                                         List<Node> children,
                                         boolean isCheckStack,
                                         LambdaComparable returnValueCheck,
                                         boolean isColumn) throws Exception {
+
+        Token returnValue = new Token("UNDEFINED", Category.UNDEFINED);
 
         if (parser.curToken.lexeme.equals("WHEN")) {
 
@@ -78,20 +82,30 @@ public class CaseParser {
                         isColumn);
 
                 children.add(parser.terminal(t -> t.lexeme.equals("END"), "END"));
-                parser.stack.pop();
+
+                if (isCheckStack) {
+
+                    returnValue =  parser.stack.pop();
+                }
 
             }
 
             case "END" -> {
 
                 children.add(new Node(NodeType.TERMINAL, parser.curToken));
-                parser.stack.pop();
+
+                if (isCheckStack) {
+
+                    returnValue = parser.stack.pop();
+                }
 
             }
 
             default -> throw new Exception(String.format("Invalid link between \"CASE\" conditions on %d!",
                     parser.curTokenPos));
         }
+
+        return returnValue;
     }
 
     private static boolean analyseReturnValue(Parser parser,
