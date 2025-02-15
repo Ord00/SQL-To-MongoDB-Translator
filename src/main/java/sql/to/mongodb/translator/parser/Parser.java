@@ -372,12 +372,16 @@ public class Parser {
         return isArithmetic;
     }
 
-    private void analyseArithmeticRec(List<Node> children, boolean isColumn) throws Exception {
+    private void analyseArithmeticRec(List<Node> children,
+                                      boolean isColumn) throws Exception {
 
-        if (curToken.category == Category.ARITHMETIC_OPERATOR || curToken.category == Category.ALL) {
+        if (curToken.category == Category.ARITHMETIC_OPERATOR
+                || curToken.category == Category.ALL) {
 
             children.add(new Node(NodeType.TERMINAL, curToken));
             getNextToken();
+
+            preProcessBrackets(children);
 
             if (analyseOperand(children,
                     t -> stack.push(t),
@@ -427,7 +431,6 @@ public class Parser {
             getPrevToken();
 
         }
-
     }
 
     void postProcessBrackets(List<Node> children,
@@ -454,7 +457,8 @@ public class Parser {
 
     }
 
-    void checkToken(LambdaComparable comparator, String expectedToken) throws Exception {
+    void checkToken(LambdaComparable comparator,
+                    String expectedToken) throws Exception {
 
         if (comparator.execute(curToken)) {
 
