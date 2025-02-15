@@ -351,7 +351,7 @@ public class Parser {
         List<Node> arithmeticChildren = new ArrayList<>();
         arithmeticChildren.add(children.getLast());
 
-        analyseArithmeticRec(arithmeticChildren, isColumn);
+        int openingBracketsAbsent = analyseArithmeticRec(arithmeticChildren, isColumn);
 
         if (arithmeticChildren.size() > 1) {
 
@@ -365,6 +365,13 @@ public class Parser {
 
             processToken.execute(new Token("NON", Category.NUMBER));
             children.removeLast();
+
+            while (openingBracketsAbsent > 0) {
+
+                arithmeticChildren.addFirst(children.removeLast());
+                --openingBracketsAbsent;
+            }
+            
             children.add(new Node(NodeType.ARITHMETIC_EXP, arithmeticChildren));
 
         }
@@ -372,8 +379,10 @@ public class Parser {
         return isArithmetic;
     }
 
-    private void analyseArithmeticRec(List<Node> children,
+    private int analyseArithmeticRec(List<Node> children,
                                       boolean isColumn) throws Exception {
+
+        int openingBracketsLeft = 0;
 
         if (curToken.category == Category.ARITHMETIC_OPERATOR
                 || curToken.category == Category.ALL) {
@@ -381,7 +390,7 @@ public class Parser {
             children.add(new Node(NodeType.TERMINAL, curToken));
             getNextToken();
 
-            preProcessBrackets(children);
+            openingBracketsLeft -= preProcessArithmeticBrackets(children);
 
             if (analyseOperand(children,
                     t -> stack.push(t),
@@ -408,10 +417,12 @@ public class Parser {
 
             }
 
-            postProcessBrackets(children, true);
+            openingBracketsLeft += postProcessArithmeticBrackets(children, true);
 
-            analyseArithmeticRec(children, isColumn);
+            openingBracketsLeft += analyseArithmeticRec(children, isColumn);
         }
+
+        return openingBracketsLeft;
     }
 
     void preProcessBrackets(List<Node> children) {
@@ -455,6 +466,59 @@ public class Parser {
 
         }
 
+    }
+
+    int preProcessArithmeticBrackets(List<Node> children) {
+
+        int addedOpeningBrackets = 0;
+
+        while (curToken.lexeme.equals("(")) {
+
+            ++addedOpeningBrackets;
+            stack.push(curToken);
+            children.add(new Node(NodeType.TERMINAL, curToken));
+            getNextToken();
+
+        }
+
+        if (curToken.lexeme.equals("SELECT")) {
+
+            --addedOpeningBrackets;
+            stack.pop();
+            children.removeLast();
+            getPrevToken();
+
+        }
+
+        return addedOpeningBrackets;
+    }
+
+    int postProcessArithmeticBrackets(List<Node> children,
+                             boolean isSubQuery) throws Exception {
+
+        int processedOpeningBrackets = 0;
+
+        Token bracketToken = stack.peek();
+
+        while (curToken.lexeme.equals(")") && bracketToken.lexeme.equals("(")) {
+
+            ++processedOpeningBrackets;
+            stack.pop();
+            bracketToken = stack.peek();
+
+            children.add(new Node(NodeType.TERMINAL, curToken));
+            getNextToken();
+
+        }
+
+        if (!isSubQuery && curToken.lexeme.equals(")")) {
+
+            throw new Exception(String.format("Invalid brackets on %d!",
+                    curTokenPos));
+
+        }
+
+        return processedOpeningBrackets;
     }
 
     void checkToken(LambdaComparable comparator,
