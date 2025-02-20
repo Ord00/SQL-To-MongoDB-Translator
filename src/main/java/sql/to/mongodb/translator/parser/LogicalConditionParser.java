@@ -328,7 +328,7 @@ public class LogicalConditionParser {
 
             case "=" -> analyseLogicalOperator(parser,
                     children,
-                    t -> true,
+                    _ -> true,
                     "");
 
             case "<" -> analyseLogicalOperator(parser,
