@@ -1,5 +1,6 @@
 package sql.to.mongodb.translator.parser;
 
+import sql.to.mongodb.translator.exceptions.SQLParseException;
 import sql.to.mongodb.translator.scanner.Token;
 import sql.to.mongodb.translator.enums.Category;
 import sql.to.mongodb.translator.enums.NodeType;
@@ -10,7 +11,7 @@ public class GroupByParser {
 
     public static Node analyseGroupBy(Parser parser,
                                       List<Node> children,
-                                      boolean isSubQuery) throws Exception {
+                                      boolean isSubQuery) throws SQLParseException {
 
         parser.preProcessBrackets(children);
 
@@ -29,14 +30,14 @@ public class GroupByParser {
             if (token.category == Category.LITERAL
                     || token.category == Category.NUMBER && !token.lexeme.equals("NON")) {
 
-                throw new Exception(String.format("Invalid member of \"GROUP BY\" on %d!",
+                throw new SQLParseException(String.format("Invalid member of \"GROUP BY\" on %d!",
                         parser.curTokenPos));
 
             }
 
         } else {
 
-            throw new Exception(String.format("Invalid member of \"GROUP BY\" on %d!",
+            throw new SQLParseException(String.format("Invalid member of \"GROUP BY\" on %d!",
                     parser.curTokenPos));
 
         }
@@ -44,7 +45,7 @@ public class GroupByParser {
         // Проверка на наличие скобок за пределами арифметического выражения
         if (parser.stack.peek().lexeme.equals("(")) {
 
-            throw new Exception(String.format("Invalid brackets in \"GROUP BY\" on %d!",
+            throw new SQLParseException(String.format("Invalid brackets in \"GROUP BY\" on %d!",
                     parser.curTokenPos));
 
         }
@@ -61,7 +62,7 @@ public class GroupByParser {
 
         } else {
 
-            throw new Exception(String.format("Invalid link between members of \"GROUP BY\" on %d!",
+            throw new SQLParseException(String.format("Invalid link between members of \"GROUP BY\" on %d!",
                     parser.curTokenPos));
 
         }

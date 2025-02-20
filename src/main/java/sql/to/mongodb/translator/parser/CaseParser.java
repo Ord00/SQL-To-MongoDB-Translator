@@ -2,7 +2,8 @@ package sql.to.mongodb.translator.parser;
 
 import sql.to.mongodb.translator.enums.Category;
 import sql.to.mongodb.translator.enums.NodeType;
-import sql.to.mongodb.translator.interfaces.LambdaComparable;
+import sql.to.mongodb.translator.exceptions.SQLParseException;
+import sql.to.mongodb.translator.interfaces.TokenComparable;
 import sql.to.mongodb.translator.scanner.Token;
 
 import java.util.ArrayList;
@@ -12,8 +13,8 @@ public class CaseParser {
 
     public static Token analyseCase(Parser parser,
                                    List<Node> children,
-                                   LambdaComparable returnValueCheck,
-                                   boolean isColumn) throws Exception {
+                                   TokenComparable returnValueCheck,
+                                   boolean isColumn) throws SQLParseException {
 
         children.add(parser.terminal(t -> t.lexeme.equals("CASE"), "CASE"));
 
@@ -33,8 +34,8 @@ public class CaseParser {
     private static Token analyseCasePart(Parser parser,
                                         List<Node> children,
                                         boolean isCheckStack,
-                                        LambdaComparable returnValueCheck,
-                                        boolean isColumn) throws Exception {
+                                        TokenComparable returnValueCheck,
+                                        boolean isColumn) throws SQLParseException {
 
         Token returnValue = new Token("UNDEFINED", Category.UNDEFINED);
 
@@ -45,7 +46,7 @@ public class CaseParser {
 
         } else {
 
-            throw new Exception(String.format("EXISTS expected instead of %s on %d!",
+            throw new SQLParseException(String.format("EXISTS expected instead of %s on %d!",
                     parser.curToken.lexeme,
                     parser.curTokenPos));
         }
@@ -101,7 +102,7 @@ public class CaseParser {
 
             }
 
-            default -> throw new Exception(String.format("Invalid link between \"CASE\" conditions on %d!",
+            default -> throw new SQLParseException(String.format("Invalid link between \"CASE\" conditions on %d!",
                     parser.curTokenPos));
         }
 
@@ -111,8 +112,8 @@ public class CaseParser {
     private static boolean analyseReturnValue(Parser parser,
                                               List<Node> children,
                                               boolean isCheckStack,
-                                              LambdaComparable returnValueCheck,
-                                              boolean isColumn) throws Exception {
+                                              TokenComparable returnValueCheck,
+                                              boolean isColumn) throws SQLParseException {
 
         boolean newIsCheckStack;
 
@@ -127,14 +128,14 @@ public class CaseParser {
 
             if (isCheckStack && parser.stack.pop().category != Category.NUMBER) {
 
-                throw new Exception(String.format("Invalid member of \"CASE\" on %d!",
+                throw new SQLParseException(String.format("Invalid member of \"CASE\" on %d!",
                         parser.curTokenPos));
 
             }
 
             if (parser.stack.peek().category == Category.AGGREGATE) {
 
-                throw new Exception(String.format("Attempt to call a nested aggregate function in \"CASE\" on %d!",
+                throw new SQLParseException(String.format("Attempt to call a nested aggregate function in \"CASE\" on %d!",
                         parser.curTokenPos));
             }
 
@@ -146,7 +147,7 @@ public class CaseParser {
 
         } else {
 
-            throw new Exception(String.format("Invalid member of \"CASE\" on %d!",
+            throw new SQLParseException(String.format("Invalid member of \"CASE\" on %d!",
                     parser.curTokenPos));
 
         }
@@ -156,7 +157,7 @@ public class CaseParser {
 
     private static boolean processOperand(Parser parser,
                                           boolean isCheckStack,
-                                          LambdaComparable returnValueCheck) throws Exception {
+                                          TokenComparable returnValueCheck) throws SQLParseException {
 
         boolean newIsCheckStack = isCheckStack;
 
@@ -165,7 +166,7 @@ public class CaseParser {
         if (returnValueCheck != null
                 && !returnValueCheck.execute(curAttribute)) {
 
-            throw new Exception(String.format("Invalid member of \"CASE\" on %d!",
+            throw new SQLParseException(String.format("Invalid member of \"CASE\" on %d!",
                     parser.curTokenPos));
 
         }
@@ -177,7 +178,7 @@ public class CaseParser {
             if ((curAttribute.category == Category.NUMBER || curAttribute.category == Category.LITERAL)
                     && curAttribute.category != prevAttribute.category) {
 
-                throw new Exception(String.format("Invalid return value of \"CASE\" on %d!",
+                throw new SQLParseException(String.format("Invalid return value of \"CASE\" on %d!",
                         parser.curTokenPos));
 
             }

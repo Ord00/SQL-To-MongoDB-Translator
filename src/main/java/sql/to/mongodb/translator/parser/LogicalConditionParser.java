@@ -1,9 +1,10 @@
 package sql.to.mongodb.translator.parser;
 
+import sql.to.mongodb.translator.exceptions.SQLParseException;
 import sql.to.mongodb.translator.scanner.Token;
 import sql.to.mongodb.translator.enums.Category;
 import sql.to.mongodb.translator.enums.NodeType;
-import sql.to.mongodb.translator.interfaces.LambdaComparable;
+import sql.to.mongodb.translator.interfaces.TokenComparable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -12,7 +13,7 @@ public class LogicalConditionParser {
 
     public static void analyseLogicalCondition(Parser parser,
                                                List<Node> children,
-                                               boolean isSubQuery) throws Exception {
+                                               boolean isSubQuery) throws SQLParseException {
 
         List<Node> logicalCheckChildren = new ArrayList<>();
 
@@ -39,7 +40,7 @@ public class LogicalConditionParser {
 
             if (!parser.curToken.lexeme.equals("(")) {
 
-                throw new Exception(String.format("Expected \"(\" after EXISTS on %d!",
+                throw new SQLParseException(String.format("Expected \"(\" after EXISTS on %d!",
                         parser.curTokenPos));
 
             }
@@ -55,7 +56,7 @@ public class LogicalConditionParser {
 
             if (!parser.curToken.lexeme.equals("(")) {
 
-                throw new Exception(String.format("Expected \"(\" after EXISTS on %d!",
+                throw new SQLParseException(String.format("Expected \"(\" after EXISTS on %d!",
                         parser.curTokenPos));
 
             }
@@ -77,7 +78,7 @@ public class LogicalConditionParser {
 
         } else {
 
-            throw new Exception(String.format("Invalid left operand of logical expression on %d!",
+            throw new SQLParseException(String.format("Invalid left operand of logical expression on %d!",
                     parser.curTokenPos));
 
         }
@@ -98,14 +99,14 @@ public class LogicalConditionParser {
 
             if ( parser.stack.peek().lexeme.equals("(")) {
 
-                throw new Exception(String.format("Invalid brackets of logical expression on %d!",
+                throw new SQLParseException(String.format("Invalid brackets of logical expression on %d!",
                         parser.curTokenPos));
 
             }
 
         } else if (!(isSubQuery && parser.curToken.lexeme.equals(")"))) {
 
-            throw new Exception(String.format("Invalid link between logical expressions on %d!",
+            throw new SQLParseException(String.format("Invalid link between logical expressions on %d!",
                     parser.curTokenPos));
 
         }
@@ -113,8 +114,8 @@ public class LogicalConditionParser {
 
     public static void analyseLogicalOperator(Parser parser,
                                               List<Node> children,
-                                              LambdaComparable comparator,
-                                              String expectedToken) throws Exception {
+                                              TokenComparable comparator,
+                                              String expectedToken) throws SQLParseException {
 
         parser.stack.push(parser.curToken);
 
@@ -142,7 +143,7 @@ public class LogicalConditionParser {
 
                 if (!parser.curToken.lexeme.equals("(")) {
 
-                    throw new Exception(String.format("Expected \"(\" after %s on %d",
+                    throw new SQLParseException(String.format("Expected \"(\" after %s on %d",
                             parser.tokens.get(parser.curTokenPos - 2),
                             parser.curTokenPos));
 
@@ -154,14 +155,14 @@ public class LogicalConditionParser {
 
                 if (parser.stack.peek().category == Category.PROC_NUMBER) {
 
-                    throw new Exception(String.format("Invalid type of subquery on %d!",
+                    throw new SQLParseException(String.format("Invalid type of subquery on %d!",
                             parser.curTokenPos));
 
                 }
 
             } else {
 
-                throw new Exception(String.format("Expected %s instead of %s on %d",
+                throw new SQLParseException(String.format("Expected %s instead of %s on %d",
                         "[ANY, SOME, ALL]",
                         parser.curToken.lexeme,
                         parser.curTokenPos));
@@ -171,14 +172,14 @@ public class LogicalConditionParser {
     }
 
     public static void analyseLike(Parser parser,
-                                   List<Node> children) throws Exception {
+                                   List<Node> children) throws SQLParseException {
 
         Token operandToken = parser.stack.pop();
 
         if (operandToken.category != Category.IDENTIFIER
                 && operandToken.category != Category.LITERAL) {
 
-            throw new Exception(String.format("Invalid left operand of \"LIKE\" on %d!",
+            throw new SQLParseException(String.format("Invalid left operand of \"LIKE\" on %d!",
                     parser.curTokenPos));
 
         }
@@ -192,7 +193,7 @@ public class LogicalConditionParser {
                 false)
                 || parser.stack.pop().category == Category.NUMBER) {
 
-            throw new Exception(String.format("Invalid right operand of \"LIKE\" on on %d!",
+            throw new SQLParseException(String.format("Invalid right operand of \"LIKE\" on on %d!",
                     parser.curTokenPos));
 
         }
@@ -200,7 +201,7 @@ public class LogicalConditionParser {
 
     public static Node analyseIn(Parser parser,
                                  List<Node> children,
-                                 boolean isCheckStack) throws Exception {
+                                 boolean isCheckStack) throws SQLParseException {
 
         boolean newIsCheckStack = isCheckStack;
 
@@ -209,7 +210,7 @@ public class LogicalConditionParser {
                 t -> t.category != Category.PROC_NUMBER,
                 false)) {
 
-            throw new Exception(String.format("Invalid member of \"IN\" on %d!",
+            throw new SQLParseException(String.format("Invalid member of \"IN\" on %d!",
                     parser.curTokenPos));
 
         }
@@ -223,7 +224,7 @@ public class LogicalConditionParser {
             if ((curAttribute.category == Category.NUMBER || curAttribute.category == Category.LITERAL)
             && curAttribute.category != prevAttribute.category) {
 
-                throw new Exception(String.format("Invalid attribute of \"IN\" on %d!",
+                throw new SQLParseException(String.format("Invalid attribute of \"IN\" on %d!",
                         parser.curTokenPos));
 
             }
@@ -254,14 +255,14 @@ public class LogicalConditionParser {
 
             }
 
-            default -> throw new Exception(String.format("Invalid link between members of \"IN\" on %d",
+            default -> throw new SQLParseException(String.format("Invalid link between members of \"IN\" on %d",
                     parser.curTokenPos));
         };
     }
 
     public static boolean analyseInOfSubquery(Parser parser,
                                               List<Node> children,
-                                              LambdaComparable subQueryCheck) throws Exception {
+                                              TokenComparable subQueryCheck) throws SQLParseException {
 
         boolean isFound = true;
 
@@ -272,7 +273,7 @@ public class LogicalConditionParser {
 
             if (!subQueryCheck.execute(parser.stack.peek())) {
 
-                throw new Exception(String.format("Wrong first of column_names on %s",
+                throw new SQLParseException(String.format("Wrong first of column_names on %s",
                         parser.curTokenPos));
 
             } else if (parser.curToken.lexeme.equals(")")) {
@@ -292,14 +293,14 @@ public class LogicalConditionParser {
     }
 
     public static void analyseBetween(Parser parser,
-                                      List<Node> children) throws Exception {
+                                      List<Node> children) throws SQLParseException {
 
         if (!parser.analyseOperand(children,
                 null,
                 t -> t.category != Category.PROC_NUMBER,
                 false)) {
 
-            throw new Exception(String.format("Invalid left border of \"BETWEEN\" range on %d",
+            throw new SQLParseException(String.format("Invalid left border of \"BETWEEN\" range on %d",
                     parser.curTokenPos));
 
         }
@@ -313,7 +314,7 @@ public class LogicalConditionParser {
                 t -> t.category != Category.PROC_NUMBER,
                 false)) {
 
-            throw new Exception(String.format("Invalid right border of \"BETWEEN\" range on %d",
+            throw new SQLParseException(String.format("Invalid right border of \"BETWEEN\" range on %d",
                     parser.curTokenPos));
 
         }
@@ -321,7 +322,7 @@ public class LogicalConditionParser {
     }
 
     public static void analyseOperation(Parser parser,
-                                        List<Node> children) throws Exception {
+                                        List<Node> children) throws SQLParseException {
 
         switch (parser.curToken.lexeme) {
 
@@ -378,7 +379,7 @@ public class LogicalConditionParser {
                         }
                     }
                     case "BETWEEN" -> analyseBetween(parser, children);
-                    default -> throw new Exception(String.format("%s expected instead of %s on %d!",
+                    default -> throw new SQLParseException(String.format("%s expected instead of %s on %d!",
                             "[LIKE, IN, BETWEEN]",
                             parser.curToken.lexeme,
                             parser.curTokenPos));
@@ -402,7 +403,7 @@ public class LogicalConditionParser {
                 }
             }
             case "BETWEEN" -> analyseBetween(parser, children);
-            default -> throw new Exception(String.format("Invalid logical operation on %d!",
+            default -> throw new SQLParseException(String.format("Invalid logical operation on %d!",
                     parser.curTokenPos));
         }
     }

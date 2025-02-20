@@ -2,6 +2,7 @@ package sql.to.mongodb.translator.parser;
 
 import sql.to.mongodb.translator.enums.Category;
 import sql.to.mongodb.translator.enums.NodeType;
+import sql.to.mongodb.translator.exceptions.SQLParseException;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -11,7 +12,7 @@ public class TableNamesParser {
     public static Node analyseTableNames(Parser parser,
                                          List<Node> children,
                                          boolean isFirstTable,
-                                         boolean isSubQuery) throws Exception {
+                                         boolean isSubQuery) throws SQLParseException {
 
         if (isFirstTable) {
 
@@ -48,7 +49,7 @@ public class TableNamesParser {
         }
     }
 
-    public static Node analyseTable(Parser parser) throws Exception {
+    public static Node analyseTable(Parser parser) throws SQLParseException {
 
         List<Node> children = new ArrayList<>();
 
@@ -67,7 +68,7 @@ public class TableNamesParser {
 
         } else {
 
-            throw new Exception(String.format("Invalid table on %d!",
+            throw new SQLParseException(String.format("Invalid table on %d!",
                     parser.curTokenPos));
         }
 
@@ -76,7 +77,7 @@ public class TableNamesParser {
         return new Node(NodeType.TABLE, children);
     }
 
-    public static Node analyseJoin(Parser parser) throws Exception {
+    public static Node analyseJoin(Parser parser) throws SQLParseException {
 
         List<Node> children = new ArrayList<>();
 
@@ -102,7 +103,7 @@ public class TableNamesParser {
 
             }
 
-            default -> throw new Exception(String.format("Expected JOIN clause instead of %s on %d!",
+            default -> throw new SQLParseException(String.format("Expected JOIN clause instead of %s on %d!",
                     parser.curToken,
                     parser.curTokenPos));
 
@@ -114,7 +115,7 @@ public class TableNamesParser {
     }
 
     public static Node analyseLogicalCondition(Parser parser,
-                                               boolean isSubQuery) throws Exception {
+                                               boolean isSubQuery) throws SQLParseException {
 
         List<Node> children = new ArrayList<>();
 
