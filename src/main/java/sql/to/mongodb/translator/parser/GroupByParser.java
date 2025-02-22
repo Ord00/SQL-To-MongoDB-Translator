@@ -20,7 +20,8 @@ public class GroupByParser {
                 t -> t.category != Category.PROC_NUMBER,
                 false)) {
 
-            parser.analyseArithmeticExpression(children,
+            ArithmeticParser.analyseArithmeticExpression(parser,
+                    children,
                     false,
                     t -> parser.stack.push(t),
                     () -> parser.stack.pop());

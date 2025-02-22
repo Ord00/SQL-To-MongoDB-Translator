@@ -26,7 +26,8 @@ public class LogicalConditionParser {
                 t -> t.category != Category.PROC_NUMBER,
                 false)) {
 
-            parser.analyseArithmeticExpression(logicalCheckChildren,
+            ArithmeticParser.analyseArithmeticExpression(parser,
+                    logicalCheckChildren,
                     false,
                     t -> parser.stack.push(t),
                     () -> parser.stack.pop());
@@ -71,7 +72,8 @@ public class LogicalConditionParser {
 
             FunctionsParser.analyseAggregate(parser, logicalCheckChildren, false);
 
-            parser.analyseArithmeticExpression(logicalCheckChildren,
+            ArithmeticParser.analyseArithmeticExpression(parser,
+                    logicalCheckChildren,
                     false,
                     t -> parser.stack.push(t),
                     () -> parser.stack.pop());

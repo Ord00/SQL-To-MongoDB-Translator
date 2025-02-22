@@ -39,7 +39,8 @@ public class ColumnNamesParser {
 
             FunctionsParser.analyseAggregate(parser, children, true);
 
-            parser.analyseArithmeticExpression(children,
+            ArithmeticParser.analyseArithmeticExpression(parser,
+                    children,
                     true,
                     parser::processColumnThroughStack,
                     parser::releaseColumnThroughStack);
@@ -49,7 +50,8 @@ public class ColumnNamesParser {
                 t -> t.category != Category.PROC_NUMBER,
                 true)) {
 
-            if (!parser.analyseArithmeticExpression(children,
+            if (!ArithmeticParser.analyseArithmeticExpression(parser,
+                    children,
                     true,
                     parser::processColumnThroughStack,
                     null)) {
