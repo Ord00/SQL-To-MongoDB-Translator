@@ -55,7 +55,8 @@ public class GroupByParser {
             parser.getNextToken();
             return analyseGroupBy(parser, children, isSubQuery);
 
-        } else if (parser.curTokenPos == parser.tokens.size() || parser.curToken.category == Category.KEYWORD
+        } else if (parser.curTokenPos == parser.tokens.size()
+                || parser.curToken.category == Category.KEYWORD
                 || isSubQuery && parser.curToken.lexeme.equals(")")) {
 
             return new Node(NodeType.GROUP_BY, children);

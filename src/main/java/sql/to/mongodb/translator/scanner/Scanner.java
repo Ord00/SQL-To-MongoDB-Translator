@@ -50,7 +50,9 @@ public class Scanner implements LexicallyAnalysable {
         }
     }
 
-    public Boolean tryAnalyse(String codeToScan, List<Token> tokens, List<String> errors) {
+    public Boolean tryAnalyse(String codeToScan,
+                              List<Token> tokens,
+                              List<String> errors) {
 
         List<String> partsSql = splitIntoParts(codeToScan.trim());
 
@@ -70,7 +72,8 @@ public class Scanner implements LexicallyAnalysable {
             }
 
             if (!isFound) {
-                errors.add(String.format("The lexeme %s is not recognised by the language!", part));
+                errors.add(String.format("The lexeme %s is not recognised by the language!",
+                        part));
             }
         }
 
@@ -102,16 +105,20 @@ public class Scanner implements LexicallyAnalysable {
 
             for (String part : curParts) {
 
-                String[] splits = part.trim().split(String.format("%s(?=(?:[^']|'[^']*')*[^']*$)", special), -1);
+                String[] splits = part.trim().split(String.format("%s(?=(?:[^']|'[^']*')*[^']*$)",
+                        special),
+                        -1);
 
                 if (splits.length == 1) {
                     parts.add(splits[0]);
                 } else {
+
                     for (String split : splits) {
                         parts.add(split);
                         parts.add(special.replaceAll("\\\\", ""));
                     }
                     parts.removeLast();
+
                 }
 
                 parts = new ArrayList<>(parts.stream()

@@ -36,7 +36,8 @@ public class LogicalConditionParser {
         } else if (parser.curToken.lexeme.equals("NOT")) {
 
             parser.getNextToken();
-            logicalCheckChildren.add(parser.terminal(t -> t.lexeme.equals("EXISTS"), "EXISTS"));
+            logicalCheckChildren.add(parser.terminal(t -> t.lexeme.equals("EXISTS"),
+                    "EXISTS"));
 
             if (!parser.curToken.lexeme.equals("(")) {
 
@@ -47,7 +48,8 @@ public class LogicalConditionParser {
 
             parser.analyseSubquery(logicalCheckChildren);
 
-            parser.checkToken(t -> t.lexeme.equals(")"), ")");
+            parser.checkToken(t -> t.lexeme.equals(")"),
+                    ")");
 
         } else if (parser.curToken.lexeme.equals("EXISTS")) {
 
@@ -151,7 +153,8 @@ public class LogicalConditionParser {
 
                 parser.analyseSubquery(children);
 
-                parser.checkToken(t -> t.lexeme.equals(")"), ")");
+                parser.checkToken(t -> t.lexeme.equals(")"),
+                        ")");
 
                 if (parser.stack.peek().category == Category.PROC_NUMBER) {
 
