@@ -2,6 +2,7 @@ package sql.to.mongodb.translator.parser;
 
 import sql.to.mongodb.translator.enums.Category;
 import sql.to.mongodb.translator.enums.NodeType;
+import sql.to.mongodb.translator.exceptions.SQLParseException;
 import sql.to.mongodb.translator.scanner.Token;
 
 import java.util.ArrayList;
@@ -11,11 +12,11 @@ public class FunctionsParser {
 
     public static void analyseAggregate(Parser parser,
                                         List<Node> children,
-                                        boolean isColumn) throws Exception {
+                                        boolean isColumn) throws SQLParseException {
 
         if (!isColumn && !parser.stack.peek().lexeme.equals("HAVING")) {
 
-            throw new Exception(String.format("Aggregate function in incorrect section on %d!",
+            throw new SQLParseException(String.format("Aggregate function in incorrect section on %d!",
                       parser.curTokenPos));
 
         }
@@ -50,20 +51,20 @@ public class FunctionsParser {
 
             if (parser.analyseOperand(aggregateChildren,
                     t -> parser.stack.push(t),
-                    t -> false,
+                    _ -> false,
                     isColumn)) {
 
                 if (parser.stack.pop().category == Category.LITERAL
                         && !parser.stack.pop().lexeme.equals("COUNT")) {
 
-                    throw new Exception(String.format("Incorrect attribute of aggregate function on %d!",
+                    throw new SQLParseException(String.format("Incorrect attribute of aggregate function on %d!",
                             parser.curTokenPos));
 
                 }
 
             } else {
 
-                throw new Exception(String.format("Incorrect attribute of aggregate function on %d!",
+                throw new SQLParseException(String.format("Incorrect attribute of aggregate function on %d!",
                         parser.curTokenPos));
 
             }
