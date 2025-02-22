@@ -63,7 +63,8 @@ public class Parser {
         return new Node(NodeType.QUERY, children);
     }
 
-    private void analyseSelect(List<Node> children, boolean isSubQuery) throws SQLParseException {
+    private void analyseSelect(List<Node> children,
+                               boolean isSubQuery) throws SQLParseException {
 
         stack.push(new Token("0", Category.PROC_NUMBER));
 
@@ -84,7 +85,11 @@ public class Parser {
         getNextToken();
 
         List<Node> tableNamesChildren = new ArrayList<>();
-        children.add(TableNamesParser.analyseTableNames(this, tableNamesChildren, true, isSubQuery));
+
+        children.add(TableNamesParser.analyseTableNames(this,
+                tableNamesChildren,
+                true,
+                isSubQuery));
 
         if (curToken.lexeme.equals("WHERE")) {
 
@@ -328,12 +333,14 @@ public class Parser {
 
             children.add(new Node(NodeType.TERMINAL, curToken));
             getNextToken();
-            children.add(terminal(t -> t.category.equals(Category.IDENTIFIER), "Identifier"));
+            children.add(terminal(t -> t.category.equals(Category.IDENTIFIER),
+                    "Identifier"));
 
         } else if (curToken.category == Category.IDENTIFIER) {
 
             children.add(new Node(NodeType.TERMINAL, new Token("AS" , Category.KEYWORD)));
-            children.add(terminal(t -> t.category.equals(Category.IDENTIFIER), "Identifier"));
+            children.add(terminal(t -> t.category.equals(Category.IDENTIFIER),
+                    "Identifier"));
 
         } else if (children.getLast().getNodeType() == NodeType.QUERY) {
 
@@ -478,7 +485,8 @@ public class Parser {
         }
     }
 
-    Node terminal(TokenComparable comparator, String expectedToken) throws SQLParseException {
+    Node terminal(TokenComparable comparator,
+                  String expectedToken) throws SQLParseException {
 
         if (comparator.execute(curToken)) {
 

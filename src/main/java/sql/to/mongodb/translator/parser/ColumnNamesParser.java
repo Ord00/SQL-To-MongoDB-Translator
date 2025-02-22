@@ -9,7 +9,8 @@ import java.util.List;
 
 public class ColumnNamesParser {
 
-    public static Node analyseColumnNames(Parser parser, List<Node> children) throws SQLParseException {
+    public static Node analyseColumnNames(Parser parser,
+                                          List<Node> children) throws SQLParseException {
 
         parser.preProcessBrackets(children);
 
