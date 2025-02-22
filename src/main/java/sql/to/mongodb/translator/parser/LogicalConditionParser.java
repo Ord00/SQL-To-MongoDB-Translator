@@ -356,7 +356,8 @@ public class LogicalConditionParser {
 
                 }
 
-                children.add(parser.terminal(t -> t.category == Category.NULL, "NULL"));
+                children.add(parser.terminal(t -> t.category == Category.NULL,
+                        "NULL"));
 
             }
             case "NOT" -> {
@@ -374,7 +375,8 @@ public class LogicalConditionParser {
                         parser.getNextToken();
                         parser.checkToken(t -> t.lexeme.equals("("), "(");
 
-                        if (analyseInOfSubquery(parser, children, t -> t.category != Category.PROC_NUMBER)) {
+                        if (analyseInOfSubquery(parser, children,
+                                t -> t.category != Category.PROC_NUMBER)) {
 
                             List<Node> inChildren = new ArrayList<>();
                             analyseIn(parser, inChildren, false);
@@ -398,7 +400,8 @@ public class LogicalConditionParser {
                 parser.getNextToken();
                 parser.checkToken(t -> t.lexeme.equals("("), "(");
 
-                if (analyseInOfSubquery(parser, children, t -> t.category != Category.PROC_NUMBER)) {
+                if (analyseInOfSubquery(parser, children,
+                        t -> t.category != Category.PROC_NUMBER)) {
 
                     List<Node> inChildren = new ArrayList<>();
                     analyseIn(parser, inChildren, false);

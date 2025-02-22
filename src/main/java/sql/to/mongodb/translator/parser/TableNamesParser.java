@@ -19,7 +19,8 @@ public class TableNamesParser {
             children.add(analyseTable(parser));
 
             if (parser.curTokenPos != parser.tokens.size()
-                    && !List.of("WHERE", "GROUP", "HAVING", "LIMIT", "SKIP", "ORDER").contains(parser.curToken.lexeme)
+                    && !List.of("WHERE", "GROUP", "HAVING", "LIMIT", "SKIP", "ORDER")
+                    .contains(parser.curToken.lexeme)
                     && !(isSubQuery && parser.curToken.lexeme.equals(")"))) {
 
                 children.add(analyseJoin(parser));
@@ -37,14 +38,18 @@ public class TableNamesParser {
         }
 
         if (parser.curTokenPos == parser.tokens.size()
-                || List.of("WHERE", "GROUP", "HAVING", "LIMIT", "SKIP", "ORDER").contains(parser.curToken.lexeme)
+                || List.of("WHERE", "GROUP", "HAVING", "LIMIT", "SKIP", "ORDER")
+                .contains(parser.curToken.lexeme)
                 || isSubQuery && parser.curToken.lexeme.equals(")")) {
 
             return new Node(NodeType.TABLE_NAMES, children);
 
         } else {
 
-            return analyseTableNames(parser, children, false, isSubQuery);
+            return analyseTableNames(parser,
+                    children,
+                    false,
+                    isSubQuery);
 
         }
     }
@@ -64,7 +69,8 @@ public class TableNamesParser {
 
             parser.stack.pop();
 
-            parser.checkToken(t -> t.lexeme.equals(")"), ")");
+            parser.checkToken(t -> t.lexeme.equals(")"),
+                    ")");
 
         } else {
 
@@ -109,7 +115,8 @@ public class TableNamesParser {
 
         }
 
-        children.add(parser.terminal(t -> t.lexeme.equals("JOIN"), "JOIN"));
+        children.add(parser.terminal(t -> t.lexeme.equals("JOIN"),
+                "JOIN"));
 
         return new Node(NodeType.JOIN, children);
     }
@@ -123,9 +130,12 @@ public class TableNamesParser {
 
             case "USING" -> {
 
-                children.add(parser.terminal(t -> t.lexeme.equals("("), "("));
-                children.add(parser.terminal(t -> t.category == Category.IDENTIFIER, "Identifier"));
-                children.add(parser.terminal(t -> t.lexeme.equals(")"), ")"));
+                children.add(parser.terminal(t -> t.lexeme.equals("("),
+                        "("));
+                children.add(parser.terminal(t -> t.category == Category.IDENTIFIER,
+                        "Identifier"));
+                children.add(parser.terminal(t -> t.lexeme.equals(")"),
+                        ")"));
 
             }
 
