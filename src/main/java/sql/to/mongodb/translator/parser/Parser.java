@@ -1,6 +1,7 @@
 package sql.to.mongodb.translator.parser;
 
 import sql.to.mongodb.translator.exceptions.SQLParseException;
+import sql.to.mongodb.translator.exceptions.SQLScanException;
 import sql.to.mongodb.translator.interfaces.TokenReleasable;
 import sql.to.mongodb.translator.scanner.Token;
 import sql.to.mongodb.translator.enums.Category;
@@ -24,7 +25,8 @@ public class Parser {
     public Parser(List<Token> tokens, List<String> errors) {
 
         this.tokens = tokens;
-        this.errors = errors;
+        this.errors =  errors;
+
     }
 
     void getNextToken() {
@@ -48,7 +50,12 @@ public class Parser {
 
     }
 
-    public Node tryAnalyse() throws Exception {
+    public Node tryAnalyse() throws SQLParseException, SQLScanException {
+
+        for (String error : errors) {
+
+            throw new SQLScanException(error);
+        }
 
         List<Node> children = new ArrayList<>();
         getNextToken();
@@ -57,7 +64,7 @@ public class Parser {
 
             case "SELECT" -> analyseSelect(children, false);
 
-            default -> throw new Exception("Invalid query keyword!");
+            default -> throw new SQLParseException("Invalid query keyword!");
         }
 
         return new Node(NodeType.QUERY, children);
@@ -108,7 +115,7 @@ public class Parser {
 
             children.add(new Node(NodeType.TERMINAL, curToken));
             getNextToken();
-            children.add(terminal(t -> t.lexeme.equals("BY"), "BY"));
+            checkToken(t -> t.lexeme.equals("BY"), "BY");
 
             List<Node> groupByChildren = new ArrayList<>();
             children.add(GroupByParser.analyseGroupBy(this, groupByChildren, isSubQuery));
@@ -131,7 +138,7 @@ public class Parser {
 
             children.add(new Node(NodeType.TERMINAL, curToken));
             getNextToken();
-            children.add(terminal(t -> t.lexeme.equals("BY"), "BY"));
+            checkToken(t -> t.lexeme.equals("BY"), "BY");
 
             List<Node> orderByChildren = new ArrayList<>();
             children.add(OrderByParser.analyseOrderBy(this, orderByChildren, isSubQuery));

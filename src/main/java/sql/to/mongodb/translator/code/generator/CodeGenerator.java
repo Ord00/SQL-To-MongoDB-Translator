@@ -2,6 +2,7 @@ package sql.to.mongodb.translator.code.generator;
 
 import sql.to.mongodb.translator.enums.Category;
 import sql.to.mongodb.translator.enums.NodeType;
+import sql.to.mongodb.translator.interfaces.ExpressionConvertible;
 import sql.to.mongodb.translator.parser.Node;
 import sql.to.mongodb.translator.scanner.Token;
 
@@ -35,6 +36,26 @@ public class CodeGenerator {
         }
     }
 
+    private String convertExpression(String keyword,
+                                     Iterator<Node> iterator,
+                                     boolean isComplicatedStructure,
+                                     ExpressionConvertible func) {
+
+        String res = "";
+
+        if (curNode.getToken().lexeme.equals(keyword)) {
+
+            res = isComplicatedStructure ?
+                    func.execute(iterator.next().getChildren().iterator()) :
+                    func.execute(iterator);
+            getNextNode(iterator);
+
+        }
+
+        return res;
+
+    }
+
     public String generateCode() {
 
         List<Node> children = parseTree.getChildren();
@@ -49,33 +70,39 @@ public class CodeGenerator {
     private String convertSelect(Iterator<Node> iterator) {
 
         String columnNames = convertColumns(iterator.next().getChildren().iterator(), true);
+
         iterator.next();
         String from = convertFrom(iterator.next().getChildren().iterator());
 
         getNextNode(iterator);
 
-        String where = "";
-        if (curNode.getToken().lexeme.equals("WHERE")) {
+        String where = convertExpression("WHERE",
+                iterator,
+                true,
+                this::convertWhere);
 
-            where = convertWhere(iterator.next().getChildren().iterator());
-            getNextNode(iterator);
-        }
+        String limit = convertExpression("LIMIT",
+                iterator,
+                false,
+                this::convertLimit);
 
-        String limit = "";
-        if (curNode.getToken().lexeme.equals("LIMIT")) {
+        String skip = convertExpression("OFFSET",
+                iterator,
+                false,
+                this::convertOffset);
 
-            limit = convertLimit(iterator);
-            getNextNode(iterator);
-        }
+        String sort = convertExpression("ORDER",
+                iterator,
+                true,
+                this::convertOrderBy);
 
-        String skip = "";
-        if (curNode.getToken().lexeme.equals("OFFSET")) {
-
-            skip = convertOffset(iterator);
-            getNextNode(iterator);
-        }
-
-        return String.format("%s.find({%s}, {%s})%s%s", from, where, columnNames, limit, skip);
+        return String.format("%s.find({%s}, {%s})%s%s%s",
+                from,
+                where,
+                columnNames,
+                limit,
+                skip,
+                sort);
 
     }
 
@@ -87,9 +114,10 @@ public class CodeGenerator {
 
             if (!isComplicatedQuery) {
 
-                return (!isFirst ? ", " : "") +
-                        String.format("%s: 1", iterator.next().getToken().lexeme) +
-                        convertColumns(iterator, false);
+                return String.format("%s%s: 1%s",
+                        !isFirst ? ", " : "",
+                        iterator.next().getToken().lexeme,
+                        convertColumns(iterator, false));
 
             }
 
@@ -161,6 +189,44 @@ public class CodeGenerator {
         if (!isComplicatedQuery) {
 
             res = String.format(".skip(%s)", iterator.next().getToken().lexeme);
+
+        }
+
+        return res;
+    }
+
+    private String convertOrderBy(Iterator<Node> iterator) {
+
+        String res = "";
+
+        if (iterator.hasNext()) {
+
+            if (!isComplicatedQuery) {
+
+                return String.format(".skip({ %s })", convertOrderByRec(iterator, true));
+
+            }
+
+        }
+
+        return res;
+    }
+
+    private String convertOrderByRec(Iterator<Node> iterator, boolean isFirst) {
+
+        String res = "";
+
+        if (iterator.hasNext()) {
+
+            if (!isComplicatedQuery) {
+
+                return String.format("%s%s: %s%s",
+                        !isFirst ? ", " : "",
+                        iterator.next().getToken().lexeme,
+                        iterator.next().getToken().lexeme.equals("ABS") ? 1 : -1,
+                        convertOrderByRec(iterator, false));
+
+            }
 
         }
 
