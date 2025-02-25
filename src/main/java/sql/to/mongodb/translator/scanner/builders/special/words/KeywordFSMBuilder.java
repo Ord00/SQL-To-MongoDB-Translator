@@ -29,7 +29,12 @@ public class KeywordFSMBuilder extends SpecialWordsFSMBuilder {
                 "ASC",
                 "DESC",
                 "LIMIT",
-                "OFFSET"
+                "OFFSET",
+                "CASE",
+                "WHEN",
+                "THEN",
+                "ELSE",
+                "END"
         ));
         return super.build();
     }

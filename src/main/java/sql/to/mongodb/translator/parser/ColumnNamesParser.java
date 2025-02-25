@@ -1,5 +1,6 @@
 package sql.to.mongodb.translator.parser;
 
+import sql.to.mongodb.translator.exceptions.SQLParseException;
 import sql.to.mongodb.translator.scanner.Token;
 import sql.to.mongodb.translator.enums.Category;
 import sql.to.mongodb.translator.enums.NodeType;
@@ -8,7 +9,12 @@ import java.util.List;
 
 public class ColumnNamesParser {
 
-    public static Node analyseColumnNames(Parser parser, List<Node> children) throws Exception {
+    public static Node analyseColumnNames(Parser parser,
+                                          List<Node> children) throws SQLParseException {
+
+        parser.preProcessBrackets(children);
+
+        final Token[] identifierToken = new Token[1];
 
         if (parser.curToken.category == Category.ALL) {
 
@@ -19,7 +25,7 @@ public class ColumnNamesParser {
 
             if (!parser.curToken.lexeme.equals("FROM")) {
 
-                throw new Exception(String.format("Expected \"FROM\" instead of %s on %d!",
+                throw new SQLParseException(String.format("Expected \"FROM\" instead of %s on %d!",
                         parser.curToken,
                         parser.curTokenPos));
 
@@ -33,28 +39,40 @@ public class ColumnNamesParser {
 
             FunctionsParser.analyseAggregate(parser, children, true);
 
-            parser.analyseArithmeticExpression(children,
+            ArithmeticParser.analyseArithmeticExpression(parser,
+                    children,
                     true,
                     parser::processColumnThroughStack,
                     parser::releaseColumnThroughStack);
 
-        } else {
+        } else if (parser.analyseOperand(children,
+                t -> identifierToken[0] = t,
+                t -> t.category != Category.PROC_NUMBER,
+                true)) {
 
-            if (!parser.analyseOperand(children,
+            if (!ArithmeticParser.analyseArithmeticExpression(parser,
+                    children,
+                    true,
                     parser::processColumnThroughStack,
-                    t -> t.category != Category.PROC_NUMBER,
-                    true)) {
+                    null)) {
 
-                throw new Exception(String.format("Incorrect attribute on %d!", parser.curTokenPos));
-
-            } else {
-
-                parser.analyseArithmeticExpression(children,
-                        true,
-                        parser::processColumnThroughStack,
-                        parser::releaseColumnThroughStack);
+                parser.processColumnThroughStack(identifierToken[0]);
 
             }
+
+        } else {
+
+            throw new SQLParseException(String.format("Incorrect attribute on %d!",
+                    parser.curTokenPos));
+
+        }
+
+        // Проверка на наличие скобок за пределами арифметического выражения
+        if (parser.stack.peek().lexeme.equals("(")) {
+
+            throw new SQLParseException(String.format("Invalid brackets in \"FROM\" on %d!",
+                    parser.curTokenPos));
+
         }
 
         parser.analyseAlias(children);
@@ -68,7 +86,8 @@ public class ColumnNamesParser {
 
             }
             case "FROM" -> new Node(NodeType.COLUMN_NAMES, children);
-            default -> throw new Exception(String.format("Invalid link between attributes on %d!", parser.curTokenPos));
+            default -> throw new SQLParseException(String.format("Invalid link between attributes on %d!",
+                    parser.curTokenPos));
 
         };
     }

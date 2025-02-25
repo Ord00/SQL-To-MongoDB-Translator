@@ -1,11 +1,13 @@
 package sql.to.mongodb.translator.parser;
 
-import sql.to.mongodb.translator.interfaces.LambdaReleasable;
+import sql.to.mongodb.translator.exceptions.SQLParseException;
+import sql.to.mongodb.translator.exceptions.SQLScanException;
+import sql.to.mongodb.translator.interfaces.TokenReleasable;
 import sql.to.mongodb.translator.scanner.Token;
 import sql.to.mongodb.translator.enums.Category;
 import sql.to.mongodb.translator.enums.NodeType;
-import sql.to.mongodb.translator.interfaces.LambdaProcessable;
-import sql.to.mongodb.translator.interfaces.LambdaComparable;
+import sql.to.mongodb.translator.interfaces.TokenProcessable;
+import sql.to.mongodb.translator.interfaces.TokenComparable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -23,7 +25,8 @@ public class Parser {
     public Parser(List<Token> tokens, List<String> errors) {
 
         this.tokens = tokens;
-        this.errors = errors;
+        this.errors =  errors;
+
     }
 
     void getNextToken() {
@@ -47,7 +50,12 @@ public class Parser {
 
     }
 
-    public Node tryAnalyse() throws Exception {
+    public Node tryAnalyse() throws SQLParseException, SQLScanException {
+
+        for (String error : errors) {
+
+            throw new SQLScanException(error);
+        }
 
         List<Node> children = new ArrayList<>();
         getNextToken();
@@ -56,13 +64,14 @@ public class Parser {
 
             case "SELECT" -> analyseSelect(children, false);
 
-            default -> throw new Exception("Invalid query keyword!");
+            default -> throw new SQLParseException("Invalid query keyword!");
         }
 
         return new Node(NodeType.QUERY, children);
     }
 
-    private void analyseSelect(List<Node> children, boolean isSubQuery) throws Exception {
+    private void analyseSelect(List<Node> children,
+                               boolean isSubQuery) throws SQLParseException {
 
         stack.push(new Token("0", Category.PROC_NUMBER));
 
@@ -83,7 +92,11 @@ public class Parser {
         getNextToken();
 
         List<Node> tableNamesChildren = new ArrayList<>();
-        children.add(TableNamesParser.analyseTableNames(this, tableNamesChildren, true, isSubQuery));
+
+        children.add(TableNamesParser.analyseTableNames(this,
+                tableNamesChildren,
+                true,
+                isSubQuery));
 
         if (curToken.lexeme.equals("WHERE")) {
 
@@ -102,7 +115,7 @@ public class Parser {
 
             children.add(new Node(NodeType.TERMINAL, curToken));
             getNextToken();
-            children.add(terminal(t -> t.lexeme.equals("BY"), "BY"));
+            checkToken(t -> t.lexeme.equals("BY"), "BY");
 
             List<Node> groupByChildren = new ArrayList<>();
             children.add(GroupByParser.analyseGroupBy(this, groupByChildren, isSubQuery));
@@ -125,7 +138,7 @@ public class Parser {
 
             children.add(new Node(NodeType.TERMINAL, curToken));
             getNextToken();
-            children.add(terminal(t -> t.lexeme.equals("BY"), "BY"));
+            checkToken(t -> t.lexeme.equals("BY"), "BY");
 
             List<Node> orderByChildren = new ArrayList<>();
             children.add(OrderByParser.analyseOrderBy(this, orderByChildren, isSubQuery));
@@ -143,14 +156,14 @@ public class Parser {
 
                 if (num <= 0) {
 
-                    throw new Exception(String.format("Invalid number in \"LIMIT\" on %d!",
+                    throw new SQLParseException(String.format("Invalid number in \"LIMIT\" on %d!",
                             curTokenPos));
 
                 }
 
             } else {
 
-                throw new Exception(String.format("Invalid member of \"LIMIT\" on %d!",
+                throw new SQLParseException(String.format("Invalid member of \"LIMIT\" on %d!",
                         curTokenPos));
 
             }
@@ -170,14 +183,14 @@ public class Parser {
 
                 if (num <= 0) {
 
-                    throw new Exception(String.format("Invalid number in \"OFFSET\" on %d!",
+                    throw new SQLParseException(String.format("Invalid number in \"OFFSET\" on %d!",
                             curTokenPos));
 
                 }
 
             } else {
 
-                throw new Exception(String.format("Invalid member of \"OFFSET\" on %d!",
+                throw new SQLParseException(String.format("Invalid member of \"OFFSET\" on %d!",
                         curTokenPos));
 
             }
@@ -194,7 +207,7 @@ public class Parser {
 
     }
 
-    void analyseSubquery(List<Node> children) throws Exception {
+    void analyseSubquery(List<Node> children) throws SQLParseException {
 
         getNextToken();
         List<Node> subqueryChildren = new ArrayList<>();
@@ -246,9 +259,9 @@ public class Parser {
     }
 
     boolean analyseOperand(List<Node> children,
-                                            LambdaProcessable processToken,
-                                            LambdaComparable subQueryCheck,
-                                            boolean isColumn) throws Exception {
+                           TokenProcessable processToken,
+                           TokenComparable subQueryCheck,
+                           boolean isColumn) throws SQLParseException {
 
         boolean isFound = true;
 
@@ -270,7 +283,8 @@ public class Parser {
 
                 getNextToken();
                 identifierChildren.add(terminal(t -> t.category == Category.IDENTIFIER
-                        || isColumn && t.category == Category.ALL, "Identifier or \"*\" in case of column"));
+                        || isColumn && t.category == Category.ALL,
+                        "Identifier or \"*\" in case of column"));
 
                 children.add(new Node(NodeType.IDENTIFIER, identifierChildren));
             }
@@ -295,7 +309,19 @@ public class Parser {
 
             if (!subQueryCheck.execute(stack.peek())) {
 
-                throw new Exception(String.format("Invalid subquery type on %d!", curTokenPos));
+                throw new SQLParseException(String.format("Invalid subquery type on %d!",
+                        curTokenPos));
+
+            }
+
+        } else if (curToken.lexeme.equals("CASE")) {
+
+            if (processToken != null) {
+
+                processToken.execute(CaseParser.analyseCase(this,
+                        children,
+                        null,
+                        true));
 
             }
 
@@ -308,85 +334,75 @@ public class Parser {
         return isFound;
     }
 
-    void analyseAlias(List<Node> children) throws Exception {
+    void analyseAlias(List<Node> children) throws SQLParseException {
 
         if (curToken.lexeme.equals("AS")) {
 
             children.add(new Node(NodeType.TERMINAL, curToken));
             getNextToken();
-            children.add(terminal(t -> t.category.equals(Category.IDENTIFIER), "Identifier"));
+            children.add(terminal(t -> t.category.equals(Category.IDENTIFIER),
+                    "Identifier"));
 
         } else if (curToken.category == Category.IDENTIFIER) {
 
             children.add(new Node(NodeType.TERMINAL, new Token("AS" , Category.KEYWORD)));
-            children.add(terminal(t -> t.category.equals(Category.IDENTIFIER), "Identifier"));
+            children.add(terminal(t -> t.category.equals(Category.IDENTIFIER),
+                    "Identifier"));
 
         } else if (children.getLast().getNodeType() == NodeType.QUERY) {
 
-            throw new Exception(String.format("Subquery is missing elias on %d!", curTokenPos));
+            throw new SQLParseException(String.format("Subquery is missing elias on %d!",
+                    curTokenPos));
 
         }
 
     }
 
-    void analyseArithmeticExpression(
-            List<Node> children,
-            boolean isColumn,
-            LambdaProcessable processToken,
-            LambdaReleasable releaseToken) throws Exception {
+    void preProcessBrackets(List<Node> children) {
 
-        List<Node> arithmeticChildren = new ArrayList<>();
-        arithmeticChildren.add(children.getLast());
+        while (curToken.lexeme.equals("(")) {
 
-        analyseArithmeticRec(arithmeticChildren, isColumn);
+            stack.push(curToken);
+            children.add(new Node(NodeType.TERMINAL, curToken));
+            getNextToken();
 
-        if (arithmeticChildren.size() > 1) {
+        }
 
-            releaseToken.execute();
-            processToken.execute(new Token("NON", Category.NUMBER));
+        if (curToken.lexeme.equals("SELECT")) {
+
+            stack.pop();
             children.removeLast();
-            children.add(new Node(NodeType.ARITHMETIC_EXP, arithmeticChildren));
+            getPrevToken();
 
         }
     }
 
-    private void analyseArithmeticRec(List<Node> children, boolean isColumn) throws Exception {
+    void postProcessBrackets(List<Node> children,
+                             boolean isSubQuery) throws SQLParseException {
 
-        if (curToken.category == Category.ARITHMETIC_OPERATOR || curToken.category == Category.ALL) {
+        Token bracketToken = stack.peek();
+
+        while (curToken.lexeme.equals(")") && bracketToken.lexeme.equals("(")) {
+
+            stack.pop();
+            bracketToken = stack.peek();
 
             children.add(new Node(NodeType.TERMINAL, curToken));
             getNextToken();
 
-            if (analyseOperand(children,
-                    null,
-                    t -> t.category != Category.PROC_NUMBER && t.category != Category.LITERAL,
-                    isColumn)) {
-
-                if (stack.peek().category == Category.LITERAL) {
-
-                    throw new Exception(String.format("Literal is involved in arithmetic operations on %d!",
-                            curTokenPos));
-
-                }
-
-            } else if (curToken.category == Category.AGGREGATE) {
-
-                FunctionsParser.analyseAggregate(this, children, isColumn);
-
-            } else {
-
-                throw new Exception(String.format("Invalid member of arithmetic operations on %d between %s and %s!",
-                        curTokenPos,
-                        curToken.lexeme,
-                        tokens.get(curTokenPos)));
-
-            }
-
-            analyseArithmeticRec(children, isColumn);
         }
+
+        if (!isSubQuery && curToken.lexeme.equals(")")) {
+
+            throw new SQLParseException(String.format("Invalid brackets on %d!",
+                    curTokenPos));
+
+        }
+
     }
 
-    void checkToken(LambdaComparable comparator, String expectedToken) throws Exception {
+    void checkToken(TokenComparable comparator,
+                    String expectedToken) throws SQLParseException {
 
         if (comparator.execute(curToken)) {
 
@@ -394,7 +410,7 @@ public class Parser {
 
         } else {
 
-            throw new Exception(String.format("%s expected instead of %s on %d!",
+            throw new SQLParseException(String.format("%s expected instead of %s on %d!",
                     expectedToken,
                     curToken.lexeme,
                     curTokenPos));
@@ -402,7 +418,8 @@ public class Parser {
         }
     }
 
-    Node terminal(LambdaComparable comparator, String expectedToken) throws Exception {
+    Node terminal(TokenComparable comparator,
+                  String expectedToken) throws SQLParseException {
 
         if (comparator.execute(curToken)) {
 
@@ -412,7 +429,7 @@ public class Parser {
 
         } else {
 
-            throw new Exception(String.format("%s expected instead of %s on %d!",
+            throw new SQLParseException(String.format("%s expected instead of %s on %d!",
                     expectedToken,
                     curToken.lexeme,
                     curTokenPos));

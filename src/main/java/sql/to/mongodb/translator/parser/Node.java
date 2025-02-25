@@ -30,6 +30,10 @@ public class Node {
         return children;
     }
 
+    public Token getToken() {
+        return token;
+    }
+
     @Override
     public String toString() {
 
