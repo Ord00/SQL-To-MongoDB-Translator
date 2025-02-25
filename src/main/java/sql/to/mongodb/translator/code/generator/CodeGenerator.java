@@ -48,6 +48,7 @@ public class CodeGenerator {
             res = isComplicatedStructure ?
                     func.execute(iterator.next().getChildren().iterator()) :
                     func.execute(iterator);
+
             getNextNode(iterator);
 
         }
@@ -69,7 +70,7 @@ public class CodeGenerator {
 
     private String convertSelect(Iterator<Node> iterator) {
 
-        String columnNames = convertColumns(iterator.next().getChildren().iterator(), true);
+        String columnNames = convertColumns(iterator.next().getChildren().iterator());
 
         iterator.next();
         String from = convertFrom(iterator.next().getChildren().iterator());
@@ -96,7 +97,7 @@ public class CodeGenerator {
                 true,
                 this::convertOrderBy);
 
-        return String.format("%s.find({%s}, {%s})%s%s%s",
+        return String.format("%s.find({%s}%s)%s%s%s",
                 from,
                 where,
                 columnNames,
@@ -106,7 +107,7 @@ public class CodeGenerator {
 
     }
 
-    private String convertColumns(Iterator<Node> iterator, boolean isFirst) {
+    private String convertColumns(Iterator<Node> iterator) {
 
         String res = "";
 
@@ -114,10 +115,30 @@ public class CodeGenerator {
 
             if (!isComplicatedQuery) {
 
-                return String.format("%s%s: 1%s",
-                        !isFirst ? ", " : "",
+                String lexeme = iterator.next().getToken().lexeme;
+                return lexeme.equals("*") ? "" :
+                        String.format(", {%s: 1%s}",
+                                lexeme,
+                                convertColumnsRec(iterator));
+
+            }
+
+        }
+
+        return res;
+    }
+
+    private String convertColumnsRec(Iterator<Node> iterator) {
+
+        String res = "";
+
+        if (iterator.hasNext()) {
+
+            if (!isComplicatedQuery) {
+
+                res = String.format(", %s: 1%s",
                         iterator.next().getToken().lexeme,
-                        convertColumns(iterator, false));
+                        convertColumnsRec(iterator));
 
             }
 

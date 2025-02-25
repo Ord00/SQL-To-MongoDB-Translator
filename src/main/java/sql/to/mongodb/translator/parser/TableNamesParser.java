@@ -19,7 +19,7 @@ public class TableNamesParser {
             children.add(analyseTable(parser));
 
             if (parser.curTokenPos != parser.tokens.size()
-                    && !List.of("WHERE", "GROUP", "HAVING", "LIMIT", "SKIP", "ORDER")
+                    && !List.of("WHERE", "GROUP", "HAVING", "LIMIT", "OFFSET", "ORDER")
                     .contains(parser.curToken.lexeme)
                     && !(isSubQuery && parser.curToken.lexeme.equals(")"))) {
 
@@ -38,7 +38,7 @@ public class TableNamesParser {
         }
 
         if (parser.curTokenPos == parser.tokens.size()
-                || List.of("WHERE", "GROUP", "HAVING", "LIMIT", "SKIP", "ORDER")
+                || List.of("WHERE", "GROUP", "HAVING", "LIMIT", "OFFSET", "ORDER")
                 .contains(parser.curToken.lexeme)
                 || isSubQuery && parser.curToken.lexeme.equals(")")) {
 

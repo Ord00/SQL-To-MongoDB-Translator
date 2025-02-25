@@ -67,6 +67,12 @@ public class Parser {
             default -> throw new SQLParseException("Invalid query keyword!");
         }
 
+        if (curTokenPos != tokens.size()) {
+
+            throw new SQLParseException(String.format("Expected end of query on %d!",
+                    curTokenPos));
+        }
+
         return new Node(NodeType.QUERY, children);
     }
 
@@ -161,15 +167,15 @@ public class Parser {
 
                 }
 
+                children.add(new Node(NodeType.TERMINAL, curToken));
+                getNextToken();
+
             } else {
 
                 throw new SQLParseException(String.format("Invalid member of \"LIMIT\" on %d!",
                         curTokenPos));
 
             }
-
-            getNextToken();
-
         }
 
         if (curToken.lexeme.equals("OFFSET")) {
@@ -188,15 +194,15 @@ public class Parser {
 
                 }
 
+                children.add(new Node(NodeType.TERMINAL, curToken));
+                getNextToken();
+
             } else {
 
                 throw new SQLParseException(String.format("Invalid member of \"OFFSET\" on %d!",
                         curTokenPos));
 
             }
-
-            getNextToken();
-
         }
 
         if (isSubQuery && !curToken.lexeme.equals(")")) {
