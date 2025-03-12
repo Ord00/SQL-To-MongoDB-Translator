@@ -2,6 +2,7 @@ package sql.to.mongodb.translator.code.generator;
 
 import sql.to.mongodb.translator.enums.Category;
 import sql.to.mongodb.translator.enums.NodeType;
+import sql.to.mongodb.translator.exceptions.TranslateToMQLException;
 import sql.to.mongodb.translator.interfaces.ExpressionConvertible;
 import sql.to.mongodb.translator.parser.Node;
 import sql.to.mongodb.translator.scanner.Token;
@@ -173,6 +174,59 @@ public class CodeGenerator {
         return res;
     }
 
+    private String convertLogicalOperator(String logOp) {
+
+        return switch (logOp) {
+            case "=": yield "$eq";
+            case "<>": yield "$ne";
+            case "<": yield "$lt";
+            case ">": yield  "$gt";
+            case "<=": yield "$lte";
+            case ">=": yield "$gte";
+            case "IN": yield "$in";
+            default: yield "$nin";
+        };
+    }
+
+    private String convertLogicalCheck(Iterator<Node> iterator) {
+
+        String res = "";
+
+        if (!isComplicatedQuery) {
+
+            String logOp = convertLogicalOperator(iterator.next().getToken().lexeme);
+
+            res = String.format("{%s: %s}",
+                    logOp,
+                    iterator.next().getToken().lexeme);
+
+        }
+
+        return res;
+    }
+
+    private String convertWhereRec(Iterator<Node> iterator) {
+
+        String res = "";
+
+        if (iterator.hasNext()) {
+
+            if (!isComplicatedQuery) {
+
+                Iterator<Node> logCheck = iterator.next().getChildren().iterator();
+
+                return String.format(", %s: %s%s",
+                        logCheck.next().getToken().lexeme,
+                        convertLogicalCheck(logCheck),
+                        convertWhere(iterator));
+
+            }
+
+        }
+
+        return res;
+    }
+
     private String convertWhere(Iterator<Node> iterator) {
 
         String res = "";
@@ -181,7 +235,12 @@ public class CodeGenerator {
 
             if (!isComplicatedQuery) {
 
-                return null;
+                Iterator<Node> logCheck = iterator.next().getChildren().iterator();
+
+                return String.format("%s: %s%s",
+                        logCheck.next().getToken().lexeme,
+                        convertLogicalCheck(logCheck),
+                        convertWhereRec(iterator));
 
             }
 
