@@ -22,6 +22,7 @@ public abstract class SpecialWordsFSMBuilder extends FSMBuilder {
         words.stream()
                 .map(String::toLowerCase)
                 .forEach(word -> {
+
                     FSMState currentState = state0;
                     int length = word.length();
                     int index = 1;
@@ -32,15 +33,20 @@ public abstract class SpecialWordsFSMBuilder extends FSMBuilder {
                         int pos = i;
 
                         FSMState nextState = fsm.transitions.stream()
-                                .filter(k -> k.start.equals(startState) && k.item.equals(word.charAt(pos)))
+                                .filter(k -> k.start.equals(startState)
+                                        && (k.item.equals(word.charAt(pos))
+                                        ||  k.item.equals(Character.toLowerCase(word.charAt(pos)))))
                                 .map(k -> k.end)
                                 .findFirst()
                                 .orElse(null);
 
                         if (nextState != null) {
+
                             nextState.isEnd = isEnd;
                             currentState = nextState;
+
                         } else {
+
                             FSMState state = new FSMState(String.format("%s%d", word, index), false, isEnd);
                             fsm.states.add(state);
 
@@ -48,6 +54,7 @@ public abstract class SpecialWordsFSMBuilder extends FSMBuilder {
                             fsm.transitions.add(transition);
 
                             currentState = state;
+
                         }
                         index++;
                     }

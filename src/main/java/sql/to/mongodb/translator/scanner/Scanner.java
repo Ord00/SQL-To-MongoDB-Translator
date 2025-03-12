@@ -65,7 +65,21 @@ public class Scanner implements LexicallyAnalysable {
                 FSM fsm = fsms.get(category);
 
                 if (fsm.simulate(part)) {
-                    tokens.add(new Token(part, category));
+
+                    tokens.add(new Token(List.of(Category.DDL,
+                            Category.DML,
+                            Category.DCL,
+                            Category.TCL,
+                            Category.KEYWORD,
+                            Category.AGGREGATE,
+                            Category.FUNCTION,
+                            Category.LOGICAL_COMBINE,
+                            Category.LOGICAL_EXPRESSION,
+                            Category.LOGICAL_COMBINE,
+                            Category.LOGICAL_EXPRESSION,
+                            Category.TYPE,
+                            Category.OBJECT,
+                            Category.NOT).contains(category) ? part.toUpperCase() : part, category));
                     isFound = true;
                     break;
                 }

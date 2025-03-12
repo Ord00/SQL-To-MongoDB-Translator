@@ -129,7 +129,12 @@ public class LogicalConditionParser {
         if (!parser.stack.pop().lexeme.equals("=")
                 && parser.curToken.category == Category.LOGICAL_OPERATOR) {
 
-            children.add(parser.terminal(comparator, expectedToken));
+            // children.add(parser.terminal(comparator, expectedToken));
+
+            children.add(new Node(NodeType.TERMINAL,
+                    new Token(children.removeLast().getToken().lexeme
+                            + parser.terminal(comparator, expectedToken).getToken().lexeme,
+                            Category.LOGICAL_OPERATOR)));
 
         }
 
