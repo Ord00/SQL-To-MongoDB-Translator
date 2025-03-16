@@ -2,7 +2,6 @@ package sql.to.mongodb.translator.parser;
 
 import sql.to.mongodb.translator.exceptions.SQLParseException;
 import sql.to.mongodb.translator.exceptions.SQLScanException;
-import sql.to.mongodb.translator.interfaces.TokenReleasable;
 import sql.to.mongodb.translator.scanner.Token;
 import sql.to.mongodb.translator.enums.Category;
 import sql.to.mongodb.translator.enums.NodeType;

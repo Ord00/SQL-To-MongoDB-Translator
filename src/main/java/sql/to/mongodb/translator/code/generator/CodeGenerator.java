@@ -5,6 +5,7 @@ import sql.to.mongodb.translator.enums.NodeType;
 import sql.to.mongodb.translator.exceptions.TranslateToMQLException;
 import sql.to.mongodb.translator.interfaces.ExpressionConvertible;
 import sql.to.mongodb.translator.parser.Node;
+import sql.to.mongodb.translator.parser.ParserResult;
 import sql.to.mongodb.translator.scanner.Token;
 
 import java.util.Iterator;
@@ -14,13 +15,15 @@ public class CodeGenerator {
 
     private Node parseTree;
     private boolean isComplicatedQuery;
+    private boolean isComplicatedWhere;
 
     private Node curNode;
 
-    public CodeGenerator(Node parseTree, boolean isComplicatedQuery) {
+    public CodeGenerator(ParserResult parserResult) {
 
-        this.parseTree = parseTree;
-        this.isComplicatedQuery = isComplicatedQuery;
+        this.parseTree = parserResult.getParseTree();
+        this.isComplicatedQuery = parserResult.isComplicatedQuery();
+        this.isComplicatedWhere = parserResult.isComplicatedWhere();
 
     }
 
@@ -196,10 +199,13 @@ public class CodeGenerator {
 
             String logOp = convertLogicalOperator(iterator.next().getToken().lexeme);
 
-            res = String.format("{%s: %s}",
-                    logOp,
-                    iterator.next().getToken().lexeme);
+            if (!isComplicatedWhere) {
 
+                res = String.format("{%s: %s}",
+                        logOp,
+                        iterator.next().getToken().lexeme);
+
+            }
         }
 
         return res;
@@ -215,11 +221,15 @@ public class CodeGenerator {
 
                 Iterator<Node> logCheck = iterator.next().getChildren().iterator();
 
-                return String.format(", %s: %s%s",
-                        logCheck.next().getToken().lexeme,
-                        convertLogicalCheck(logCheck),
-                        convertWhere(iterator));
+                if (!isComplicatedWhere) {
 
+                    return String.format(", %s: %s%s",
+                            logCheck.next().getToken().lexeme,
+                            convertLogicalCheck(logCheck),
+                            convertWhere(iterator));
+
+
+                }
             }
 
         }
