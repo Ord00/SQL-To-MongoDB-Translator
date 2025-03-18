@@ -1,5 +1,6 @@
 package sql.to.mongodb.translator.scanner;
 
+import org.springframework.stereotype.Component;
 import sql.to.mongodb.translator.scanner.builders.*;
 import sql.to.mongodb.translator.scanner.builders.special.words.*;
 import sql.to.mongodb.translator.scanner.finite.automata.FSM;
@@ -11,7 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-
+@Component
 public class Scanner implements LexicallyAnalysable {
     private final Map<Category, FSM> fsms;
 

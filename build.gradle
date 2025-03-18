@@ -1,5 +1,8 @@
 plugins {
     id("java")
+    id 'org.springframework.boot' version '3.2.0'
+    id 'io.spring.dependency-management' version '1.1.4'
+    id "com.github.node-gradle.node" version "7.0.2"
 }
 
 group = "sql.to.mongodb.translator"
@@ -12,9 +15,29 @@ repositories {
 dependencies {
     testImplementation(platform("org.junit:junit-bom:5.10.0"))
     testImplementation("org.junit.jupiter:junit-jupiter")
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
 }
 
 tasks.test {
     useJUnitPlatform()
 }
 
+springBoot {
+    mainClass = 'sql.to.mongodb.translator.Main'
+}
+
+//tasks.register('buildReact', NpmTask) {
+//    npmCommand = ["npm.cmd"]
+//    args = ['run', 'build']
+//    workingDir = file("../frontend")
+//}
+//
+//tasks.register('copyReactBuild', Copy) {
+//    from "../frontend/build"
+//    into "src/main/resources/static"
+//}
+//
+//processResources.dependsOn(copyReactBuild)
+//copyReactBuild.dependsOn(buildReact)

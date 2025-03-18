@@ -1,5 +1,6 @@
 package sql.to.mongodb.translator.parser;
 
+import org.springframework.stereotype.Component;
 import sql.to.mongodb.translator.exceptions.SQLParseException;
 import sql.to.mongodb.translator.exceptions.SQLScanException;
 import sql.to.mongodb.translator.scanner.Token;
@@ -12,6 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Stack;
 
+@Component
 public class Parser {
 
     List<Token> tokens;

@@ -6,6 +6,7 @@ import sql.to.mongodb.translator.exceptions.SQLScanException;
 import sql.to.mongodb.translator.exceptions.TranslateToMQLException;
 import sql.to.mongodb.translator.parser.Node;
 import sql.to.mongodb.translator.parser.Parser;
+import sql.to.mongodb.translator.parser.ParserResult;
 import sql.to.mongodb.translator.scanner.Scanner;
 import sql.to.mongodb.translator.scanner.Token;
 
@@ -27,7 +28,10 @@ public class SQLToMongoDBTranslator {
             Parser parser = new Parser(tokens, errors);
             Node parseTree = parser.tryAnalyse();
 
-            CodeGenerator codeGenerator = new CodeGenerator(parseTree, false);
+            ParserResult parserResult = new ParserResult(parseTree,
+                    false,
+                    false);
+            CodeGenerator codeGenerator = new CodeGenerator(parserResult);
 
             return codeGenerator.generateCode();
 
