@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Code2, Database, FileSearch } from 'lucide-react';
+import SyntaxTree from './SyntaxTree';
 
 function App() {
   const [sqlQuery, setSqlQuery] = useState('');
@@ -44,7 +45,7 @@ function App() {
           </div>
 
           <div className="flex gap-6 h-[calc(100vh-180px)] w-full">
-            {/* Left Panel - Input */}
+            {/* Левый блок ввода */}
             <div className={`bg-white rounded-lg shadow-md overflow-hidden ${activeTab ? 'w-1/2' : 'w-full'} transition-all duration-300`}>
               <div className="p-6 border-b border-gray-200 flex gap-3">
                 <button
@@ -90,7 +91,7 @@ function App() {
               </div>
             </div>
 
-            {/* Right Panel - Results */}
+            {/* Правый блок результатов */}
             {activeTab && analysisResult && (
                 <div className="w-1/2 bg-white rounded-lg shadow-md overflow-hidden flex flex-col">
                   <div className="p-6 border-b border-gray-200 flex justify-between items-center">
@@ -137,9 +138,7 @@ function App() {
                     )}
 
                     {activeTab === 'syntax' && (
-                        <pre className="bg-gray-50 p-4 rounded-md overflow-x-auto text-sm font-mono whitespace-pre-wrap min-w-[600px]">
-                    {JSON.stringify(analysisResult.syntaxResult, null, 2)}
-                  </pre>
+                        <SyntaxTree data={analysisResult.syntaxResult} />
                     )}
                   </div>
                 </div>

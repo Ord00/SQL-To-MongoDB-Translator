@@ -1,3 +1,21 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+.tree-container {
+    background-color: #f9fafb;
+    border-radius: 0.5rem;
+    padding: 1rem;
+}
+
+.tree-node {
+    cursor: pointer;
+}
+
+.tree-node circle {
+    transition: fill 0.2s ease;
+}
+
+.tree-node:hover circle {
+    fill: #818cf8;
+}
