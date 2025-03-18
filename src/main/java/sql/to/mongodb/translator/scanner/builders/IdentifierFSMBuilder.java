@@ -37,7 +37,7 @@ public class IdentifierFSMBuilder extends FSMBuilder {
 
         for (Character letter : sigma) {
 
-            if ((letter < '0' || letter > '9') && letter != '_') {
+            if (letter < '0' || letter > '9') {
                 FSMTransition transition0 = new FSMTransition(state0, stateEnd, letter);
                 fsm.transitions.add(transition0);
             }

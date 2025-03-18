@@ -1,5 +1,6 @@
 package sql.to.mongodb.translator.scanner;
 
+import org.springframework.stereotype.Component;
 import sql.to.mongodb.translator.scanner.builders.*;
 import sql.to.mongodb.translator.scanner.builders.special.words.*;
 import sql.to.mongodb.translator.scanner.finite.automata.FSM;
@@ -11,7 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-
+@Component
 public class Scanner implements LexicallyAnalysable {
     private final Map<Category, FSM> fsms;
 
@@ -65,7 +66,21 @@ public class Scanner implements LexicallyAnalysable {
                 FSM fsm = fsms.get(category);
 
                 if (fsm.simulate(part)) {
-                    tokens.add(new Token(part, category));
+
+                    tokens.add(new Token(List.of(Category.DDL,
+                            Category.DML,
+                            Category.DCL,
+                            Category.TCL,
+                            Category.KEYWORD,
+                            Category.AGGREGATE,
+                            Category.FUNCTION,
+                            Category.LOGICAL_COMBINE,
+                            Category.LOGICAL_EXPRESSION,
+                            Category.LOGICAL_COMBINE,
+                            Category.LOGICAL_EXPRESSION,
+                            Category.TYPE,
+                            Category.OBJECT,
+                            Category.NOT).contains(category) ? part.toUpperCase() : part, category));
                     isFound = true;
                     break;
                 }

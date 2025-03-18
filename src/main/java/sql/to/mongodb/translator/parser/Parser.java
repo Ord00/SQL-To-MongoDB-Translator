@@ -1,8 +1,8 @@
 package sql.to.mongodb.translator.parser;
 
+import org.springframework.stereotype.Component;
 import sql.to.mongodb.translator.exceptions.SQLParseException;
 import sql.to.mongodb.translator.exceptions.SQLScanException;
-import sql.to.mongodb.translator.interfaces.TokenReleasable;
 import sql.to.mongodb.translator.scanner.Token;
 import sql.to.mongodb.translator.enums.Category;
 import sql.to.mongodb.translator.enums.NodeType;
@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Stack;
 
+@Component
 public class Parser {
 
     List<Token> tokens;
@@ -65,6 +66,12 @@ public class Parser {
             case "SELECT" -> analyseSelect(children, false);
 
             default -> throw new SQLParseException("Invalid query keyword!");
+        }
+
+        if (curTokenPos != tokens.size()) {
+
+            throw new SQLParseException(String.format("Expected end of query on %d!",
+                    curTokenPos));
         }
 
         return new Node(NodeType.QUERY, children);
@@ -161,15 +168,15 @@ public class Parser {
 
                 }
 
+                children.add(new Node(NodeType.TERMINAL, curToken));
+                getNextToken();
+
             } else {
 
                 throw new SQLParseException(String.format("Invalid member of \"LIMIT\" on %d!",
                         curTokenPos));
 
             }
-
-            getNextToken();
-
         }
 
         if (curToken.lexeme.equals("OFFSET")) {
@@ -188,15 +195,15 @@ public class Parser {
 
                 }
 
+                children.add(new Node(NodeType.TERMINAL, curToken));
+                getNextToken();
+
             } else {
 
                 throw new SQLParseException(String.format("Invalid member of \"OFFSET\" on %d!",
                         curTokenPos));
 
             }
-
-            getNextToken();
-
         }
 
         if (isSubQuery && !curToken.lexeme.equals(")")) {

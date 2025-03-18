@@ -92,16 +92,16 @@ public class CodeGeneratorTest {
                 getTranslationResult("SELECT column_name FROM collection WHERE age <> 22")
         );
         Assertions.assertEquals(
-                "db.collection.find({}, {a: 1, b: 1, c: 1, d: 1}).skip(2).limit(10)",
-                getTranslationResult("SELECT a, b, c, d FROM collection SKIP 2 LIMIT 10")
+                "db.collection.find({}, {a: 1, b: 1, c: 1, d: 1}).limit(10).skip(2)",
+                getTranslationResult("SELECT a, b, c, d FROM collection LIMIT 10 OFFSET 2")
         );
         Assertions.assertEquals(
                 "db.collection.find({income: {$lt: -11}}).limit(10).skip(2)",
-                getTranslationResult("SELECT * FROM collection WHERE income < -11 LIMIT 10 SKIP 2")
+                getTranslationResult("SELECT * FROM collection WHERE income < -11 LIMIT 10 OFFSET 2")
         );
         Assertions.assertEquals(
-                "db.collection.find({name: {$eq: 'abcd'}}).skip(2).limit(10)",
-                getTranslationResult("SELECT * FROM collection WHERE name = 'abcd' SKIP 2 LIMIT 10")
+                "db.collection.find({name: {$eq: 'abcd'}}).limit(10).skip(2)",
+                getTranslationResult("SELECT * FROM collection WHERE name = 'abcd' LIMIT 10 OFFSET 2")
         );
         Assertions.assertEquals(
                 "db.collection.find({age: {$lt: 22}}, {column_name: 1}).limit(10)",
@@ -109,20 +109,20 @@ public class CodeGeneratorTest {
         );
         Assertions.assertEquals(
                 "db.collection.find({income: {$ne: -11}}, {a: 1, b: 1, c: 1, d: 1}).skip(2)",
-                getTranslationResult("SELECT a, b, c, d FROM collection WHERE -11 <> income SKIP 2")
+                getTranslationResult("SELECT a, b, c, d FROM collection WHERE -11 <> income OFFSET 2")
         );
     }
 
     @Test
     public void parsingTest() {
         Assertions.assertEquals(
-                "db.collection.find({age: {$gt: 22}}, {a: 1, b: 1, c: 1, d: 1}).skip(2).limit(10)",
-                getTranslationResult("SeLeCt a, b, c, d fRoM collection whEre age > 22 SKip 2 liMIT 10")
+                "db.collection.find({age: {$gt: 22}}, {a: 1, b: 1, c: 1, d: 1}).limit(10).skip(2)",
+                getTranslationResult("SeLeCt a, b, c, d fRoM collection whEre age > 22 liMIT 10 OFFSET 2")
         );
         Assertions.assertEquals(
-                "db.collection.find({age: {$gt: 22}}, {a: 1, b: 1, c: 1, d: 1}).skip(2).limit(10)",
+                "db.collection.find({age: {$gt: 22}}, {a: 1, b: 1, c: 1, d: 1}).limit(10).skip(2)",
                 getTranslationResult("   SELECT  a,b,   c  ,d    FROM  collection   " +
-                        " WHERE age> 22    SKIP  2  LIMIT 10    ")
+                        " WHERE age> 22   LIMIT 10 OFFSET  2    ")
         );
         Assertions.assertEquals(
                 "db.c0lL__EcTi0n.find({n23_ame: {$gt: ''}}, {a1_A2_: 1, _b_B: 1, C13: 1, _Dd_1_23_: 1})",

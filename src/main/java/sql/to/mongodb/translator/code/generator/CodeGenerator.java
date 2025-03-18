@@ -2,8 +2,10 @@ package sql.to.mongodb.translator.code.generator;
 
 import sql.to.mongodb.translator.enums.Category;
 import sql.to.mongodb.translator.enums.NodeType;
+import sql.to.mongodb.translator.exceptions.TranslateToMQLException;
 import sql.to.mongodb.translator.interfaces.ExpressionConvertible;
 import sql.to.mongodb.translator.parser.Node;
+import sql.to.mongodb.translator.parser.ParserResult;
 import sql.to.mongodb.translator.scanner.Token;
 
 import java.util.Iterator;
@@ -13,13 +15,15 @@ public class CodeGenerator {
 
     private Node parseTree;
     private boolean isComplicatedQuery;
+    private boolean isComplicatedWhere;
 
     private Node curNode;
 
-    public CodeGenerator(Node parseTree, boolean isComplicatedQuery) {
+    public CodeGenerator(ParserResult parserResult) {
 
-        this.parseTree = parseTree;
-        this.isComplicatedQuery = isComplicatedQuery;
+        this.parseTree = parserResult.getParseTree();
+        this.isComplicatedQuery = parserResult.isComplicatedQuery();
+        this.isComplicatedWhere = parserResult.isComplicatedWhere();
 
     }
 
@@ -48,6 +52,7 @@ public class CodeGenerator {
             res = isComplicatedStructure ?
                     func.execute(iterator.next().getChildren().iterator()) :
                     func.execute(iterator);
+
             getNextNode(iterator);
 
         }
@@ -69,7 +74,7 @@ public class CodeGenerator {
 
     private String convertSelect(Iterator<Node> iterator) {
 
-        String columnNames = convertColumns(iterator.next().getChildren().iterator(), true);
+        String columnNames = convertColumns(iterator.next().getChildren().iterator());
 
         iterator.next();
         String from = convertFrom(iterator.next().getChildren().iterator());
@@ -96,7 +101,7 @@ public class CodeGenerator {
                 true,
                 this::convertOrderBy);
 
-        return String.format("%s.find({%s}, {%s})%s%s%s",
+        return String.format("%s.find({%s}%s)%s%s%s",
                 from,
                 where,
                 columnNames,
@@ -106,7 +111,7 @@ public class CodeGenerator {
 
     }
 
-    private String convertColumns(Iterator<Node> iterator, boolean isFirst) {
+    private String convertColumns(Iterator<Node> iterator) {
 
         String res = "";
 
@@ -114,10 +119,30 @@ public class CodeGenerator {
 
             if (!isComplicatedQuery) {
 
-                return String.format("%s%s: 1%s",
-                        !isFirst ? ", " : "",
+                String lexeme = iterator.next().getToken().lexeme;
+                return lexeme.equals("*") ? "" :
+                        String.format(", {%s: 1%s}",
+                                lexeme,
+                                convertColumnsRec(iterator));
+
+            }
+
+        }
+
+        return res;
+    }
+
+    private String convertColumnsRec(Iterator<Node> iterator) {
+
+        String res = "";
+
+        if (iterator.hasNext()) {
+
+            if (!isComplicatedQuery) {
+
+                res = String.format(", %s: 1%s",
                         iterator.next().getToken().lexeme,
-                        convertColumns(iterator, false));
+                        convertColumnsRec(iterator));
 
             }
 
@@ -152,6 +177,66 @@ public class CodeGenerator {
         return res;
     }
 
+    private String convertLogicalOperator(String logOp) {
+
+        return switch (logOp) {
+            case "=": yield "$eq";
+            case "<>": yield "$ne";
+            case "<": yield "$lt";
+            case ">": yield  "$gt";
+            case "<=": yield "$lte";
+            case ">=": yield "$gte";
+            case "IN": yield "$in";
+            default: yield "$nin";
+        };
+    }
+
+    private String convertLogicalCheck(Iterator<Node> iterator) {
+
+        String res = "";
+
+        if (!isComplicatedQuery) {
+
+            String logOp = convertLogicalOperator(iterator.next().getToken().lexeme);
+
+            if (!isComplicatedWhere) {
+
+                res = String.format("{%s: %s}",
+                        logOp,
+                        iterator.next().getToken().lexeme);
+
+            }
+        }
+
+        return res;
+    }
+
+    private String convertWhereRec(Iterator<Node> iterator) {
+
+        String res = "";
+
+        if (iterator.hasNext()) {
+
+            if (!isComplicatedQuery) {
+
+                Iterator<Node> logCheck = iterator.next().getChildren().iterator();
+
+                if (!isComplicatedWhere) {
+
+                    return String.format(", %s: %s%s",
+                            logCheck.next().getToken().lexeme,
+                            convertLogicalCheck(logCheck),
+                            convertWhere(iterator));
+
+
+                }
+            }
+
+        }
+
+        return res;
+    }
+
     private String convertWhere(Iterator<Node> iterator) {
 
         String res = "";
@@ -160,7 +245,12 @@ public class CodeGenerator {
 
             if (!isComplicatedQuery) {
 
-                return null;
+                Iterator<Node> logCheck = iterator.next().getChildren().iterator();
+
+                return String.format("%s: %s%s",
+                        logCheck.next().getToken().lexeme,
+                        convertLogicalCheck(logCheck),
+                        convertWhereRec(iterator));
 
             }
 
