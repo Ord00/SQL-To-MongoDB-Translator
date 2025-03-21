@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Code2, Database, FileSearch } from 'lucide-react';
+import SyntaxTree from './SyntaxTree';
 
 function App() {
   const [sqlQuery, setSqlQuery] = useState('');
@@ -11,7 +12,8 @@ function App() {
   const [error, setError] = useState<string | null>(null);
 
   const analyseSql = async () => {
-    setActiveTab(null);
+    setActiveTab(null); // Сбрасываем активную вкладку
+    setError(null); // Сбрасываем ошибку перед новой попыткой
     try {
       const response = await fetch('http://localhost:8080/api/analyse', {
         method: 'POST',
@@ -27,11 +29,11 @@ function App() {
       }
 
       const result = await response.json();
-      setAnalysisResult(result);
-      setError(null);
+      setAnalysisResult(result); // Устанавливаем результат анализа
+      setError(null); // Очищаем ошибку при успешном анализе
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-      setAnalysisResult(null);
+      setError(err instanceof Error ? err.message : 'An error occurred'); // Устанавливаем ошибку
+      setAnalysisResult(null); // Сбрасываем результат анализа при ошибке
     }
   };
 
@@ -44,8 +46,8 @@ function App() {
           </div>
 
           <div className="flex gap-6 h-[calc(100vh-180px)] w-full">
-            {/* Left Panel - Input */}
-            <div className={`bg-white rounded-lg shadow-md overflow-hidden ${activeTab ? 'w-1/2' : 'w-full'} transition-all duration-300`}>
+            {/* Левый блок ввода */}
+            <div className={`bg-white rounded-lg shadow-md overflow-hidden ${activeTab || error ? 'w-1/2' : 'w-full'} transition-all duration-300`}>
               <div className="p-6 border-b border-gray-200 flex gap-3">
                 <button
                     onClick={analyseSql}
@@ -57,11 +59,11 @@ function App() {
                 <button
                     onClick={() => analysisResult && setActiveTab('lexical')}
                     className={`flex items-center gap-2 px-4 py-2 rounded-md transition-colors ${
-                        activeTab === 'lexical'
+                        analysisResult && activeTab === 'lexical'
                             ? 'bg-green-600 text-white'
                             : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                     }`}
-                    disabled={!analysisResult}
+                    disabled={!analysisResult} // Блокируем кнопку, если нет результата анализа
                 >
                   <Code2 size={20} />
                   Lexical
@@ -69,11 +71,11 @@ function App() {
                 <button
                     onClick={() => analysisResult && setActiveTab('syntax')}
                     className={`flex items-center gap-2 px-4 py-2 rounded-md transition-colors ${
-                        activeTab === 'syntax'
+                        analysisResult && activeTab === 'syntax'
                             ? 'bg-purple-600 text-white'
                             : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                     }`}
-                    disabled={!analysisResult}
+                    disabled={!analysisResult} // Блокируем кнопку, если нет результата анализа
                 >
                   <Database size={20} />
                   Syntax
@@ -90,17 +92,18 @@ function App() {
               </div>
             </div>
 
-            {/* Right Panel - Results */}
-            {activeTab && analysisResult && (
+            {/* Правый блок результатов или ошибок */}
+            {(activeTab || error) && (
                 <div className="w-1/2 bg-white rounded-lg shadow-md overflow-hidden flex flex-col">
                   <div className="p-6 border-b border-gray-200 flex justify-between items-center">
                     <h2 className="text-lg font-semibold text-gray-800">
-                      {activeTab === 'lexical'
-                          ? 'Lexical Analysis'
-                          : 'Syntax Analysis'}
+                      {error ? 'Error' : activeTab === 'lexical' ? 'Lexical Analysis' : 'Syntax Analysis'}
                     </h2>
                     <button
-                        onClick={() => setActiveTab(null)}
+                        onClick={() => {
+                          setActiveTab(null);
+                          setError(null); // Сбрасываем ошибку при закрытии
+                        }}
                         className="text-gray-500 hover:text-gray-700"
                     >
                       ×
@@ -113,7 +116,7 @@ function App() {
                         </div>
                     )}
 
-                    {activeTab === 'lexical' && (
+                    {activeTab === 'lexical' && analysisResult && (
                         <div className="overflow-x-auto min-w-[600px]">
                           <table className="w-full text-left">
                             <thead className="bg-gray-50">
@@ -136,10 +139,8 @@ function App() {
                         </div>
                     )}
 
-                    {activeTab === 'syntax' && (
-                        <pre className="bg-gray-50 p-4 rounded-md overflow-x-auto text-sm font-mono whitespace-pre-wrap min-w-[600px]">
-                    {JSON.stringify(analysisResult.syntaxResult, null, 2)}
-                  </pre>
+                    {activeTab === 'syntax' && analysisResult && (
+                        <SyntaxTree data={analysisResult.syntaxResult} />
                     )}
                   </div>
                 </div>
