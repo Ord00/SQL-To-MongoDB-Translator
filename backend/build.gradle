@@ -48,9 +48,10 @@ sourceSets {
 }
 
 jar {
-    manifest {
-        attributes 'Main-Class': 'sql.to.mongodb.translator.Main'
-    }
-    archiveFileName = "SQL-To-MongoDB-Translator.jar"
-    destinationDirectory = file("${project.projectDir}/build/libs")
+    enabled = false
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_22
+    targetCompatibility = JavaVersion.VERSION_22
 }

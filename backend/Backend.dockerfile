@@ -1,4 +1,4 @@
-FROM openjdk:17-jdk-alpine
+FROM amazoncorretto:22-alpine
 VOLUME /tmp
 ARG JAR_FILE=build/libs/SQL-To-MongoDB-Translator.jar
 COPY ${JAR_FILE} app.jar
