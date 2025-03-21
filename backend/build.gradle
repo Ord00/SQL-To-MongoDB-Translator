@@ -31,18 +31,26 @@ springBoot {
 sourceSets {
     main {
         java {
-            srcDirs = ['backend/src/main/java']
+            srcDirs = ['src/main/java']
         }
         resources {
-            srcDirs = ['backend/src/main/resources']
+            srcDirs = ['src/main/resources']
         }
     }
     test {
         java {
-            srcDirs = ['backend/src/test/java']
+            srcDirs = ['src/test/java']
         }
         resources {
-            srcDirs = ['backend/src/test/resources']
+            srcDirs = ['src/test/resources']
         }
     }
+}
+
+jar {
+    manifest {
+        attributes 'Main-Class': 'sql.to.mongodb.translator.Main'
+    }
+    archiveFileName = "SQL-To-MongoDB-Translator.jar"
+    destinationDirectory = file("${project.projectDir}/build/libs")
 }

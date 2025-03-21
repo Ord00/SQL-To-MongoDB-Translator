@@ -1,14 +1,18 @@
-version: '3.8'
 services:
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+      dockerfile: Backend.dockerfile
+
     ports:
       - "8080:8080"
     environment:
       - SPRING_PROFILES_ACTIVE=prod
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      dockerfile: Frontend.dockerfile
     ports:
       - "5173:80"
     depends_on:
