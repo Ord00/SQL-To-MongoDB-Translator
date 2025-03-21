@@ -66,7 +66,7 @@ function App() {
                     disabled={!analysisResult} // Блокируем кнопку, если нет результата анализа
                 >
                   <Code2 size={20} />
-                  Lexical
+                  Lexical Analysis
                 </button>
                 <button
                     onClick={() => analysisResult && setActiveTab('syntax')}
@@ -78,7 +78,7 @@ function App() {
                     disabled={!analysisResult} // Блокируем кнопку, если нет результата анализа
                 >
                   <Database size={20} />
-                  Syntax
+                  Syntax Analysis
                 </button>
               </div>
               <div className="h-[calc(100%-68px)] overflow-auto p-6">
