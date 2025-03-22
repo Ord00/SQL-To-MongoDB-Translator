@@ -1,9 +1,5 @@
 package sql.to.mongodb.translator;
 
-import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Test;
-import sql.to.mongodb.translator.exceptions.TranslateToMQLException;
-
 public class CodeGeneratorTest {
 
 /*    private SQLToMongoDBTranslator translator = new SQLToMongoDBTranslator();

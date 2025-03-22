@@ -2,9 +2,9 @@ package sql.to.mongodb.translator;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
-import sql.to.mongodb.translator.scanner.Scanner;
-import sql.to.mongodb.translator.scanner.Token;
-import sql.to.mongodb.translator.enums.Category;
+import sql.to.mongodb.translator.service.scanner.Scanner;
+import sql.to.mongodb.translator.service.scanner.Token;
+import sql.to.mongodb.translator.service.enums.Category;
 
 import java.util.ArrayList;
 import java.util.List;

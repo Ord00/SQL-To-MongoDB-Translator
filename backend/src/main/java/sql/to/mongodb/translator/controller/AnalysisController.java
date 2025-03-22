@@ -6,12 +6,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import sql.to.mongodb.translator.dto.AnalysisResult;
 import sql.to.mongodb.translator.dto.SqlRequest;
-import sql.to.mongodb.translator.exceptions.SQLParseException;
-import sql.to.mongodb.translator.exceptions.SQLScanException;
-import sql.to.mongodb.translator.parser.Node;
-import sql.to.mongodb.translator.parser.Parser;
-import sql.to.mongodb.translator.scanner.Scanner;
-import sql.to.mongodb.translator.scanner.Token;
+import sql.to.mongodb.translator.service.exceptions.SQLParseException;
+import sql.to.mongodb.translator.service.exceptions.SQLScanException;
+import sql.to.mongodb.translator.service.parser.Node;
+import sql.to.mongodb.translator.service.parser.Parser;
+import sql.to.mongodb.translator.service.scanner.Scanner;
+import sql.to.mongodb.translator.service.scanner.Token;
 
 import java.util.ArrayList;
 import java.util.List;
