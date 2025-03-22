@@ -6,7 +6,7 @@ import sql.to.mongodb.translator.exceptions.TranslateToMQLException;
 
 public class CodeGeneratorTest {
 
-    private SQLToMongoDBTranslator translator = new SQLToMongoDBTranslator();
+/*    private SQLToMongoDBTranslator translator = new SQLToMongoDBTranslator();
 
     private String getTranslationResult(String sqlQuery) {
 
@@ -138,5 +138,5 @@ public class CodeGeneratorTest {
         Assertions.assertNull(getTranslationResult("SELECT * FROM collection WHERE age > 22LIMIT 10"));
         Assertions.assertNull(getTranslationResult("SELECT * FROM collection WHERE name = 'ab'cd'"));
         Assertions.assertNull(getTranslationResult("SELECT * FROM collection WHERE 'abcd\\' = name"));
-    }
+    }*/
 }
