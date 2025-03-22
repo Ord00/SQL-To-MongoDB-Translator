@@ -2,14 +2,6 @@ package sql.to.mongodb.translator;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import sql.to.mongodb.translator.code.generator.CodeGenerator;
-import sql.to.mongodb.translator.parser.Node;
-import sql.to.mongodb.translator.scanner.Scanner;
-import sql.to.mongodb.translator.scanner.Token;
-import sql.to.mongodb.translator.parser.Parser;
-
-import java.util.ArrayList;
-import java.util.List;
 
 @SpringBootApplication
 public class Main {

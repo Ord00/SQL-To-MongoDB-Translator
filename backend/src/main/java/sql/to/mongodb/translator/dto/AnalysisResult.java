@@ -1,7 +1,7 @@
 package sql.to.mongodb.translator.dto;
 
-import sql.to.mongodb.translator.parser.Node;
-import sql.to.mongodb.translator.scanner.Token;
+import sql.to.mongodb.translator.service.parser.Node;
+import sql.to.mongodb.translator.service.scanner.Token;
 
 import java.util.List;
 
