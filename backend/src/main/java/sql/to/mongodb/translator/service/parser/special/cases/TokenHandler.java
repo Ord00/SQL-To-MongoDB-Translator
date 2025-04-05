@@ -1,14 +1,16 @@
-package sql.to.mongodb.translator.service.parser;
+package sql.to.mongodb.translator.service.parser.special.cases;
 
 import sql.to.mongodb.translator.service.enums.NodeType;
 import sql.to.mongodb.translator.service.exceptions.SQLParseException;
 import sql.to.mongodb.translator.service.interfaces.TokenComparable;
+import sql.to.mongodb.translator.service.parser.Node;
+import sql.to.mongodb.translator.service.parser.PushdownAutomaton;
 
 public class TokenHandler {
 
     public static void checkToken(PushdownAutomaton pA,
-                    TokenComparable comparator,
-                    String expectedToken) throws SQLParseException {
+                                  TokenComparable comparator,
+                                  String expectedToken) throws SQLParseException {
 
         if (comparator.execute(pA.curToken())) {
 
@@ -26,8 +28,8 @@ public class TokenHandler {
     }
 
     public static Node terminal(PushdownAutomaton pA,
-                  TokenComparable comparator,
-                  String expectedToken) throws SQLParseException {
+                                TokenComparable comparator,
+                                String expectedToken) throws SQLParseException {
 
         if (comparator.execute(pA.curToken())) {
 

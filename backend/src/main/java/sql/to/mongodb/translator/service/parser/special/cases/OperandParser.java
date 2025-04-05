@@ -1,24 +1,28 @@
-package sql.to.mongodb.translator.service.parser;
+package sql.to.mongodb.translator.service.parser.special.cases;
 
 import sql.to.mongodb.translator.service.enums.Category;
 import sql.to.mongodb.translator.service.enums.NodeType;
 import sql.to.mongodb.translator.service.exceptions.SQLParseException;
 import sql.to.mongodb.translator.service.interfaces.TokenComparable;
 import sql.to.mongodb.translator.service.interfaces.TokenProcessable;
+import sql.to.mongodb.translator.service.parser.main.cases.CaseParser;
+import sql.to.mongodb.translator.service.parser.Node;
+import sql.to.mongodb.translator.service.parser.PushdownAutomaton;
+import sql.to.mongodb.translator.service.parser.dml.SelectParser;
 
 import java.util.ArrayList;
 import java.util.List;
 
-import static sql.to.mongodb.translator.service.parser.TokenHandler.checkToken;
-import static sql.to.mongodb.translator.service.parser.TokenHandler.terminal;
+import static sql.to.mongodb.translator.service.parser.special.cases.TokenHandler.checkToken;
+import static sql.to.mongodb.translator.service.parser.special.cases.TokenHandler.terminal;
 
 public class OperandParser {
 
     public static boolean analyseOperand(PushdownAutomaton pA,
-                           List<Node> children,
-                           TokenProcessable processToken,
-                           TokenComparable subQueryCheck,
-                           boolean isColumn) throws SQLParseException {
+                                         List<Node> children,
+                                         TokenProcessable processToken,
+                                         TokenComparable subQueryCheck,
+                                         boolean isColumn) throws SQLParseException {
 
         boolean isFound = true;
 

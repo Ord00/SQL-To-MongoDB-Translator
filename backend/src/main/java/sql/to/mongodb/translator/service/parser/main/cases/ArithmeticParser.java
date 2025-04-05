@@ -1,16 +1,18 @@
-package sql.to.mongodb.translator.service.parser;
+package sql.to.mongodb.translator.service.parser.main.cases;
 
 import sql.to.mongodb.translator.service.enums.Category;
 import sql.to.mongodb.translator.service.enums.NodeType;
 import sql.to.mongodb.translator.service.exceptions.SQLParseException;
 import sql.to.mongodb.translator.service.interfaces.TokenProcessable;
 import sql.to.mongodb.translator.service.interfaces.TokenReleasable;
+import sql.to.mongodb.translator.service.parser.Node;
+import sql.to.mongodb.translator.service.parser.PushdownAutomaton;
 import sql.to.mongodb.translator.service.scanner.Token;
 
 import java.util.ArrayList;
 import java.util.List;
 
-import static sql.to.mongodb.translator.service.parser.OperandParser.analyseOperand;
+import static sql.to.mongodb.translator.service.parser.special.cases.OperandParser.analyseOperand;
 
 public class ArithmeticParser {
 

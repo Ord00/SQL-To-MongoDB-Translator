@@ -1,15 +1,18 @@
-package sql.to.mongodb.translator.service.parser;
+package sql.to.mongodb.translator.service.parser.main.cases;
 
 import sql.to.mongodb.translator.service.enums.Category;
 import sql.to.mongodb.translator.service.enums.NodeType;
 import sql.to.mongodb.translator.service.exceptions.SQLParseException;
+import sql.to.mongodb.translator.service.parser.Node;
+import sql.to.mongodb.translator.service.parser.PushdownAutomaton;
+import sql.to.mongodb.translator.service.parser.dml.SelectParser;
 
 import java.util.ArrayList;
 import java.util.List;
 
-import static sql.to.mongodb.translator.service.parser.AliasParser.analyseAlias;
-import static sql.to.mongodb.translator.service.parser.TokenHandler.checkToken;
-import static sql.to.mongodb.translator.service.parser.TokenHandler.terminal;
+import static sql.to.mongodb.translator.service.parser.special.cases.AliasParser.analyseAlias;
+import static sql.to.mongodb.translator.service.parser.special.cases.TokenHandler.checkToken;
+import static sql.to.mongodb.translator.service.parser.special.cases.TokenHandler.terminal;
 
 public class TableNamesParser {
 

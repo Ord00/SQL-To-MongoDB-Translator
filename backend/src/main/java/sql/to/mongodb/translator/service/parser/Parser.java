@@ -3,11 +3,9 @@ package sql.to.mongodb.translator.service.parser;
 import org.springframework.stereotype.Component;
 import sql.to.mongodb.translator.service.exceptions.SQLParseException;
 import sql.to.mongodb.translator.service.exceptions.SQLScanException;
+import sql.to.mongodb.translator.service.parser.dml.SelectParser;
 import sql.to.mongodb.translator.service.scanner.Token;
-import sql.to.mongodb.translator.service.enums.Category;
 import sql.to.mongodb.translator.service.enums.NodeType;
-import sql.to.mongodb.translator.service.interfaces.TokenProcessable;
-import sql.to.mongodb.translator.service.interfaces.TokenComparable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -43,7 +41,7 @@ public class Parser {
             default -> throw new SQLParseException("Invalid query keyword!");
         }
 
-        if (pA.isEnd()) {
+        if (!pA.isEnd()) {
 
             throw new SQLParseException(String.format("Expected end of query on %d!",
                     pA.curTokenPos()));

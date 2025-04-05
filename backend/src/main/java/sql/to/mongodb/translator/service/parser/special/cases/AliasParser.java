@@ -1,18 +1,20 @@
-package sql.to.mongodb.translator.service.parser;
+package sql.to.mongodb.translator.service.parser.special.cases;
 
 import sql.to.mongodb.translator.service.enums.Category;
 import sql.to.mongodb.translator.service.enums.NodeType;
 import sql.to.mongodb.translator.service.exceptions.SQLParseException;
+import sql.to.mongodb.translator.service.parser.Node;
+import sql.to.mongodb.translator.service.parser.PushdownAutomaton;
 import sql.to.mongodb.translator.service.scanner.Token;
 
 import java.util.List;
 
-import static sql.to.mongodb.translator.service.parser.TokenHandler.terminal;
+import static sql.to.mongodb.translator.service.parser.special.cases.TokenHandler.terminal;
 
 public class AliasParser {
 
     public static void analyseAlias(PushdownAutomaton pA,
-                      List<Node> children) throws SQLParseException {
+                                    List<Node> children) throws SQLParseException {
 
         if (pA.curToken().lexeme.equals("AS")) {
 
