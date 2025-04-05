@@ -23,7 +23,7 @@ public class ParserTest {
 
     @Test
     public void testInOfOneSubquery() {
-
+        
         SCANNER.tryAnalyse("""
                 SELECT id, name, file
                 FROM products

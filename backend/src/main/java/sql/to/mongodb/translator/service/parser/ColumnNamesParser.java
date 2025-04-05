@@ -7,88 +7,136 @@ import sql.to.mongodb.translator.service.enums.NodeType;
 
 import java.util.List;
 
+import static sql.to.mongodb.translator.service.parser.AliasParser.analyseAlias;
+import static sql.to.mongodb.translator.service.parser.BracketsParser.analysePreProcessBrackets;
+import static sql.to.mongodb.translator.service.parser.OperandParser.analyseOperand;
+
 public class ColumnNamesParser {
 
-    public static Node analyseColumnNames(Parser parser,
+    public static Node analyseColumnNames(PushdownAutomaton pA,
                                           List<Node> children) throws SQLParseException {
 
-        parser.preProcessBrackets(children);
+        analysePreProcessBrackets(pA, children);
 
         final Token[] identifierToken = new Token[1];
 
-        if (parser.curToken.category == Category.ALL) {
+        if (pA.curToken().category == Category.ALL) {
 
-            parser.stack.push(new Token("2", Category.PROC_NUMBER));
+            pA.push(new Token("2", Category.PROC_NUMBER));
 
-            children.add(new Node(NodeType.TERMINAL, parser.curToken));
-            parser.getNextToken();
+            children.add(new Node(NodeType.TERMINAL, pA.curToken()));
+            pA.getNextToken();
 
-            if (!parser.curToken.lexeme.equals("FROM")) {
+            if (!pA.curToken().lexeme.equals("FROM")) {
 
                 throw new SQLParseException(String.format("Expected \"FROM\" instead of %s on %d!",
-                        parser.curToken,
-                        parser.curTokenPos));
+                        pA.curToken(),
+                        pA.curTokenPos()));
 
             }
 
             return new Node(NodeType.COLUMN_NAMES, children);
 
-        } else if (parser.curToken.category == Category.AGGREGATE) {
+        } else if (pA.curToken().category == Category.AGGREGATE) {
 
-            parser.processColumnThroughStack(parser.curToken);
+            processColumnThroughStack(pA, pA.curToken());
 
-            FunctionsParser.analyseAggregate(parser, children, true);
+            FunctionsParser.analyseAggregate(pA, children, true);
 
-            ArithmeticParser.analyseArithmeticExpression(parser,
+            ArithmeticParser.analyseArithmeticExpression(pA,
                     children,
                     true,
-                    parser::processColumnThroughStack,
-                    parser::releaseColumnThroughStack);
+                    ColumnNamesParser::processColumnThroughStack,
+                    ColumnNamesParser::releaseColumnThroughStack);
 
-        } else if (parser.analyseOperand(children,
-                t -> identifierToken[0] = t,
+        } else if (analyseOperand(pA,
+                children,
+                (_, t) -> identifierToken[0] = t,
                 t -> t.category != Category.PROC_NUMBER,
                 true)) {
 
-            if (!ArithmeticParser.analyseArithmeticExpression(parser,
+            if (!ArithmeticParser.analyseArithmeticExpression(pA,
                     children,
                     true,
-                    parser::processColumnThroughStack,
+                    ColumnNamesParser::processColumnThroughStack,
                     null)) {
 
-                parser.processColumnThroughStack(identifierToken[0]);
+                processColumnThroughStack(pA, identifierToken[0]);
 
             }
 
         } else {
 
             throw new SQLParseException(String.format("Incorrect attribute on %d!",
-                    parser.curTokenPos));
+                    pA.curTokenPos()));
 
         }
 
         // Проверка на наличие скобок за пределами арифметического выражения
-        if (parser.stack.peek().lexeme.equals("(")) {
+        if (pA.peek().lexeme.equals("(")) {
 
             throw new SQLParseException(String.format("Invalid brackets in \"FROM\" on %d!",
-                    parser.curTokenPos));
+                    pA.curTokenPos()));
 
         }
 
-        parser.analyseAlias(children);
+        analyseAlias(pA, children);
 
-        return switch (parser.curToken.lexeme) {
+        return switch (pA.curToken().lexeme) {
 
             case "," -> {
 
-                parser.getNextToken();
-                yield analyseColumnNames(parser, children);
+                pA.getNextToken();
+                yield analyseColumnNames(pA, children);
 
             }
             case "FROM" -> new Node(NodeType.COLUMN_NAMES, children);
             default -> throw new SQLParseException(String.format("Invalid link between attributes on %d!",
-                    parser.curTokenPos));
+                    pA.curTokenPos()));
 
         };
+    }
+
+    private static void processColumnThroughStack(PushdownAutomaton pA,
+                                                  Token token) {
+
+        Token prevToken = pA.pop();
+
+        if (prevToken.category == Category.PROC_NUMBER) {
+
+            if (prevToken.lexeme.equals("0")) {
+
+                pA.push(token);
+
+            } else {
+
+                int procNum = Integer.parseInt(prevToken.lexeme);
+                procNum++;
+                pA.push(new Token(Integer.toString(procNum), Category.PROC_NUMBER));
+
+            }
+
+        } else {
+
+            pA.push(new Token("2", Category.PROC_NUMBER));
+
+        }
+    }
+
+    private static void releaseColumnThroughStack(PushdownAutomaton pA) {
+
+        Token prevToken = pA.pop();
+
+        if (prevToken.category == Category.PROC_NUMBER) {
+
+            int procNum = Integer.parseInt(prevToken.lexeme);
+            --procNum;
+            pA.push(new Token(Integer.toString(procNum), Category.PROC_NUMBER));
+
+        } else {
+
+            pA.push(new Token("0", Category.PROC_NUMBER));
+
+        }
     }
 }

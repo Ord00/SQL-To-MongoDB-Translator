@@ -9,18 +9,22 @@ import sql.to.mongodb.translator.service.scanner.Token;
 import java.util.ArrayList;
 import java.util.List;
 
+import static sql.to.mongodb.translator.service.parser.OperandParser.analyseOperand;
+import static sql.to.mongodb.translator.service.parser.TokenHandler.terminal;
+
 public class CaseParser {
 
-    public static Token analyseCase(Parser parser,
+    public static Token analyseCase(PushdownAutomaton pA,
                                    List<Node> children,
                                    TokenComparable returnValueCheck,
                                    boolean isColumn) throws SQLParseException {
 
-        children.add(parser.terminal(t -> t.lexeme.equals("CASE"), "CASE"));
+        children.add(terminal(pA,
+                t -> t.lexeme.equals("CASE"), "CASE"));
 
         List<Node> caseChildren = new ArrayList<>();
 
-        Token returnValue = analyseCasePart(parser,
+        Token returnValue = analyseCasePart(pA,
                 caseChildren,
                 false,
                 returnValueCheck,
@@ -31,7 +35,7 @@ public class CaseParser {
         return returnValue;
     }
 
-    private static Token analyseCasePart(Parser parser,
+    private static Token analyseCasePart(PushdownAutomaton pA,
                                         List<Node> children,
                                         boolean isCheckStack,
                                         TokenComparable returnValueCheck,
@@ -39,33 +43,34 @@ public class CaseParser {
 
         Token returnValue = new Token("UNDEFINED", Category.UNDEFINED);
 
-        if (parser.curToken.lexeme.equals("WHEN")) {
+        if (pA.curToken().lexeme.equals("WHEN")) {
 
-            parser.stack.push(parser.curToken);
-            children.add(new Node(NodeType.TERMINAL, parser.curToken));
+            pA.push(pA.curToken());
+            children.add(new Node(NodeType.TERMINAL, pA.curToken()));
 
         } else {
 
             throw new SQLParseException(String.format("EXISTS expected instead of %s on %d!",
-                    parser.curToken.lexeme,
-                    parser.curTokenPos));
+                    pA.curToken().lexeme,
+                    pA.curTokenPos()));
         }
 
-        LogicalConditionParser.analyseLogicalCondition(parser, children, false);
+        LogicalConditionParser.analyseLogicalCondition(pA, children, false);
 
-        parser.stack.pop();
+        pA.pop();
 
-        children.add(parser.terminal(t -> t.lexeme.equals("THEN"), "THEN"));
+        children.add(terminal(pA,
+                t -> t.lexeme.equals("THEN"), "THEN"));
 
-        boolean newIsCheckStack = analyseReturnValue(parser,
+        boolean newIsCheckStack = analyseReturnValue(pA,
                 children,
                 isCheckStack,
                 returnValueCheck,
                 isColumn);
 
-        switch (parser.curToken.lexeme) {
+        switch (pA.curToken().lexeme) {
 
-            case "WHEN" -> analyseCasePart(parser,
+            case "WHEN" -> analyseCasePart(pA,
                     children,
                     newIsCheckStack,
                     returnValueCheck,
@@ -73,43 +78,44 @@ public class CaseParser {
 
             case "ELSE" -> {
 
-                children.add(new Node(NodeType.TERMINAL, parser.curToken));
-                parser.getNextToken();
+                children.add(new Node(NodeType.TERMINAL, pA.curToken()));
+                pA.getNextToken();
 
-                analyseReturnValue(parser,
+                analyseReturnValue(pA,
                         children,
                         newIsCheckStack,
                         returnValueCheck,
                         isColumn);
 
-                children.add(parser.terminal(t -> t.lexeme.equals("END"), "END"));
+                children.add(terminal(pA,
+                        t -> t.lexeme.equals("END"), "END"));
 
                 if (isCheckStack) {
 
-                    returnValue =  parser.stack.pop();
+                    returnValue = pA.pop();
                 }
 
             }
 
             case "END" -> {
 
-                children.add(new Node(NodeType.TERMINAL, parser.curToken));
+                children.add(new Node(NodeType.TERMINAL, pA.curToken()));
 
                 if (isCheckStack) {
 
-                    returnValue = parser.stack.pop();
+                    returnValue = pA.pop();
                 }
 
             }
 
             default -> throw new SQLParseException(String.format("Invalid link between \"CASE\" conditions on %d!",
-                    parser.curTokenPos));
+                    pA.curTokenPos()));
         }
 
         return returnValue;
     }
 
-    private static boolean analyseReturnValue(Parser parser,
+    private static boolean analyseReturnValue(PushdownAutomaton pA,
                                               List<Node> children,
                                               boolean isCheckStack,
                                               TokenComparable returnValueCheck,
@@ -117,76 +123,77 @@ public class CaseParser {
 
         boolean newIsCheckStack;
 
-        if (parser.analyseOperand(children,
-                t -> parser.stack.push(t),
+        if (analyseOperand(pA,
+                children,
+                PushdownAutomaton::push,
                 t -> t.category != Category.PROC_NUMBER,
                 false)) {
 
-            newIsCheckStack = processOperand(parser, isCheckStack, returnValueCheck);
+            newIsCheckStack = processOperand(pA, isCheckStack, returnValueCheck);
 
-        } else if (parser.curToken.category == Category.AGGREGATE) {
+        } else if (pA.curToken().category == Category.AGGREGATE) {
 
-            if (isCheckStack && parser.stack.pop().category != Category.NUMBER) {
+            if (isCheckStack && pA.pop().category != Category.NUMBER) {
 
                 throw new SQLParseException(String.format("Invalid member of \"CASE\" on %d!",
-                        parser.curTokenPos));
+                        pA.curTokenPos()));
 
             }
 
-            if (parser.stack.peek().category == Category.AGGREGATE) {
+            if (pA.peek().category == Category.AGGREGATE) {
 
                 throw new SQLParseException(String.format("Attempt to call a nested aggregate function in \"CASE\" on %d!",
-                        parser.curTokenPos));
+                        pA.curTokenPos()));
             }
 
-            FunctionsParser.analyseAggregate(parser, children, isColumn);
+            FunctionsParser.analyseAggregate(pA, children, isColumn);
 
-            parser.stack.push(new Token("1", Category.NUMBER));
+            pA.push(new Token("1", Category.NUMBER));
 
             newIsCheckStack = true;
 
         } else {
 
             throw new SQLParseException(String.format("Invalid member of \"CASE\" on %d!",
-                    parser.curTokenPos));
+                    pA.curTokenPos()));
 
         }
 
         return newIsCheckStack;
     }
 
-    private static boolean processOperand(Parser parser,
+    private static boolean processOperand(PushdownAutomaton pA,
                                           boolean isCheckStack,
                                           TokenComparable returnValueCheck) throws SQLParseException {
 
         boolean newIsCheckStack = isCheckStack;
 
-        Token curAttribute = parser.stack.pop();
+        Token curAttribute = pA.pop();
 
         if (returnValueCheck != null
                 && !returnValueCheck.execute(curAttribute)) {
 
             throw new SQLParseException(String.format("Invalid member of \"CASE\" on %d!",
-                    parser.curTokenPos));
+                    pA.curTokenPos()));
 
         }
 
         if (isCheckStack) {
 
-            Token prevAttribute = parser.stack.peek();
+            Token prevAttribute = pA.peek();
 
             if ((curAttribute.category == Category.NUMBER || curAttribute.category == Category.LITERAL)
                     && curAttribute.category != prevAttribute.category) {
 
                 throw new SQLParseException(String.format("Invalid return value of \"CASE\" on %d!",
-                        parser.curTokenPos));
+                        pA.curTokenPos()));
 
             }
 
         } else if (curAttribute.category == Category.NUMBER
                 || curAttribute.category == Category.LITERAL) {
 
-            parser.stack.push(curAttribute);
+            pA.push(curAttribute);
             newIsCheckStack = true;
 
         }

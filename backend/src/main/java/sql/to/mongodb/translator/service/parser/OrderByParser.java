@@ -7,48 +7,52 @@ import sql.to.mongodb.translator.service.scanner.Token;
 
 import java.util.List;
 
+import static sql.to.mongodb.translator.service.parser.BracketsParser.analysePreProcessBrackets;
+import static sql.to.mongodb.translator.service.parser.OperandParser.analyseOperand;
+
 public class OrderByParser {
 
-    public static Node analyseOrderBy(Parser parser,
+    public static Node analyseOrderBy(PushdownAutomaton pA,
                                       List<Node> children,
                                       boolean isSubQuery) throws SQLParseException {
 
-        parser.preProcessBrackets(children);
+        analysePreProcessBrackets(pA, children);
 
-        if (parser.analyseOperand(children,
-                t -> parser.stack.push(t),
+        if (analyseOperand(pA,
+                children,
+                PushdownAutomaton::push,
                 t -> t.category != Category.PROC_NUMBER,
                 false)) {
 
-            ArithmeticParser.analyseArithmeticExpression(parser,
+            ArithmeticParser.analyseArithmeticExpression(pA,
                     children,
                     false,
-                    t -> parser.stack.push(t),
-                    () -> parser.stack.pop());
+                    PushdownAutomaton::push,
+                    PushdownAutomaton::pop);
 
-            Token token = parser.stack.pop();
+            Token token = pA.pop();
 
             // Проверка на наличие скобок за пределами арифметического выражения
-            if (parser.stack.peek().lexeme.equals("(")) {
+            if (pA.peek().lexeme.equals("(")) {
 
                 throw new SQLParseException(String.format("Invalid brackets in \"ORDER BY\" on %d!",
-                        parser.curTokenPos));
+                        pA.curTokenPos()));
 
             }
 
             if (token.category == Category.LITERAL) {
 
                 throw new SQLParseException(String.format("Invalid member of \"ORDER BY\" on %d!",
-                        parser.curTokenPos));
+                        pA.curTokenPos()));
 
             } else if (token.category == Category.NUMBER && !token.lexeme.equals("NON")) {
 
                 int curNum = Integer.parseInt(token.lexeme);
 
-                if (curNum <= 0 || Integer.parseInt(parser.stack.peek().lexeme) < curNum) {
+                if (curNum <= 0 || Integer.parseInt(pA.peek().lexeme) < curNum) {
 
                     throw new SQLParseException(String.format("Invalid constant number in \"ORDER BY\" on %d!",
-                            parser.curTokenPos));
+                            pA.curTokenPos()));
 
                 }
             }
@@ -56,15 +60,15 @@ public class OrderByParser {
         } else {
 
             throw new SQLParseException(String.format("Invalid member of \"ORDER BY\" on %d!",
-                    parser.curTokenPos));
+                    pA.curTokenPos()));
 
         }
 
-        if (parser.curToken.lexeme.equals("DESC")
-                || parser.curToken.lexeme.equals("ASC")) {
+        if (pA.curToken().lexeme.equals("DESC")
+                || pA.curToken().lexeme.equals("ASC")) {
 
-            children.add(new Node(NodeType.TERMINAL, parser.curToken));
-            parser.getNextToken();
+            children.add(new Node(NodeType.TERMINAL, pA.curToken()));
+            pA.getNextToken();
 
         } else {
 
@@ -72,21 +76,21 @@ public class OrderByParser {
 
         }
 
-        if (parser.curToken.lexeme.equals(",")) {
+        if (pA.curToken().lexeme.equals(",")) {
 
-            parser.getNextToken();
-            return analyseOrderBy(parser, children, isSubQuery);
+            pA.getNextToken();
+            return analyseOrderBy(pA, children, isSubQuery);
 
-        } else if (parser.curTokenPos == parser.tokens.size()
-                || parser.curToken.category == Category.KEYWORD
-                || isSubQuery && parser.curToken.lexeme.equals(")")) {
+        } else if (pA.isEnd()
+                || pA.curToken().category == Category.KEYWORD
+                || isSubQuery && pA.curToken().lexeme.equals(")")) {
 
             return new Node(NodeType.ORDER_BY, children);
 
         } else {
 
             throw new SQLParseException(String.format("Invalid link between members of \"ORDER BY\" on %d!",
-                    parser.curTokenPos));
+                    pA.curTokenPos()));
 
         }
     }

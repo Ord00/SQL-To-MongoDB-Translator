@@ -7,46 +7,50 @@ import sql.to.mongodb.translator.service.exceptions.SQLParseException;
 import java.util.ArrayList;
 import java.util.List;
 
+import static sql.to.mongodb.translator.service.parser.AliasParser.analyseAlias;
+import static sql.to.mongodb.translator.service.parser.TokenHandler.checkToken;
+import static sql.to.mongodb.translator.service.parser.TokenHandler.terminal;
+
 public class TableNamesParser {
 
-    public static Node analyseTableNames(Parser parser,
+    public static Node analyseTableNames(PushdownAutomaton pA,
                                          List<Node> children,
                                          boolean isFirstTable,
                                          boolean isSubQuery) throws SQLParseException {
 
         if (isFirstTable) {
 
-            children.add(analyseTable(parser));
+            children.add(analyseTable(pA));
 
-            if (parser.curTokenPos != parser.tokens.size()
+            if (!pA.isEnd()
                     && !List.of("WHERE", "GROUP", "HAVING", "LIMIT", "OFFSET", "ORDER")
-                    .contains(parser.curToken.lexeme)
-                    && !(isSubQuery && parser.curToken.lexeme.equals(")"))) {
+                    .contains(pA.curToken().lexeme)
+                    && !(isSubQuery && pA.curToken().lexeme.equals(")"))) {
 
-                children.add(analyseJoin(parser));
-                children.add(analyseTable(parser));
-                children.add(analyseLogicalCondition(parser, isSubQuery));
+                children.add(analyseJoin(pA));
+                children.add(analyseTable(pA));
+                children.add(analyseLogicalCondition(pA, isSubQuery));
 
             }
 
         } else {
 
-            children.add(analyseJoin(parser));
-            children.add(analyseTable(parser));
-            children.add(analyseLogicalCondition(parser, isSubQuery));
+            children.add(analyseJoin(pA));
+            children.add(analyseTable(pA));
+            children.add(analyseLogicalCondition(pA, isSubQuery));
 
         }
 
-        if (parser.curTokenPos == parser.tokens.size()
+        if (pA.isEnd()
                 || List.of("WHERE", "GROUP", "HAVING", "LIMIT", "OFFSET", "ORDER")
-                .contains(parser.curToken.lexeme)
-                || isSubQuery && parser.curToken.lexeme.equals(")")) {
+                .contains(pA.curToken().lexeme)
+                || isSubQuery && pA.curToken().lexeme.equals(")")) {
 
             return new Node(NodeType.TABLE_NAMES, children);
 
         } else {
 
-            return analyseTableNames(parser,
+            return analyseTableNames(pA,
                     children,
                     false,
                     isSubQuery);
@@ -54,96 +58,101 @@ public class TableNamesParser {
         }
     }
 
-    public static Node analyseTable(Parser parser) throws SQLParseException {
+    public static Node analyseTable(PushdownAutomaton pA) throws SQLParseException {
 
         List<Node> children = new ArrayList<>();
 
-        if (parser.curToken.category == Category.IDENTIFIER) {
+        if (pA.curToken().category == Category.IDENTIFIER) {
 
-            children.add(new Node(NodeType.TERMINAL, parser.curToken));
-            parser.getNextToken();
+            children.add(new Node(NodeType.TERMINAL, pA.curToken()));
+            pA.getNextToken();
 
-        } else if (parser.curToken.lexeme.equals("(")) {
+        } else if (pA.curToken().lexeme.equals("(")) {
 
-            parser.analyseSubquery(children);
+            SelectParser.analyseSubquery(pA, children);
 
-            parser.stack.pop();
+            pA.pop();
 
-            parser.checkToken(t -> t.lexeme.equals(")"),
+            checkToken(pA,
+                    t -> t.lexeme.equals(")"),
                     ")");
 
         } else {
 
             throw new SQLParseException(String.format("Invalid table on %d!",
-                    parser.curTokenPos));
+                    pA.curTokenPos()));
         }
 
-        parser.analyseAlias(children);
+        analyseAlias(pA, children);
 
         return new Node(NodeType.TABLE, children);
     }
 
-    public static Node analyseJoin(Parser parser) throws SQLParseException {
+    public static Node analyseJoin(PushdownAutomaton pA) throws SQLParseException {
 
         List<Node> children = new ArrayList<>();
 
-        switch (parser.curToken.lexeme) {
+        switch (pA.curToken().lexeme) {
 
             case "JOIN" -> {
 
-                Node res = new Node(NodeType.TERMINAL, parser.curToken);
-                parser.getNextToken();
+                Node res = new Node(NodeType.TERMINAL, pA.curToken());
+                pA.getNextToken();
                 return res;
 
             }
 
-            case "INNER" -> parser.getNextToken();
+            case "INNER" -> pA.getNextToken();
             case "LEFT", "RIGHT" -> {
 
-                parser.getNextToken();
-                if (parser.curToken.lexeme.equals("OUTER")) {
+                pA.getNextToken();
+                if (pA.curToken().lexeme.equals("OUTER")) {
 
-                    parser.getNextToken();
+                    pA.getNextToken();
 
                 }
 
             }
 
             default -> throw new SQLParseException(String.format("Expected JOIN clause instead of %s on %d!",
-                    parser.curToken,
-                    parser.curTokenPos));
+                    pA.curToken(),
+                    pA.curTokenPos()));
 
         }
 
-        children.add(parser.terminal(t -> t.lexeme.equals("JOIN"),
+        children.add(terminal(pA,
+                t -> t.lexeme.equals("JOIN"),
                 "JOIN"));
 
         return new Node(NodeType.JOIN, children);
     }
 
-    public static Node analyseLogicalCondition(Parser parser,
+    public static Node analyseLogicalCondition(PushdownAutomaton pA,
                                                boolean isSubQuery) throws SQLParseException {
 
         List<Node> children = new ArrayList<>();
 
-        switch (parser.curToken.lexeme) {
+        switch (pA.curToken().lexeme) {
 
             case "USING" -> {
 
-                children.add(parser.terminal(t -> t.lexeme.equals("("),
+                children.add(terminal(pA,
+                        t -> t.lexeme.equals("("),
                         "("));
-                children.add(parser.terminal(t -> t.category == Category.IDENTIFIER,
+                children.add(terminal(pA,
+                        t -> t.category == Category.IDENTIFIER,
                         "Identifier"));
-                children.add(parser.terminal(t -> t.lexeme.equals(")"),
+                children.add(terminal(pA,
+                        t -> t.lexeme.equals(")"),
                         ")"));
 
             }
 
             case "ON" -> {
 
-                parser.stack.push(parser.curToken);
-                LogicalConditionParser.analyseLogicalCondition(parser, children, isSubQuery);
-                parser.stack.pop();
+                pA.push(pA.curToken());
+                LogicalConditionParser.analyseLogicalCondition(pA, children, isSubQuery);
+                pA.pop();
             }
 
         }

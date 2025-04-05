@@ -8,69 +8,74 @@ import sql.to.mongodb.translator.service.scanner.Token;
 import java.util.ArrayList;
 import java.util.List;
 
+import static sql.to.mongodb.translator.service.parser.OperandParser.analyseOperand;
+import static sql.to.mongodb.translator.service.parser.TokenHandler.checkToken;
+
 public class FunctionsParser {
 
-    public static void analyseAggregate(Parser parser,
+    public static void analyseAggregate(PushdownAutomaton pA,
                                         List<Node> children,
                                         boolean isColumn) throws SQLParseException {
 
-        if (!isColumn && !parser.stack.peek().lexeme.equals("HAVING")) {
+        if (!isColumn && !pA.peek().lexeme.equals("HAVING")) {
 
             throw new SQLParseException(String.format("Aggregate function in incorrect section on %d!",
-                      parser.curTokenPos));
+                    pA.curTokenPos()));
 
         }
 
-        parser.stack.push(parser.curToken);
+        pA.push(pA.curToken());
 
         List<Node> aggregateChildren = new ArrayList<>();
-        aggregateChildren.add(new Node(NodeType.TERMINAL, parser.curToken));
+        aggregateChildren.add(new Node(NodeType.TERMINAL, pA.curToken()));
 
-        parser.getNextToken();
+        pA.getNextToken();
 
-        parser.checkToken(t -> t.lexeme.equals("("), "(");
+        checkToken(pA, t -> t.lexeme.equals("("), "(");
 
-        Token aggregateFunction = parser.stack.pop();
+        Token aggregateFunction = pA.pop();
 
         if (aggregateFunction.lexeme.equals("COUNT")
-                && parser.curToken.category == Category.ALL) {
+                && pA.curToken().category == Category.ALL) {
 
-            aggregateChildren.add(new Node(NodeType.TERMINAL, parser.curToken));
-            parser.getNextToken();
+            aggregateChildren.add(new Node(NodeType.TERMINAL, pA.curToken()));
+            pA.getNextToken();
 
         } else {
 
-            if (parser.curToken.lexeme.equals("DISTINCT")) {
+            if (pA.curToken().lexeme.equals("DISTINCT")) {
 
-                aggregateChildren.add(new Node(NodeType.TERMINAL, parser.curToken));
-                parser.getNextToken();
+                aggregateChildren.add(new Node(NodeType.TERMINAL, pA.curToken()));
+                pA.getNextToken();
 
             }
 
-            parser.stack.push(aggregateFunction);
+            pA.push(aggregateFunction);
 
-            if (parser.analyseOperand(aggregateChildren,
-                    t -> parser.stack.push(t),
+            if (analyseOperand(pA,
+                    aggregateChildren,
+                    PushdownAutomaton::push,
                     _ -> false,
                     isColumn)) {
 
-                if (parser.stack.pop().category == Category.LITERAL
-                        && !parser.stack.pop().lexeme.equals("COUNT")) {
+                if (pA.pop().category == Category.LITERAL
+                        && !pA.pop().lexeme.equals("COUNT")) {
 
                     throw new SQLParseException(String.format("Incorrect attribute of aggregate function on %d!",
-                            parser.curTokenPos));
+                            pA.curTokenPos()));
 
                 }
 
             } else {
 
                 throw new SQLParseException(String.format("Incorrect attribute of aggregate function on %d!",
-                        parser.curTokenPos));
+                        pA.curTokenPos()));
 
             }
         }
 
-        parser.checkToken(t -> t.lexeme.equals(")"), ")");
+        checkToken(pA,
+                t -> t.lexeme.equals(")"), ")");
 
         children.add(new Node(NodeType.AGGREGATE, aggregateChildren));
     }
