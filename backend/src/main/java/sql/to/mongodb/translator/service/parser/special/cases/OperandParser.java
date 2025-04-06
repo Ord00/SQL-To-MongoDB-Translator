@@ -43,6 +43,7 @@ public class OperandParser {
                 identifierChildren.add(children.removeLast());
 
                 pA.getNextToken();
+
                 identifierChildren.add(terminal(pA,
                         t -> t.category == Category.IDENTIFIER
                                 || isColumn && t.category == Category.ALL,
@@ -95,6 +96,7 @@ public class OperandParser {
         }
 
         return isFound;
+
     }
 
 }

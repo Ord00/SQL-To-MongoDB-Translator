@@ -46,6 +46,7 @@ public class ArithmeticParser {
 
                 arithmeticChildren.addFirst(children.removeLast());
                 --closeBracketsLeft;
+
             }
 
             children.add(new Node(NodeType.ARITHMETIC_EXP, arithmeticChildren));
@@ -53,6 +54,7 @@ public class ArithmeticParser {
         }
 
         return isArithmetic;
+
     }
 
     private static int analyseArithmeticRec(PushdownAutomaton pA,
@@ -95,9 +97,8 @@ public class ArithmeticParser {
 
             }
 
-            closeBracketsLeft += postProcessBrackets(pA, children);
+            closeBracketsLeft += postProcessBrackets(pA, children) + analyseArithmeticRec(pA, children, isColumn);
 
-            closeBracketsLeft += analyseArithmeticRec(pA, children, isColumn);
         }
 
         return closeBracketsLeft;
@@ -134,13 +135,10 @@ public class ArithmeticParser {
 
         int closeBracketsFound = 0;
 
-        Token bracketToken = pA.peek();
-
-        while (pA.curToken().lexeme.equals(")") && bracketToken.lexeme.equals("(")) {
+        while (pA.curToken().lexeme.equals(")") && pA.peek().lexeme.equals("(")) {
 
             closeBracketsFound++;
             pA.pop();
-            bracketToken = pA.peek();
 
             children.add(new Node(NodeType.TERMINAL, pA.curToken()));
             pA.getNextToken();

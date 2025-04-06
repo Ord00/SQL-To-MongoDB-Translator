@@ -10,6 +10,7 @@ import sql.to.mongodb.translator.service.scanner.Token;
 import java.util.ArrayList;
 import java.util.List;
 
+import static sql.to.mongodb.translator.service.parser.main.cases.LogicalConditionParser.analyseLogicalCondition;
 import static sql.to.mongodb.translator.service.parser.special.cases.TokenHandler.checkToken;
 
 public class SelectParser {
@@ -45,15 +46,8 @@ public class SelectParser {
 
         if (pA.curToken().lexeme.equals("WHERE")) {
 
-            pA.push(pA.curToken());
+            analyseLogicalPart(pA, children, isSubQuery);
 
-            children.add(new Node(NodeType.TERMINAL, pA.curToken()));
-
-            List<Node> whereChildren = new ArrayList<>();
-            LogicalConditionParser.analyseLogicalCondition(pA, whereChildren, isSubQuery);
-            children.add(new Node(NodeType.LOGICAL_CONDITION, whereChildren));
-
-            pA.pop();
         }
 
         if (pA.curToken().lexeme.equals("GROUP")) {
@@ -69,15 +63,8 @@ public class SelectParser {
 
         if (pA.curToken().lexeme.equals("HAVING")) {
 
-            pA.push(pA.curToken());
+            analyseLogicalPart(pA, children, isSubQuery);
 
-            children.add(new Node(NodeType.TERMINAL, pA.curToken()));
-
-            List<Node> havingChildren = new ArrayList<>();
-            LogicalConditionParser.analyseLogicalCondition(pA, havingChildren, isSubQuery);
-            children.add(new Node(NodeType.LOGICAL_CONDITION, havingChildren));
-
-            pA.pop();
         }
 
         if (pA.curToken().lexeme.equals("ORDER")) {
@@ -161,6 +148,26 @@ public class SelectParser {
         List<Node> subqueryChildren = new ArrayList<>();
         analyseSelect(pA, subqueryChildren, true);
         children.add(new Node(NodeType.QUERY, subqueryChildren));
+
+    }
+
+    private static void analyseLogicalPart(PushdownAutomaton pA,
+                                           List<Node> children,
+                                           boolean isSubQuery) throws SQLParseException {
+
+        pA.push(pA.curToken());
+
+        children.add(new Node(NodeType.TERMINAL, pA.curToken()));
+
+        List<Node> logicalPartChildren = new ArrayList<>();
+
+        analyseLogicalCondition(pA,
+                logicalPartChildren,
+                isSubQuery);
+
+        children.add(new Node(NodeType.LOGICAL_CONDITION, logicalPartChildren));
+
+        pA.pop();
 
     }
 

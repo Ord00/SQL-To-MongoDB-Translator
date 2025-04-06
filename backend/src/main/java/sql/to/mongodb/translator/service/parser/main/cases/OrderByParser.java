@@ -9,6 +9,7 @@ import sql.to.mongodb.translator.service.scanner.Token;
 
 import java.util.List;
 
+import static sql.to.mongodb.translator.service.parser.main.cases.ArithmeticParser.analyseArithmeticExpression;
 import static sql.to.mongodb.translator.service.parser.special.cases.BracketsParser.analysePreProcessBrackets;
 import static sql.to.mongodb.translator.service.parser.special.cases.OperandParser.analyseOperand;
 
@@ -26,7 +27,7 @@ public class OrderByParser {
                 t -> t.category != Category.PROC_NUMBER,
                 false)) {
 
-            ArithmeticParser.analyseArithmeticExpression(pA,
+            analyseArithmeticExpression(pA,
                     children,
                     false,
                     PushdownAutomaton::push,

@@ -3,7 +3,6 @@ package sql.to.mongodb.translator.service.parser.main.cases;
 import sql.to.mongodb.translator.service.exceptions.SQLParseException;
 import sql.to.mongodb.translator.service.parser.Node;
 import sql.to.mongodb.translator.service.parser.PushdownAutomaton;
-import sql.to.mongodb.translator.service.parser.dml.SelectParser;
 import sql.to.mongodb.translator.service.scanner.Token;
 import sql.to.mongodb.translator.service.enums.Category;
 import sql.to.mongodb.translator.service.enums.NodeType;
@@ -12,6 +11,8 @@ import sql.to.mongodb.translator.service.interfaces.TokenComparable;
 import java.util.ArrayList;
 import java.util.List;
 
+import static sql.to.mongodb.translator.service.parser.dml.SelectParser.analyseSubquery;
+import static sql.to.mongodb.translator.service.parser.main.cases.ArithmeticParser.analyseArithmeticExpression;
 import static sql.to.mongodb.translator.service.parser.special.cases.BracketsParser.analysePostProcessBrackets;
 import static sql.to.mongodb.translator.service.parser.special.cases.BracketsParser.analysePreProcessBrackets;
 import static sql.to.mongodb.translator.service.parser.special.cases.OperandParser.analyseOperand;
@@ -36,7 +37,7 @@ public class LogicalConditionParser {
                 t -> t.category != Category.PROC_NUMBER,
                 false)) {
 
-            ArithmeticParser.analyseArithmeticExpression(pA,
+            analyseArithmeticExpression(pA,
                     logicalCheckChildren,
                     false,
                     PushdownAutomaton::push,
@@ -58,7 +59,7 @@ public class LogicalConditionParser {
 
             }
 
-            SelectParser.analyseSubquery(pA, logicalCheckChildren);
+            analyseSubquery(pA, logicalCheckChildren);
 
             checkToken(pA,
                     t -> t.lexeme.equals(")"),
@@ -76,7 +77,7 @@ public class LogicalConditionParser {
 
             }
 
-            SelectParser.analyseSubquery(pA, logicalCheckChildren);
+            analyseSubquery(pA, logicalCheckChildren);
 
             checkToken(pA,
                     t -> t.lexeme.equals(")"), ")");
@@ -85,7 +86,7 @@ public class LogicalConditionParser {
 
             FunctionsParser.analyseAggregate(pA, logicalCheckChildren, false);
 
-            ArithmeticParser.analyseArithmeticExpression(pA,
+            analyseArithmeticExpression(pA,
                     logicalCheckChildren,
                     false,
                     PushdownAutomaton::push,
@@ -172,7 +173,7 @@ public class LogicalConditionParser {
 
                 }
 
-                SelectParser.analyseSubquery(pA, children);
+                analyseSubquery(pA, children);
 
                checkToken(pA,
                        t -> t.lexeme.equals(")"),
@@ -296,7 +297,7 @@ public class LogicalConditionParser {
         if (pA.curToken().lexeme.equals("SELECT")) {
 
             pA.getPrevToken();
-            SelectParser.analyseSubquery(pA, children);
+            analyseSubquery(pA, children);
 
             if (!subQueryCheck.execute(pA.peek())) {
 
@@ -388,71 +389,77 @@ public class LogicalConditionParser {
                         "NULL"));
 
             }
+
             case "NOT" -> {
+
                 children.add(new Node(NodeType.TERMINAL, pA.curToken()));
                 pA.getNextToken();
 
                 switch (pA.curToken().lexeme) {
+
                     case "LIKE" -> {
+
                         children.add(new Node(NodeType.TERMINAL, pA.curToken()));
                         pA.getNextToken();
                         analyseLike(pA, children);
+
                     }
-                    case "IN" -> {
-                        children.add(new Node(NodeType.TERMINAL, pA.curToken()));
-                        pA.getNextToken();
-                        checkToken(pA,
-                                t -> t.lexeme.equals("("), "(");
 
-                        if (analyseInOfSubquery(pA, children,
-                                t -> t.category != Category.PROC_NUMBER)) {
+                    case "IN" -> analyseInPart(pA, children);
 
-                            List<Node> inChildren = new ArrayList<>();
-                            analyseIn(pA, inChildren, false);
-
-                        }
-                    }
                     case "BETWEEN" -> analyseBetween(pA, children);
+
                     default -> throw new SQLParseException(String.format("%s expected instead of %s on %d!",
                             "[LIKE, IN, BETWEEN]",
                             pA.curToken().lexeme,
                             pA.curTokenPos()));
+
                 }
+
             }
+
             case "LIKE" -> {
+
                 children.add(new Node(NodeType.TERMINAL, pA.curToken()));
                 pA.getNextToken();
                 analyseLike(pA, children);
+
             }
-            case "IN" -> {
-                children.add(new Node(NodeType.TERMINAL, pA.curToken()));
-                pA.getNextToken();
-                checkToken(pA,
-                        t -> t.lexeme.equals("("), "(");
 
-                if (analyseInOfSubquery(pA, children,
-                        t -> t.category != Category.PROC_NUMBER)) {
+            case "IN" -> analyseInPart(pA, children);
 
-                    List<Node> inChildren = new ArrayList<>();
-                    analyseIn(pA, inChildren, false);
-
-                }
-            }
             case "BETWEEN" -> analyseBetween(pA, children);
+
             default -> throw new SQLParseException(String.format("Invalid logical operation on %d!",
                     pA.curTokenPos()));
+
         }
     }
 
-    public static void clearLogicalExpInStack(PushdownAutomaton pA) {
+    private static void analyseInPart(PushdownAutomaton pA,
+                                      List<Node> children) throws SQLParseException {
 
-        Token curStackToken = pA.peek();
+        children.add(new Node(NodeType.TERMINAL, pA.curToken()));
+        pA.getNextToken();
+        checkToken(pA,
+                t -> t.lexeme.equals("("), "(");
 
-        while (curStackToken.category != Category.KEYWORD
-                && !curStackToken.lexeme.equals("(")) {
+        if (analyseInOfSubquery(pA, children,
+                t -> t.category != Category.PROC_NUMBER)) {
+
+            List<Node> inChildren = new ArrayList<>();
+            analyseIn(pA, inChildren, false);
+
+        }
+
+    }
+
+    private static void clearLogicalExpInStack(PushdownAutomaton pA) {
+
+        while (pA.peek().category != Category.KEYWORD
+                && !pA.peek().lexeme.equals("(")) {
 
             pA.pop();
-            curStackToken = pA.peek();
 
         }
 

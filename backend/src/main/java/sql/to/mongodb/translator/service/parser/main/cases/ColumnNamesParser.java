@@ -9,6 +9,8 @@ import sql.to.mongodb.translator.service.enums.NodeType;
 
 import java.util.List;
 
+import static sql.to.mongodb.translator.service.parser.main.cases.ArithmeticParser.analyseArithmeticExpression;
+import static sql.to.mongodb.translator.service.parser.main.cases.FunctionsParser.analyseAggregate;
 import static sql.to.mongodb.translator.service.parser.special.cases.AliasParser.analyseAlias;
 import static sql.to.mongodb.translator.service.parser.special.cases.BracketsParser.analysePreProcessBrackets;
 import static sql.to.mongodb.translator.service.parser.special.cases.OperandParser.analyseOperand;
@@ -43,9 +45,9 @@ public class ColumnNamesParser {
 
             processColumnThroughStack(pA, pA.curToken());
 
-            FunctionsParser.analyseAggregate(pA, children, true);
+            analyseAggregate(pA, children, true);
 
-            ArithmeticParser.analyseArithmeticExpression(pA,
+            analyseArithmeticExpression(pA,
                     children,
                     true,
                     ColumnNamesParser::processColumnThroughStack,
@@ -57,7 +59,7 @@ public class ColumnNamesParser {
                 t -> t.category != Category.PROC_NUMBER,
                 true)) {
 
-            if (!ArithmeticParser.analyseArithmeticExpression(pA,
+            if (!analyseArithmeticExpression(pA,
                     children,
                     true,
                     ColumnNamesParser::processColumnThroughStack,
@@ -112,9 +114,8 @@ public class ColumnNamesParser {
 
             } else {
 
-                int procNum = Integer.parseInt(prevToken.lexeme);
-                procNum++;
-                pA.push(new Token(Integer.toString(procNum), Category.PROC_NUMBER));
+                pA.push(new Token(Integer.toString(Integer.parseInt(prevToken.lexeme) + 1),
+                        Category.PROC_NUMBER));
 
             }
 
@@ -131,9 +132,8 @@ public class ColumnNamesParser {
 
         if (prevToken.category == Category.PROC_NUMBER) {
 
-            int procNum = Integer.parseInt(prevToken.lexeme);
-            --procNum;
-            pA.push(new Token(Integer.toString(procNum), Category.PROC_NUMBER));
+            pA.push(new Token(Integer.toString(Integer.parseInt(prevToken.lexeme) - 1),
+                    Category.PROC_NUMBER));
 
         } else {
 

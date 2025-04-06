@@ -11,6 +11,8 @@ import sql.to.mongodb.translator.service.scanner.Token;
 import java.util.ArrayList;
 import java.util.List;
 
+import static sql.to.mongodb.translator.service.parser.main.cases.FunctionsParser.analyseAggregate;
+import static sql.to.mongodb.translator.service.parser.main.cases.LogicalConditionParser.analyseLogicalCondition;
 import static sql.to.mongodb.translator.service.parser.special.cases.OperandParser.analyseOperand;
 import static sql.to.mongodb.translator.service.parser.special.cases.TokenHandler.terminal;
 
@@ -38,12 +40,10 @@ public class CaseParser {
     }
 
     private static Token analyseCasePart(PushdownAutomaton pA,
-                                        List<Node> children,
-                                        boolean isCheckStack,
-                                        TokenComparable returnValueCheck,
-                                        boolean isColumn) throws SQLParseException {
-
-        Token returnValue = new Token("UNDEFINED", Category.UNDEFINED);
+                                         List<Node> children,
+                                         boolean isCheckStack,
+                                         TokenComparable returnValueCheck,
+                                         boolean isColumn) throws SQLParseException {
 
         if (pA.curToken().lexeme.equals("WHEN")) {
 
@@ -57,7 +57,7 @@ public class CaseParser {
                     pA.curTokenPos()));
         }
 
-        LogicalConditionParser.analyseLogicalCondition(pA, children, false);
+        analyseLogicalCondition(pA, children, false);
 
         pA.pop();
 
@@ -94,7 +94,7 @@ public class CaseParser {
 
                 if (isCheckStack) {
 
-                    returnValue = pA.pop();
+                    return pA.pop();
                 }
 
             }
@@ -105,16 +105,19 @@ public class CaseParser {
 
                 if (isCheckStack) {
 
-                    returnValue = pA.pop();
+                    return pA.pop();
+
                 }
 
             }
 
             default -> throw new SQLParseException(String.format("Invalid link between \"CASE\" conditions on %d!",
                     pA.curTokenPos()));
+
         }
 
-        return returnValue;
+        return new Token("UNDEFINED", Category.UNDEFINED);
+
     }
 
     private static boolean analyseReturnValue(PushdownAutomaton pA,
@@ -148,7 +151,7 @@ public class CaseParser {
                         pA.curTokenPos()));
             }
 
-            FunctionsParser.analyseAggregate(pA, children, isColumn);
+            analyseAggregate(pA, children, isColumn);
 
             pA.push(new Token("1", Category.NUMBER));
 
@@ -162,13 +165,12 @@ public class CaseParser {
         }
 
         return newIsCheckStack;
+
     }
 
     private static boolean processOperand(PushdownAutomaton pA,
                                           boolean isCheckStack,
                                           TokenComparable returnValueCheck) throws SQLParseException {
-
-        boolean newIsCheckStack = isCheckStack;
 
         Token curAttribute = pA.pop();
 
@@ -196,10 +198,11 @@ public class CaseParser {
                 || curAttribute.category == Category.LITERAL) {
 
             pA.push(curAttribute);
-            newIsCheckStack = true;
+            return true;
 
         }
 
-        return newIsCheckStack;
+        return isCheckStack;
+
     }
 }

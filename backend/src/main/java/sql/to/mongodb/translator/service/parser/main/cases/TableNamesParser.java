@@ -5,11 +5,12 @@ import sql.to.mongodb.translator.service.enums.NodeType;
 import sql.to.mongodb.translator.service.exceptions.SQLParseException;
 import sql.to.mongodb.translator.service.parser.Node;
 import sql.to.mongodb.translator.service.parser.PushdownAutomaton;
-import sql.to.mongodb.translator.service.parser.dml.SelectParser;
 
 import java.util.ArrayList;
 import java.util.List;
 
+import static sql.to.mongodb.translator.service.parser.dml.SelectParser.analyseSubquery;
+import static sql.to.mongodb.translator.service.parser.main.cases.LogicalConditionParser.analyseLogicalCondition;
 import static sql.to.mongodb.translator.service.parser.special.cases.AliasParser.analyseAlias;
 import static sql.to.mongodb.translator.service.parser.special.cases.TokenHandler.checkToken;
 import static sql.to.mongodb.translator.service.parser.special.cases.TokenHandler.terminal;
@@ -32,7 +33,7 @@ public class TableNamesParser {
 
                 children.add(analyseJoin(pA));
                 children.add(analyseTable(pA));
-                children.add(analyseLogicalCondition(pA, isSubQuery));
+                children.add(analyseJoinCondition(pA, isSubQuery));
 
             }
 
@@ -40,7 +41,7 @@ public class TableNamesParser {
 
             children.add(analyseJoin(pA));
             children.add(analyseTable(pA));
-            children.add(analyseLogicalCondition(pA, isSubQuery));
+            children.add(analyseJoinCondition(pA, isSubQuery));
 
         }
 
@@ -72,7 +73,7 @@ public class TableNamesParser {
 
         } else if (pA.curToken().lexeme.equals("(")) {
 
-            SelectParser.analyseSubquery(pA, children);
+            analyseSubquery(pA, children);
 
             pA.pop();
 
@@ -106,6 +107,7 @@ public class TableNamesParser {
             }
 
             case "INNER" -> pA.getNextToken();
+
             case "LEFT", "RIGHT" -> {
 
                 pA.getNextToken();
@@ -130,8 +132,8 @@ public class TableNamesParser {
         return new Node(NodeType.JOIN, children);
     }
 
-    public static Node analyseLogicalCondition(PushdownAutomaton pA,
-                                               boolean isSubQuery) throws SQLParseException {
+    public static Node analyseJoinCondition(PushdownAutomaton pA,
+                                            boolean isSubQuery) throws SQLParseException {
 
         List<Node> children = new ArrayList<>();
 
@@ -142,9 +144,11 @@ public class TableNamesParser {
                 children.add(terminal(pA,
                         t -> t.lexeme.equals("("),
                         "("));
+
                 children.add(terminal(pA,
                         t -> t.category == Category.IDENTIFIER,
                         "Identifier"));
+
                 children.add(terminal(pA,
                         t -> t.lexeme.equals(")"),
                         ")"));
@@ -154,12 +158,14 @@ public class TableNamesParser {
             case "ON" -> {
 
                 pA.push(pA.curToken());
-                LogicalConditionParser.analyseLogicalCondition(pA, children, isSubQuery);
+                analyseLogicalCondition(pA, children, isSubQuery);
                 pA.pop();
+
             }
 
         }
 
         return new Node(NodeType.LOGICAL_CONDITION, children);
+
     }
 }

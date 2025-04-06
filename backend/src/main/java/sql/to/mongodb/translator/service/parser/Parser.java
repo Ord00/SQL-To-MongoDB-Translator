@@ -3,12 +3,13 @@ package sql.to.mongodb.translator.service.parser;
 import org.springframework.stereotype.Component;
 import sql.to.mongodb.translator.service.exceptions.SQLParseException;
 import sql.to.mongodb.translator.service.exceptions.SQLScanException;
-import sql.to.mongodb.translator.service.parser.dml.SelectParser;
 import sql.to.mongodb.translator.service.scanner.Token;
 import sql.to.mongodb.translator.service.enums.NodeType;
 
 import java.util.ArrayList;
 import java.util.List;
+
+import static sql.to.mongodb.translator.service.parser.dml.SelectParser.analyseSelect;
 
 @Component
 public class Parser {
@@ -19,7 +20,7 @@ public class Parser {
     public Parser(List<Token> tokens, List<String> errors) {
 
         pA = new PushdownAutomaton(tokens);
-        this.errors =  errors;
+        this.errors = errors;
 
     }
 
@@ -28,6 +29,7 @@ public class Parser {
         for (String error : errors) {
 
             throw new SQLScanException(error);
+
         }
 
         List<Node> children = new ArrayList<>();
@@ -36,15 +38,19 @@ public class Parser {
 
         switch (pA.curToken().lexeme) {
 
-            case "SELECT" -> SelectParser.analyseSelect(pA, children, false);
+            case "SELECT" -> analyseSelect(pA,
+                    children,
+                    false);
 
             default -> throw new SQLParseException("Invalid query keyword!");
+
         }
 
         if (!pA.isEnd()) {
 
             throw new SQLParseException(String.format("Expected end of query on %d!",
                     pA.curTokenPos()));
+
         }
 
         return new Node(NodeType.QUERY, children);

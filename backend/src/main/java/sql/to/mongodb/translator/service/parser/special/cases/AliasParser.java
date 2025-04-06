@@ -20,13 +20,16 @@ public class AliasParser {
 
             children.add(new Node(NodeType.TERMINAL, pA.curToken()));
             pA.getNextToken();
+
             children.add(terminal(pA,
                     t -> t.category.equals(Category.IDENTIFIER),
                     "Identifier"));
 
         } else if (pA.curToken().category == Category.IDENTIFIER) {
 
-            children.add(new Node(NodeType.TERMINAL, new Token("AS" , Category.KEYWORD)));
+            children.add(new Node(NodeType.TERMINAL,
+                    new Token("AS" , Category.KEYWORD)));
+
             children.add(terminal(pA,
                     t -> t.category.equals(Category.IDENTIFIER),
                     "Identifier"));

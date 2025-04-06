@@ -80,6 +80,7 @@ public class FunctionsParser {
                 t -> t.lexeme.equals(")"), ")");
 
         children.add(new Node(NodeType.AGGREGATE, aggregateChildren));
+
     }
 
 }
