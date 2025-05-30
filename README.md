@@ -23,7 +23,7 @@
 4. Генератор кода на языке MongoDB.
    
    На основе промежуточного представления создаётся код запроса для MongoDB.
-
+---
 # Используемые технологии
 * Java
 * Gradle
@@ -32,7 +32,7 @@
 * Spring Boot
 * Docker
 * React
-
+---
 # Пример работы
 ![image](https://github.com/user-attachments/assets/d59414ff-c719-4b52-a2cc-ee1834d3eb7e)
 ![image](https://github.com/user-attachments/assets/424d472e-6617-4e13-a833-bf36ca859360)
