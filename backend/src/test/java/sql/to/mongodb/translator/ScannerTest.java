@@ -10,7 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class ScannerTest {
-    private static final Scanner SCANNER = new Scanner();
+    private static final Scanner scanner = new Scanner();
 
     @Test
     public void testSubqueryWithIn() {
@@ -37,7 +37,7 @@ public class ScannerTest {
 
         List<Token> tokens = new ArrayList<>();
         List<String> errors = new ArrayList<>();
-        SCANNER.tryAnalyse("SELECT id, name, file FROM products WHERE id IN (SELECT product_id FROM sales)", tokens, errors);
+        scanner.tryAnalyse("SELECT id, name, file FROM products WHERE id IN (SELECT product_id FROM sales)", tokens, errors);
         Assertions.assertEquals(expectedTokens, tokens);
     }
 
@@ -64,7 +64,7 @@ public class ScannerTest {
 
         List<Token> tokens = new ArrayList<>();
         List<String> errors = new ArrayList<>();
-        SCANNER.tryAnalyse("SELECT * FROM Students WHERE Id >= 2 / 7 AND K LIKE 'mou%_se'", tokens, errors);
+        scanner.tryAnalyse("SELECT * FROM Students WHERE Id >= 2 / 7 AND K LIKE 'mou%_se'", tokens, errors);
         Assertions.assertEquals(expectedTokens, tokens);
     }
 
@@ -92,7 +92,7 @@ public class ScannerTest {
 
         List<Token> tokens = new ArrayList<>();
         List<String> errors = new ArrayList<>();
-        SCANNER.tryAnalyse("SELECT COUNT(DISTINCT Id_book) FROM Library WHERE Id_book IN(7, 19)", tokens, errors);
+        scanner.tryAnalyse("SELECT COUNT(DISTINCT Id_book) FROM Library WHERE Id_book IN(7, 19)", tokens, errors);
         Assertions.assertEquals(expectedTokens, tokens);
     }
 
@@ -116,7 +116,7 @@ public class ScannerTest {
 
         List<Token> tokens = new ArrayList<>();
         List<String> errors = new ArrayList<>();
-        SCANNER.tryAnalyse("SELECT * FROM Students WHERE Id > '.2#, ' AND K LIKE 'mou %_se'", tokens, errors);
+        scanner.tryAnalyse("SELECT * FROM Students WHERE Id > '.2#, ' AND K LIKE 'mou %_se'", tokens, errors);
         Assertions.assertEquals(expectedTokens, tokens);
     }
 }
