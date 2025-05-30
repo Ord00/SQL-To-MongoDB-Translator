@@ -1,18 +1,22 @@
-package sql.to.mongodb.translator.service.parser;
+package sql.to.mongodb.translator.service.parser.main.cases;
 
 import sql.to.mongodb.translator.service.enums.Category;
 import sql.to.mongodb.translator.service.enums.NodeType;
 import sql.to.mongodb.translator.service.exceptions.SQLParseException;
 import sql.to.mongodb.translator.service.interfaces.TokenProcessable;
 import sql.to.mongodb.translator.service.interfaces.TokenReleasable;
+import sql.to.mongodb.translator.service.parser.Node;
+import sql.to.mongodb.translator.service.parser.PushdownAutomaton;
 import sql.to.mongodb.translator.service.scanner.Token;
 
 import java.util.ArrayList;
 import java.util.List;
 
+import static sql.to.mongodb.translator.service.parser.special.cases.OperandParser.analyseOperand;
+
 public class ArithmeticParser {
 
-    public static boolean analyseArithmeticExpression(Parser parser,
+    public static boolean analyseArithmeticExpression(PushdownAutomaton pA,
                                                       List<Node> children,
                                                       boolean isColumn,
                                                       TokenProcessable processToken,
@@ -23,7 +27,7 @@ public class ArithmeticParser {
         List<Node> arithmeticChildren = new ArrayList<>();
         arithmeticChildren.add(children.getLast());
 
-        int closeBracketsLeft = analyseArithmeticRec(parser, arithmeticChildren, isColumn);
+        int closeBracketsLeft = analyseArithmeticRec(pA, arithmeticChildren, isColumn);
 
         if (arithmeticChildren.size() > 1) {
 
@@ -31,17 +35,18 @@ public class ArithmeticParser {
 
             if (releaseToken != null) {
 
-                releaseToken.execute();
+                releaseToken.execute(pA);
 
             }
 
-            processToken.execute(new Token("NON", Category.NUMBER));
+            processToken.execute(pA, new Token("NON", Category.NUMBER));
             children.removeLast();
 
             while (closeBracketsLeft > 0) {
 
                 arithmeticChildren.addFirst(children.removeLast());
                 --closeBracketsLeft;
+
             }
 
             children.add(new Node(NodeType.ARITHMETIC_EXP, arithmeticChildren));
@@ -49,96 +54,94 @@ public class ArithmeticParser {
         }
 
         return isArithmetic;
+
     }
 
-    private static int analyseArithmeticRec(Parser parser,
+    private static int analyseArithmeticRec(PushdownAutomaton pA,
                                             List<Node> children,
                                             boolean isColumn) throws SQLParseException {
 
         int closeBracketsLeft = 0;
 
-        if (parser.curToken.category == Category.ARITHMETIC_OPERATOR
-                || parser.curToken.category == Category.ALL) {
+        if (pA.curToken().category == Category.ARITHMETIC_OPERATOR
+                || pA.curToken().category == Category.ALL) {
 
-            children.add(new Node(NodeType.TERMINAL, parser.curToken));
-            parser.getNextToken();
+            children.add(new Node(NodeType.TERMINAL, pA.curToken()));
+            pA.getNextToken();
 
-            closeBracketsLeft -= preProcessBrackets(parser, children);
+            closeBracketsLeft -= preProcessBrackets(pA, children);
 
-            if (parser.analyseOperand(children,
-                    t -> parser.stack.push(t),
+            if (analyseOperand(pA,
+                    children,
+                    PushdownAutomaton::push,
                     t -> t.category != Category.PROC_NUMBER && t.category != Category.LITERAL,
                     isColumn)) {
 
-                if (parser.stack.pop().category == Category.LITERAL) {
+                if (pA.pop().category == Category.LITERAL) {
 
                     throw new SQLParseException(String.format("Literal is involved in arithmetic operations on %d!",
-                            parser.curTokenPos));
+                            pA.curTokenPos()));
 
                 }
 
-            } else if (parser.curToken.category == Category.AGGREGATE) {
+            } else if (pA.curToken().category == Category.AGGREGATE) {
 
-                FunctionsParser.analyseAggregate(parser, children, isColumn);
+                FunctionsParser.analyseAggregate(pA, children, isColumn);
 
             } else {
 
                 throw new SQLParseException(String.format("Invalid member of arithmetic operations on %d between %s and %s!",
-                        parser.curTokenPos,
-                        parser.curToken.lexeme,
-                        parser.tokens.get(parser.curTokenPos)));
+                        pA.curTokenPos(),
+                        pA.curToken().lexeme,
+                        pA.token(pA.curTokenPos())));
 
             }
 
-            closeBracketsLeft += postProcessBrackets(parser, children);
+            closeBracketsLeft += postProcessBrackets(pA, children) + analyseArithmeticRec(pA, children, isColumn);
 
-            closeBracketsLeft += analyseArithmeticRec(parser, children, isColumn);
         }
 
         return closeBracketsLeft;
 
     }
 
-    private static int preProcessBrackets(Parser parser,
+    private static int preProcessBrackets(PushdownAutomaton pA,
                                           List<Node> children) {
 
         int openBracketsFound = 0;
 
-        while (parser.curToken.lexeme.equals("(")) {
+        while (pA.curToken().lexeme.equals("(")) {
 
             openBracketsFound++;
-            parser.stack.push(parser.curToken);
-            children.add(new Node(NodeType.TERMINAL, parser.curToken));
-            parser.getNextToken();
+            pA.push(pA.curToken());
+            children.add(new Node(NodeType.TERMINAL, pA.curToken()));
+            pA.getNextToken();
 
         }
 
-        if (parser.curToken.lexeme.equals("SELECT")) {
+        if (pA.curToken().lexeme.equals("SELECT")) {
 
-            parser.stack.pop();
+            pA.pop();
             children.removeLast();
-            parser.getPrevToken();
+            pA.getPrevToken();
 
         }
 
         return openBracketsFound;
     }
 
-    private static int postProcessBrackets(Parser parser,
+    private static int postProcessBrackets(PushdownAutomaton pA,
                                            List<Node> children) {
 
         int closeBracketsFound = 0;
 
-        Token bracketToken = parser.stack.peek();
-
-        while (parser.curToken.lexeme.equals(")") && bracketToken.lexeme.equals("(")) {
+        while (pA.curToken().lexeme.equals(")") && pA.peek().lexeme.equals("(")) {
 
             closeBracketsFound++;
-            parser.stack.pop();
-            bracketToken = parser.stack.peek();
+            pA.pop();
 
-            children.add(new Node(NodeType.TERMINAL, parser.curToken));
-            parser.getNextToken();
+            children.add(new Node(NodeType.TERMINAL, pA.curToken()));
+            pA.getNextToken();
 
         }
 

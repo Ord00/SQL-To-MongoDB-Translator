@@ -11,7 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class ParserTest {
-    private static final Scanner SCANNER = new Scanner();
+    private static final Scanner scanner = new Scanner();
     private static List<Token> tokens = new ArrayList<>();
     private static List<String> errors = new ArrayList<>();
 
@@ -24,7 +24,7 @@ public class ParserTest {
     @Test
     public void testInOfOneSubquery() {
 
-        SCANNER.tryAnalyse("""
+        scanner.tryAnalyse("""
                 SELECT id, name, file
                 FROM products
                 WHERE id IN (SELECT product_id
@@ -37,7 +37,7 @@ public class ParserTest {
     @Test
     public void testExistsAndJoin() {
 
-        SCANNER.tryAnalyse("""
+        scanner.tryAnalyse("""
                 SELECT Tm.TeamName
                 FROM Team Tm
                 WHERE NOT EXISTS (SELECT 1
@@ -65,7 +65,7 @@ public class ParserTest {
     @Test
     public void testAllWithSpecificTable() {
 
-        SCANNER.tryAnalyse("""
+        scanner.tryAnalyse("""
                 SELECT CompetitionName, Race.*
                 FROM Competition LEFT JOIN Race
                 	 ON Id_competition = Competition""", tokens, errors);
@@ -77,7 +77,7 @@ public class ParserTest {
     @Test
     public void testAllFunction() {
 
-        SCANNER.tryAnalyse("""
+        scanner.tryAnalyse("""
                 SELECT TP.Id_team, TP.TeamName
                 FROM TeamProfit TP
                 WHERE TP.Profit >= ALL(SELECT TP2.Profit
@@ -90,7 +90,7 @@ public class ParserTest {
     @Test
     public void testOrderBy() {
 
-        SCANNER.tryAnalyse("""
+        scanner.tryAnalyse("""
                 SELECT R.*, R.TicketPrice * R.SoldTickets AS Profit
                 FROM Race R
                 ORDER BY R.TicketPrice * R.SoldTickets DESC""", tokens, errors);
@@ -101,8 +101,7 @@ public class ParserTest {
 
     @Test
     public void testDistinct() {
-
-        SCANNER.tryAnalyse("""
+        scanner.tryAnalyse("""
                 SELECT DISTINCT Cn.*
                 FROM Team Tm JOIN Country Cn
                    ON Tm.Country = Cn.Id_country
@@ -143,7 +142,7 @@ public class ParserTest {
     @Test
     public void testLimit() {
 
-        SCANNER.tryAnalyse("""
+        scanner.tryAnalyse("""
                 SELECT DISTINCT Cn.Id_country, Cn.CountryName
                 FROM Race R RIGHT JOIN StaffRace SR
                 	ON R.Id_race = SR.Race
@@ -169,7 +168,7 @@ public class ParserTest {
     @Test
     public void testCaseAsAggregateAttribute() {
 
-        SCANNER.tryAnalyse("""
+        scanner.tryAnalyse("""
                 SELECT (CalcRes.ChampionshipNum * 100) / CalcRes.Total AS Championship,
                        (CalcRes.CupNum * 100) / CalcRes.Total AS Cup,
                        (CalcRes.PrecedenceNum * 100) / CalcRes.Total AS Precedence
