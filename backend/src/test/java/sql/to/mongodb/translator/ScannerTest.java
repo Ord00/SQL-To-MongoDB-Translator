@@ -14,7 +14,6 @@ public class ScannerTest {
 
     @Test
     public void testSubqueryWithIn() {
-
         List<Token> expectedTokens = new ArrayList<>(List.of(
                 new Token("SELECT", Category.DML),
                 new Token("id", Category.IDENTIFIER),
@@ -34,16 +33,17 @@ public class ScannerTest {
                 new Token("sales", Category.IDENTIFIER),
                 new Token(")", Category.PUNCTUATION)
         ));
-
         List<Token> tokens = new ArrayList<>();
         List<String> errors = new ArrayList<>();
-        scanner.tryAnalyse("SELECT id, name, file FROM products WHERE id IN (SELECT product_id FROM sales)", tokens, errors);
+        scanner.tryAnalyse(
+                "SELECT id, name, file FROM products WHERE id IN (SELECT product_id FROM sales)",
+                tokens,
+                errors);
         Assertions.assertEquals(expectedTokens, tokens);
     }
 
     @Test
     public void testConditionWhereWithNumbersAndStrings() {
-
         List<Token> expectedTokens = new ArrayList<>(List.of(
                 new Token("SELECT", Category.DML),
                 new Token("*", Category.ALL),
@@ -61,16 +61,17 @@ public class ScannerTest {
                 new Token("LIKE", Category.LOGICAL_EXPRESSION),
                 new Token("'mou%_se'", Category.LITERAL)
         ));
-
         List<Token> tokens = new ArrayList<>();
         List<String> errors = new ArrayList<>();
-        scanner.tryAnalyse("SELECT * FROM Students WHERE Id >= 2 / 7 AND K LIKE 'mou%_se'", tokens, errors);
+        scanner.tryAnalyse(
+                "SELECT * FROM Students WHERE Id >= 2 / 7 AND K LIKE 'mou%_se'",
+                tokens,
+                errors);
         Assertions.assertEquals(expectedTokens, tokens);
     }
 
     @Test
     public void testAggregateFunctions() {
-
         List<Token> expectedTokens = new ArrayList<>(List.of(
                 new Token("SELECT", Category.DML),
                 new Token("COUNT", Category.AGGREGATE),
@@ -89,16 +90,17 @@ public class ScannerTest {
                 new Token("19", Category.NUMBER),
                 new Token(")", Category.PUNCTUATION)
         ));
-
         List<Token> tokens = new ArrayList<>();
         List<String> errors = new ArrayList<>();
-        scanner.tryAnalyse("SELECT COUNT(DISTINCT Id_book) FROM Library WHERE Id_book IN(7, 19)", tokens, errors);
+        scanner.tryAnalyse(
+                "SELECT COUNT(DISTINCT Id_book) FROM Library WHERE Id_book IN(7, 19)",
+                tokens,
+                errors);
         Assertions.assertEquals(expectedTokens, tokens);
     }
 
     @Test
     public void testLiteralsRecognition() {
-
         List<Token> expectedTokens = new ArrayList<>(List.of(
                 new Token("SELECT", Category.DML),
                 new Token("*", Category.ALL),
@@ -113,10 +115,12 @@ public class ScannerTest {
                 new Token("LIKE", Category.LOGICAL_EXPRESSION),
                 new Token("'mou %_se'", Category.LITERAL)
         ));
-
         List<Token> tokens = new ArrayList<>();
         List<String> errors = new ArrayList<>();
-        scanner.tryAnalyse("SELECT * FROM Students WHERE Id > '.2#, ' AND K LIKE 'mou %_se'", tokens, errors);
+        scanner.tryAnalyse(
+                "SELECT * FROM Students WHERE Id > '.2#, ' AND K LIKE 'mou %_se'",
+                tokens,
+                errors);
         Assertions.assertEquals(expectedTokens, tokens);
     }
 }

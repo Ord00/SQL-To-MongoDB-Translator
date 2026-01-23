@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Code2, Database, FileSearch } from 'lucide-react';
+import { Code2, Database, FileSearch, Maximize2, Minimize2 } from 'lucide-react';
 import SyntaxTree from './SyntaxTree';
 
 function App() {
@@ -10,10 +10,11 @@ function App() {
     syntaxResult: any;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isTreeFullscreen, setIsTreeFullscreen] = useState(false);
 
   const analyseSql = async () => {
-    setActiveTab(null); // Сбрасываем активную вкладку
-    setError(null); // Сбрасываем ошибку перед новой попыткой
+    setActiveTab(null);
+    setError(null);
     try {
       const response = await fetch('http://localhost:8080/api/analyse', {
         method: 'POST',
@@ -29,11 +30,11 @@ function App() {
       }
 
       const result = await response.json();
-      setAnalysisResult(result); // Устанавливаем результат анализа
-      setError(null); // Очищаем ошибку при успешном анализе
+      setAnalysisResult(result);
+      setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred'); // Устанавливаем ошибку
-      setAnalysisResult(null); // Сбрасываем результат анализа при ошибке
+      setError(err instanceof Error ? err.message : 'Произошла ошибка');
+      setAnalysisResult(null);
     }
   };
 
@@ -41,20 +42,20 @@ function App() {
       <div className="min-h-screen bg-gray-50">
         <div className="mx-auto p-6">
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-800 mb-2">SQL to MongoDB Translator</h1>
-            <p className="text-gray-600">Analyze and convert your SQL queries to MongoDB format</p>
+            <h1 className="text-3xl font-bold text-gray-800 mb-2">Транслятор с SQL в MongoDB</h1>
+            <p className="text-gray-600">Анализируйте и преобразуйте SQL-запросы в формат MongoDB</p>
           </div>
 
           <div className="flex gap-6 h-[calc(100vh-180px)] w-full">
             {/* Левый блок ввода */}
-            <div className={`bg-white rounded-lg shadow-md overflow-hidden ${activeTab || error ? 'w-1/2' : 'w-full'} transition-all duration-300`}>
+            <div className={`bg-white rounded-lg shadow-md overflow-hidden ${(activeTab || error) && !isTreeFullscreen ? 'w-1/2' : 'w-full'} transition-all duration-300 ${isTreeFullscreen ? 'hidden' : ''}`}>
               <div className="p-6 border-b border-gray-200 flex gap-3">
                 <button
                     onClick={analyseSql}
                     className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
                 >
                   <FileSearch size={20} />
-                  Analyze
+                  Анализировать
                 </button>
                 <button
                     onClick={() => analysisResult && setActiveTab('lexical')}
@@ -63,10 +64,10 @@ function App() {
                             ? 'bg-green-600 text-white'
                             : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                     }`}
-                    disabled={!analysisResult} // Блокируем кнопку, если нет результата анализа
+                    disabled={!analysisResult}
                 >
                   <Code2 size={20} />
-                  Lexical Analysis
+                  Лексический анализ
                 </button>
                 <button
                     onClick={() => analysisResult && setActiveTab('syntax')}
@@ -75,10 +76,10 @@ function App() {
                             ? 'bg-purple-600 text-white'
                             : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                     }`}
-                    disabled={!analysisResult} // Блокируем кнопку, если нет результата анализа
+                    disabled={!analysisResult}
                 >
                   <Database size={20} />
-                  Syntax Analysis
+                  Синтаксический анализ
                 </button>
               </div>
               <div className="h-[calc(100%-68px)] overflow-auto p-6">
@@ -87,27 +88,39 @@ function App() {
                   value={sqlQuery}
                   onChange={(e) => setSqlQuery(e.target.value)}
                   className="w-full h-full min-h-[300px] px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
-                  placeholder="Enter your SQL query here..."
+                  placeholder="Введите SQL-запрос здесь..."
               />
               </div>
             </div>
 
             {/* Правый блок результатов или ошибок */}
             {(activeTab || error) && (
-                <div className="w-1/2 bg-white rounded-lg shadow-md overflow-hidden flex flex-col">
+                <div className={`bg-white rounded-lg shadow-md overflow-hidden flex flex-col ${isTreeFullscreen ? 'fixed inset-0 z-50 m-0' : 'w-1/2'}`}>
                   <div className="p-6 border-b border-gray-200 flex justify-between items-center">
                     <h2 className="text-lg font-semibold text-gray-800">
-                      {error ? 'Error' : activeTab === 'lexical' ? 'Lexical Analysis' : 'Syntax Analysis'}
+                      {error ? 'Ошибка' : activeTab === 'lexical' ? 'Лексический анализ' : 'Синтаксический анализ'}
                     </h2>
-                    <button
-                        onClick={() => {
-                          setActiveTab(null);
-                          setError(null); // Сбрасываем ошибку при закрытии
-                        }}
-                        className="text-gray-500 hover:text-gray-700"
-                    >
-                      ×
-                    </button>
+                    <div className="flex gap-2">
+                      {activeTab === 'syntax' && (
+                          <button
+                              onClick={() => setIsTreeFullscreen(!isTreeFullscreen)}
+                              className="text-gray-500 hover:text-gray-700 p-1"
+                              title={isTreeFullscreen ? 'Свернуть' : 'Развернуть'}
+                          >
+                            {isTreeFullscreen ? <Minimize2 size={20} /> : <Maximize2 size={20} />}
+                          </button>
+                      )}
+                      <button
+                          onClick={() => {
+                            setActiveTab(null);
+                            setError(null);
+                            setIsTreeFullscreen(false);
+                          }}
+                          className="text-gray-500 hover:text-gray-700"
+                      >
+                        ×
+                      </button>
+                    </div>
                   </div>
                   <div className="flex-1 overflow-auto p-6">
                     {error && (
@@ -121,9 +134,9 @@ function App() {
                           <table className="w-full text-left">
                             <thead className="bg-gray-50">
                             <tr>
-                              <th className="px-4 py-2 sticky left-0 bg-white">#</th>
-                              <th className="px-4 py-2 min-w-[200px]">Lexeme</th>
-                              <th className="px-4 py-2 min-w-[200px]">Category</th>
+                              <th className="px-4 py-2 sticky left-0 bg-white">№</th>
+                              <th className="px-4 py-2 min-w-[200px]">Лексема</th>
+                              <th className="px-4 py-2 min-w-[200px]">Категория</th>
                             </tr>
                             </thead>
                             <tbody>
@@ -140,7 +153,7 @@ function App() {
                     )}
 
                     {activeTab === 'syntax' && analysisResult && (
-                        <SyntaxTree data={analysisResult.syntaxResult} />
+                        <SyntaxTree data={analysisResult.syntaxResult} isFullscreen={isTreeFullscreen} />
                     )}
                   </div>
                 </div>

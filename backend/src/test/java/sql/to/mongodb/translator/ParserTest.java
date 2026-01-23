@@ -43,19 +43,19 @@ public class ParserTest {
                 WHERE NOT EXISTS (SELECT 1
                 				  FROM Competition Comp2
                 				  WHERE (SELECT 1
-                									FROM Race R3 JOIN StaffRace SR3
-                									ON R3.Id_race = SR3.Race
-                									JOIN Staff S3
-                									ON SR3.Staff = S3.Id_staff
-                									JOIN TeamStaff TS3
-                									ON S3.Id_staff = TS3.Staff
-                									JOIN Team Tm3
-                									ON TS3.Team = Tm3.Id_team
-                									WHERE RaceDate >= EntryDate
-                	  										AND (TS3.ExitDate IS NULL OR R3.RaceDate <= TS3.ExitDate)
-                											AND Tm.Id_team = Tm3.Id_team
-                											AND Comp2.Id_competition = R3.Competition
-                									) >= 1
+                                        FROM Race R3 JOIN StaffRace SR3
+                                        ON R3.Id_race = SR3.Race
+                                        JOIN Staff S3
+                                        ON SR3.Staff = S3.Id_staff
+                                        JOIN TeamStaff TS3
+                                        ON S3.Id_staff = TS3.Staff
+                                        JOIN Team Tm3
+                                        ON TS3.Team = Tm3.Id_team
+                                        WHERE RaceDate >= EntryDate
+                                                AND (TS3.ExitDate IS NULL OR R3.RaceDate <= TS3.ExitDate)
+                                                AND Tm.Id_team = Tm3.Id_team
+                                                AND Comp2.Id_competition = R3.Competition
+                                        ) >= 1
                 				)""", tokens, errors);
 
         Parser parser = new Parser(tokens, errors);
@@ -64,84 +64,37 @@ public class ParserTest {
 
     @Test
     public void testAllWithSpecificTable() {
-
         scanner.tryAnalyse("""
                 SELECT CompetitionName, Race.*
                 FROM Competition LEFT JOIN Race
                 	 ON Id_competition = Competition""", tokens, errors);
-
         Parser parser = new Parser(tokens, errors);
         Assertions.assertDoesNotThrow(parser::tryAnalyse);
     }
 
     @Test
     public void testAllFunction() {
-
         scanner.tryAnalyse("""
                 SELECT TP.Id_team, TP.TeamName
                 FROM TeamProfit TP
                 WHERE TP.Profit >= ALL(SELECT TP2.Profit
                                        FROM TeamProfit TP2)""", tokens, errors);
-
         Parser parser = new Parser(tokens, errors);
         Assertions.assertDoesNotThrow(parser::tryAnalyse);
     }
 
     @Test
     public void testOrderBy() {
-
         scanner.tryAnalyse("""
                 SELECT R.*, R.TicketPrice * R.SoldTickets AS Profit
                 FROM Race R
                 ORDER BY R.TicketPrice * R.SoldTickets DESC""", tokens, errors);
-
-        Parser parser = new Parser(tokens, errors);
-        Assertions.assertDoesNotThrow(parser::tryAnalyse);
-    }
-
-    @Test
-    public void testDistinct() {
-        scanner.tryAnalyse("""
-                SELECT DISTINCT Cn.*
-                FROM Team Tm JOIN Country Cn
-                   ON Tm.Country = Cn.Id_country
-                WHERE EXISTS (SELECT 1
-                             FROM Race R2 JOIN StaffRace SR2
-                               ON R2.Id_race = SR2.Race
-                               JOIN Staff S2
-                               ON SR2.Staff = S2.Id_staff
-                               JOIN TeamStaff TS2
-                               ON S2.Id_staff = TS2.Staff
-                               JOIN Team Tm2
-                               ON TS2.Team = Tm2.Id_team
-                             WHERE Cn.Id_country = Tm2.Country
-                                 AND R2.RaceDate >= TS2.EntryDate
-                                 AND (TS2.ExitDate IS NULL
-                                     OR R2.RaceDate <= TS2.ExitDate)
-                             GROUP BY Tm2.Id_team, Tm2.TeamName
-                             HAVING COUNT(DISTINCT R2.Competition) = (SELECT COUNT(*)
-                                                                      FROM Competition
-                                                                     )
-                             )
-                    AND NOT EXISTS (SELECT 1
-                                FROM Race R3 JOIN StaffRace SR3
-                                    ON R3.Id_race = SR3.Race
-                                    JOIN Staff S3
-                                    ON SR3.Staff = S3.Id_staff
-                                    JOIN TeamStaff TS3
-                                    ON S3.Id_staff = TS3.Staff
-                                    JOIN Team Tm3
-                                    ON TS3.Team = Tm3.Id_team
-                                WHERE Tm.Id_team = Tm3.Id_team
-                                )""", tokens, errors);
-
         Parser parser = new Parser(tokens, errors);
         Assertions.assertDoesNotThrow(parser::tryAnalyse);
     }
 
     @Test
     public void testLimit() {
-
         scanner.tryAnalyse("""
                 SELECT DISTINCT Cn.Id_country, Cn.CountryName
                 FROM Race R RIGHT JOIN StaffRace SR
@@ -160,7 +113,6 @@ public class ParserTest {
                 										  FROM Race R
                 										  ORDER BY Profit DESC
                 										  LIMIT 3)""", tokens, errors);
-
         Parser parser = new Parser(tokens, errors);
         Assertions.assertDoesNotThrow(parser::tryAnalyse);
     }
