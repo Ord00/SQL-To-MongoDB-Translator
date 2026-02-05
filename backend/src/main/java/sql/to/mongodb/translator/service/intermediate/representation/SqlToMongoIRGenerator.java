@@ -2,17 +2,13 @@ package sql.to.mongodb.translator.service.intermediate.representation;
 
 import sql.to.mongodb.translator.service.enums.Category;
 import sql.to.mongodb.translator.service.enums.NodeType;
-import sql.to.mongodb.translator.service.exceptions.SQLParseException;
+import sql.to.mongodb.translator.service.exceptions.IRGenerationException;
 import sql.to.mongodb.translator.service.intermediate.representation.details.*;
 import sql.to.mongodb.translator.service.parser.Node;
 import sql.to.mongodb.translator.service.scanner.Token;
 
 import java.util.*;
 
-/**
- * ????????? ?????????????? ????????????? ??? ?????????? SQL ? MongoDB
- * ???????? ? ??? ??????????? ??????? ??????? (AST)
- */
 public class SqlToMongoIRGenerator {
 
     private final Node astRoot;
@@ -27,25 +23,19 @@ public class SqlToMongoIRGenerator {
         this.ir = new SqlToMongoIR();
     }
 
-    /**
-     * ???????? ????? ????????? ?????????????? ?????????????
-     */
-    public SqlToMongoIR generateIR() throws SQLParseException {
+    public SqlToMongoIR generateIR() throws IRGenerationException {
         if (astRoot == null || astRoot.getNodeType() != NodeType.QUERY) {
-            throw new SQLParseException("Invalid AST root node");
+            throw new IRGenerationException("Invalid AST root node");
         }
 
         processQueryNode(astRoot);
         return ir;
     }
 
-    /**
-     * ????????? ???? ???????
-     */
-    private void processQueryNode(Node queryNode) throws SQLParseException {
+    private void processQueryNode(Node queryNode) throws IRGenerationException {
+
         if (queryNode.getChildren() == null) return;
 
-        // ???????? ?????????? ? ???????
         boolean hasWhere = false;
         boolean hasHaving = false;
 
@@ -94,38 +84,18 @@ public class SqlToMongoIRGenerator {
         }
     }
 
-    /**
-     * ????????? ?????????? ? ????????? ???????
-     */
     private void processTerminalInQuery(Node terminalNode) {
+
         Token token = terminalNode.getToken();
         if (token == null) return;
 
-        switch (token.lexeme) {
-            case "SELECT":
-                // ?????? ???????
-                break;
-            case "DISTINCT":
-                ir.setDistinct(true);
-                break;
-            case "FROM":
-                // ??? ?????????? ? TABLE_NAMES
-                break;
-            case "WHERE":
-            case "GROUP":
-            case "HAVING":
-            case "ORDER":
-            case "LIMIT":
-            case "OFFSET":
-                // ??? ???????? ????? ?????????????? ? ????? ???????
-                break;
+        if (token.lexeme.equals("DISTINCT")) {
+            ir.setDistinct(true);
         }
     }
 
-    /**
-     * ????????? ?????? ????????
-     */
-    private void processColumnNames(Node columnNamesNode) throws SQLParseException {
+    private void processColumnNames(Node columnNamesNode) throws IRGenerationException {
+
         if (columnNamesNode.getChildren() == null) return;
 
         for (Node child : columnNamesNode.getChildren()) {
@@ -148,7 +118,7 @@ public class SqlToMongoIRGenerator {
                     processCaseExpression(child, true);
                     break;
                 case LOGICAL_CHECK:
-                    // ????? ???? ? ???????????
+                    // Может быть в подзапросах
                     processLogicalCheck(child, ConditionContext.SELECT);
                     break;
                 case QUERY:
@@ -158,10 +128,8 @@ public class SqlToMongoIRGenerator {
         }
     }
 
-    /**
-     * ????????? SELECT *
-     */
     private void processAllColumns() {
+
         ProjectionField field = new ProjectionField();
         field.setField("*");
 
@@ -172,10 +140,8 @@ public class SqlToMongoIRGenerator {
         ir.getProjectionFields().add(field);
     }
 
-    /**
-     * ????????? ?????????????? (???????.???????)
-     */
     private void processIdentifier(Node identifierNode) {
+
         if (identifierNode.getChildren() == null || identifierNode.getChildren().size() < 2)
             return;
 
@@ -186,7 +152,6 @@ public class SqlToMongoIRGenerator {
         field.setSource(tableOrAlias);
         field.setField(column);
 
-        // ????????? ?????
         if (identifierNode.getChildren().size() > 2) {
             String alias = extractAliasFromChildren(identifierNode.getChildren());
             field.setAlias(alias);
@@ -195,10 +160,8 @@ public class SqlToMongoIRGenerator {
         ir.getProjectionFields().add(field);
     }
 
-    /**
-     * ????????? ?????????? ???????
-     */
     private void processAggregateFunction(Node aggregateNode, boolean inSelect) {
+
         ir.setHasAggregateFunctions(true);
 
         if (inSelect) {
@@ -209,10 +172,8 @@ public class SqlToMongoIRGenerator {
         ir.getProjectionFields().add(field);
     }
 
-    /**
-     * ????????? ??????????????? ?????????
-     */
     private void processArithmeticExpression(Node arithNode, boolean inSelect) {
+
         if (inSelect) {
             ir.setHasComplexProjections(true);
         }
@@ -223,10 +184,8 @@ public class SqlToMongoIRGenerator {
         ir.getProjectionFields().add(field);
     }
 
-    /**
-     * ????????? CASE ?????????
-     */
     private void processCaseExpression(Node caseNode, boolean inSelect) {
+
         if (inSelect) {
             ir.setHasComplexProjections(true);
         }
@@ -237,15 +196,14 @@ public class SqlToMongoIRGenerator {
         ir.getProjectionFields().add(field);
     }
 
-    /**
-     * ????????? ?????? ? ???????
-     */
-    private void processTableNames(Node tableNamesNode) throws SQLParseException {
+    private void processTableNames(Node tableNamesNode) throws IRGenerationException {
+
         if (tableNamesNode.getChildren() == null) return;
 
         JoinInfo currentJoin = null;
 
         for (int i = 0; i < tableNamesNode.getChildren().size(); i++) {
+
             Node child = tableNamesNode.getChildren().get(i);
 
             switch (child.getNodeType()) {
@@ -253,7 +211,7 @@ public class SqlToMongoIRGenerator {
                     TableInfo tableInfo = processTable(child);
 
                     if (ir.getMainCollection() == null) {
-                        // ?????? ??????? - ???????? ?????????
+                        // Первая таблица - основная коллекция
                         ir.setMainCollection(tableInfo.tableName);
                         currentContext.push(tableInfo.alias != null ? tableInfo.alias : tableInfo.tableName);
 
@@ -262,7 +220,7 @@ public class SqlToMongoIRGenerator {
                             ir.getAliases().put(tableInfo.alias, tableInfo.tableName);
                         }
                     } else if (currentJoin != null) {
-                        // ?????? ??????? ??? ??????
+                        // Правая таблица для джойна
                         currentJoin.setRightTable(tableInfo.tableName);
                         currentJoin.setRightAlias(tableInfo.alias);
 
@@ -286,29 +244,29 @@ public class SqlToMongoIRGenerator {
                     break;
 
                 case QUERY:
-                    // ????????? ? FROM
+                    // Подзапрос в FROM
                     processSubqueryInFrom(child);
                     break;
 
                 case TERMINAL:
-                    // JOIN ???????? ????? ?????????????? ? processJoin
                     break;
             }
         }
     }
 
-    /**
-     * ????????? ?????????? ? ???????
-     */
     private TableInfo processTable(Node tableNode) {
+
         TableInfo info = new TableInfo();
 
         if (tableNode.getChildren() == null) return info;
 
         for (Node child : tableNode.getChildren()) {
+
             if (child.getNodeType() == NodeType.TERMINAL) {
+
                 Token token = child.getToken();
                 if (token.category == Category.IDENTIFIER) {
+
                     if (info.tableName == null) {
                         info.tableName = token.lexeme;
                     } else {
@@ -320,23 +278,22 @@ public class SqlToMongoIRGenerator {
                 info.tableName = "subquery_" + System.identityHashCode(child);
             }
         }
-
         return info;
     }
 
-    /**
-     * ????????? ??????
-     */
     private JoinInfo processJoin(Node joinNode) {
+
         JoinInfo joinInfo = new JoinInfo();
 
         if (joinNode.getChildren() != null && !joinNode.getChildren().isEmpty()) {
+
             Node firstChild = joinNode.getChildren().getFirst();
             if (firstChild.getNodeType() == NodeType.TERMINAL) {
+
                 String joinType = firstChild.getToken().lexeme;
 
                 switch (joinType) {
-                    case "JOIN":
+                    case "JOIN", "INNER":
                         joinInfo.setType(JoinInfo.JoinType.INNER);
                         break;
                     case "LEFT":
@@ -345,45 +302,29 @@ public class SqlToMongoIRGenerator {
                     case "RIGHT":
                         joinInfo.setType(JoinInfo.JoinType.RIGHT);
                         break;
-                    case "INNER":
-                        joinInfo.setType(JoinInfo.JoinType.INNER);
-                        break;
                 }
             }
         }
-
         return joinInfo;
     }
 
-    /**
-     * ????????? ??????? ??????
-     */
-    private ConditionNode processJoinCondition(Node conditionNode) throws SQLParseException {
+    private ConditionNode processJoinCondition(Node conditionNode) throws IRGenerationException {
         return processLogicalCondition(conditionNode, ConditionContext.JOIN);
     }
 
-    /**
-     * ????????? WHERE ???????
-     */
-    private void processWhereCondition(Node conditionNode) throws SQLParseException {
+    private void processWhereCondition(Node conditionNode) throws IRGenerationException {
         ConditionNode condition = processLogicalCondition(conditionNode, ConditionContext.WHERE);
         ir.getWhereConditions().add(condition);
     }
 
-    /**
-     * ????????? HAVING ???????
-     */
-    private void processHavingCondition(Node conditionNode) throws SQLParseException {
+    private void processHavingCondition(Node conditionNode) throws IRGenerationException {
         ConditionNode condition = processLogicalCondition(conditionNode, ConditionContext.HAVING);
         ir.getHavingConditions().add(condition);
         ir.setHasHaving(true);
     }
 
-    /**
-     * ????????? ??????????? ??????? (????? ?????)
-     */
     private ConditionNode processLogicalCondition(Node logicalNode, ConditionContext context)
-            throws SQLParseException {
+            throws IRGenerationException {
 
         if (logicalNode.getChildren() == null || logicalNode.getChildren().isEmpty()) {
             return null;
@@ -393,12 +334,15 @@ public class SqlToMongoIRGenerator {
         String logicalCombine = null;
 
         for (Node child : logicalNode.getChildren()) {
+
             if (child.getNodeType() == NodeType.LOGICAL_CHECK) {
+
                 ConditionNode condition = processLogicalCheck(child, context);
                 if (condition != null) {
                     conditions.add(condition);
                 }
             } else if (child.getNodeType() == NodeType.TERMINAL) {
+
                 String lexeme = child.getToken().lexeme;
                 if ("AND".equals(lexeme) || "OR".equals(lexeme)) {
                     logicalCombine = lexeme;
@@ -414,7 +358,7 @@ public class SqlToMongoIRGenerator {
             return conditions.getFirst();
         }
 
-        // ?????????? ???????
+        // Объединение условия
         ConditionNode combined = new ConditionNode();
         combined.setType("AND".equals(logicalCombine) ?
                 ConditionNode.ConditionType.AND : ConditionNode.ConditionType.OR);
@@ -423,11 +367,8 @@ public class SqlToMongoIRGenerator {
         return combined;
     }
 
-    /**
-     * ????????? ?????????? ????????
-     */
-    private ConditionNode processLogicalCheck(Node logicalCheckNode, ConditionContext context)
-            throws SQLParseException {
+    private ConditionNode processLogicalCheck(Node logicalCheckNode,
+                                              ConditionContext context) throws IRGenerationException {
 
         if (logicalCheckNode.getChildren() == null || logicalCheckNode.getChildren().isEmpty()) {
             return null;
@@ -439,6 +380,7 @@ public class SqlToMongoIRGenerator {
         boolean notFlag = false;
 
         for (Node child : logicalCheckNode.getChildren()) {
+
             switch (child.getNodeType()) {
                 case TERMINAL:
                     Token token = child.getToken();
@@ -449,7 +391,6 @@ public class SqlToMongoIRGenerator {
                             operator = lexeme;
                             break;
                         case LOGICAL_COMBINE:
-                            // AND/OR ?????????????? ????
                             break;
                         case IDENTIFIER:
                         case NUMBER:
@@ -480,12 +421,10 @@ public class SqlToMongoIRGenerator {
                     break;
 
                 case ARITHMETIC_EXP:
-                    // ?????????????? ????????? ? ???????
                     condition.setField(buildExpressionString(child));
                     break;
 
                 case AGGREGATE:
-                    // ?????????? ??????? ? ???????
                     if (context == ConditionContext.HAVING) {
                         ir.setHasAggregateFunctions(true);
                     }
@@ -493,14 +432,15 @@ public class SqlToMongoIRGenerator {
                     break;
 
                 case QUERY:
-                    // ????????? ? ???????
                     SubqueryInfo subqueryInfo = processSubquery(child,
                             determineSubqueryTypeFromCondition(operator, notFlag));
 
                     if (subqueryInfo != null) {
+
                         condition.setValue(subqueryInfo);
 
                         if (subqueryInfo.getType() == SubqueryInfo.SubqueryType.EXISTS) {
+
                             condition.setType(notFlag ?
                                     ConditionNode.ConditionType.NOT_EXISTS :
                                     ConditionNode.ConditionType.EXISTS);
@@ -511,37 +451,38 @@ public class SqlToMongoIRGenerator {
                     break;
 
                 case ATTRIBUTES:
-                    // ?????? ???????? ??? IN
+                    // Список значений для IN
                     processAttributesForIn(child, condition);
                     break;
             }
         }
 
-        // ????????????? ??? ??????? ???? ??? ?? ??????????
+        // Устанавливаем тип условия если еще не установлен
         if (condition.getType() == null) {
+
             if (operator != null) {
+
                 condition.setType(ConditionNode.ConditionType.COMPARISON);
                 condition.setOperator(operator);
             } else if (operands.size() >= 2) {
-                // ???????? ?????????? ???? ? ????????
+                // Пытаемся определить поле и значение
                 condition.setType(ConditionNode.ConditionType.COMPARISON);
                 condition.setField(extractOperandValue(operands.get(0)));
                 condition.setValue(extractOperandValue(operands.get(1)));
             }
         }
-
         return condition;
     }
 
-    /**
-     * ????????? GROUP BY
-     */
     private void processGroupBy(Node groupByNode) {
+
         ir.setHasGroupBy(true);
         ir.setRequiresAggregation(true);
 
         if (groupByNode.getChildren() != null) {
+
             for (Node child : groupByNode.getChildren()) {
+
                 String field = extractFieldFromGroupBy(child);
                 if (field != null && !field.isEmpty()) {
                     ir.getGroupByFields().add(field);
@@ -550,18 +491,20 @@ public class SqlToMongoIRGenerator {
         }
     }
 
-    /**
-     * ????????? ORDER BY
-     */
     private void processOrderBy(Node orderByNode) {
+
         if (orderByNode.getChildren() != null) {
+
             boolean ascending = true;
             String currentField = null;
 
             for (Node child : orderByNode.getChildren()) {
+
                 if (child.getNodeType() == NodeType.TERMINAL) {
+
                     String lexeme = child.getToken().lexeme;
                     if ("ASC".equals(lexeme)) {
+
                         ascending = true;
                         // ???? ???? ????, ??????? SortField
                         if (currentField != null) {
@@ -599,13 +542,11 @@ public class SqlToMongoIRGenerator {
         ir.getOrderBy().add(sortField);
     }
 
-    /**
-     * ????????? ??????????
-     */
     private SubqueryInfo processSubquery(Node subqueryNode, SubqueryInfo.SubqueryType type) {
-        ir.setHasSubqueries(true);
 
+        ir.setHasSubqueries(true);
         SqlToMongoIRGenerator subqueryGenerator = new SqlToMongoIRGenerator(subqueryNode);
+
         try {
             SqlToMongoIR subqueryIR = subqueryGenerator.generateIR();
 
@@ -613,7 +554,6 @@ public class SqlToMongoIRGenerator {
             subqueryInfo.setType(type);
             subqueryInfo.setSubqueryIR(subqueryIR);
 
-            // ????????? ??????????????? ??????????
             if (hasCorrelations(subqueryNode)) {
                 ir.setHasCorrelatedSubqueries(true);
                 subqueryInfo.setCorrelations(extractCorrelationConditions(subqueryNode));
@@ -622,39 +562,38 @@ public class SqlToMongoIRGenerator {
             nestedSubqueries.add(subqueryInfo);
             return subqueryInfo;
 
-        } catch (SQLParseException e) {
-            // ?????? ????????? ??????????
+        } catch (IRGenerationException e) {
+            // Ошибка обработки подзапроса
             return null;
         }
     }
 
-    /**
-     * ????????? ?????????? ? FROM
-     */
     private void processSubqueryInFrom(Node subqueryNode) {
-        // ????????? ? FROM ?????? ????? ?????
+        // Подзапрос в FROM должен иметь алиас
         String alias = extractSubqueryAlias(subqueryNode);
 
         SubqueryInfo subqueryInfo = processSubquery(subqueryNode, SubqueryInfo.SubqueryType.SCALAR);
         if (subqueryInfo != null && alias != null) {
+
             tableAliases.put(alias, "subquery");
             ir.getAliases().put(alias, "subquery");
             currentContext.push(alias);
         }
     }
 
-    /**
-     * ????????? ????????? ??? IN ???????
-     */
     private void processAttributesForIn(Node attributesNode, ConditionNode condition) {
+
         if (attributesNode.getChildren() == null) return;
 
         List<Object> values = new ArrayList<>();
         for (Node child : attributesNode.getChildren()) {
+
             if (child.getNodeType() == NodeType.TERMINAL) {
+
                 values.add(extractTokenValue(child));
+
             } else if (child.getNodeType() == NodeType.QUERY) {
-                // ????????? ? IN
+                // Подзапрос в IN
                 SubqueryInfo subquery = processSubquery(child, SubqueryInfo.SubqueryType.IN);
                 if (subquery != null) {
                     condition.setValue(subquery);
@@ -662,11 +601,10 @@ public class SqlToMongoIRGenerator {
                 }
             }
         }
-
         condition.setValue(values);
     }
 
-    // ========== ??????????????? ?????? ?????????? ?????????? ==========
+    // ========== Вспомогательные методы извлечения информации ==========
 
     private ProjectionField extractColumnExpressionInfo(Node columnExprNode) {
         ProjectionField field = new ProjectionField();

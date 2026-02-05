@@ -3,6 +3,9 @@ package sql.to.mongodb.translator;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import sql.to.mongodb.translator.service.exceptions.SQLParseException;
+import sql.to.mongodb.translator.service.exceptions.SQLScanException;
+import sql.to.mongodb.translator.service.parser.Node;
 import sql.to.mongodb.translator.service.parser.Parser;
 import sql.to.mongodb.translator.service.scanner.Scanner;
 import sql.to.mongodb.translator.service.scanner.Token;
@@ -114,6 +117,8 @@ public class ParserTest {
                 										  ORDER BY Profit DESC
                 										  LIMIT 3)""", tokens, errors);
         Parser parser = new Parser(tokens, errors);
+/*        Node root = parser.tryAnalyse();
+        System.out.println(root);*/
         Assertions.assertDoesNotThrow(parser::tryAnalyse);
     }
 
