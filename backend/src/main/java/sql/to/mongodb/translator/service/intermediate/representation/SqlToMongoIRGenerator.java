@@ -3,17 +3,22 @@ package sql.to.mongodb.translator.service.intermediate.representation;
 import sql.to.mongodb.translator.service.enums.Category;
 import sql.to.mongodb.translator.service.enums.NodeType;
 import sql.to.mongodb.translator.service.exceptions.IRGenerationException;
-import sql.to.mongodb.translator.service.intermediate.representation.details.*;
+import sql.to.mongodb.translator.service.intermediate.representation.details.ConditionNode;
+import sql.to.mongodb.translator.service.intermediate.representation.details.CorrelationCondition;
+import sql.to.mongodb.translator.service.intermediate.representation.details.JoinInfo;
+import sql.to.mongodb.translator.service.intermediate.representation.details.ProjectionField;
+import sql.to.mongodb.translator.service.intermediate.representation.details.SortField;
+import sql.to.mongodb.translator.service.intermediate.representation.details.SubqueryInfo;
 import sql.to.mongodb.translator.service.parser.Node;
 import sql.to.mongodb.translator.service.scanner.Token;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.Stack;
+
+import static sql.to.mongodb.translator.service.intermediate.representation.ConditionExtractor.ConditionContext;
 
 public class SqlToMongoIRGenerator {
 
@@ -22,7 +27,6 @@ public class SqlToMongoIRGenerator {
     private final Map<String, String> tableAliases = new HashMap<>();
     private final Stack<String> currentContext = new Stack<>();
     private final List<SubqueryInfo> nestedSubqueries = new ArrayList<>();
-    private final Set<String> outerTables = new HashSet<>();
 
     public SqlToMongoIRGenerator(Node astRoot) {
         this.astRoot = astRoot;
@@ -57,15 +61,19 @@ public class SqlToMongoIRGenerator {
                     processTableNames(child);
                     break;
                 case LOGICAL_CONDITION:
-                    // Нужно определить контекст - WHERE или HAVING
-                    if (!hasWhere) {
-                        processWhereCondition(child);
-                        hasWhere = true;
-                    } else if (!hasHaving) {
-                        processHavingCondition(child);
-                        hasHaving = true;
-                    } else {
-                        processLogicalCondition(child, ConditionContext.WHERE);
+                    // Используем ConditionExtractor для обработки условий
+                    ConditionNode condition = ConditionExtractor.extractCondition(child,
+                            determineConditionContext(child, hasWhere, hasHaving));
+
+                    if (condition != null) {
+                        if (!hasWhere) {
+                            ir.getWhereConditions().add(condition);
+                            hasWhere = true;
+                        } else if (!hasHaving) {
+                            ir.getHavingConditions().add(condition);
+                            ir.setHasHaving(true);
+                            hasHaving = true;
+                        }
                     }
                     break;
                 case GROUP_BY:
@@ -88,6 +96,17 @@ public class SqlToMongoIRGenerator {
                     break;
             }
         }
+    }
+
+    private ConditionContext determineConditionContext(Node conditionNode,
+                                                       boolean hasWhere,
+                                                       boolean hasHaving) {
+        if (!hasWhere) {
+            return ConditionContext.WHERE;
+        } else if (!hasHaving) {
+            return ConditionContext.HAVING;
+        }
+        return ConditionContext.WHERE;
     }
 
     private void processTerminalInQuery(Node terminalNode) {
@@ -124,8 +143,17 @@ public class SqlToMongoIRGenerator {
                     processCaseExpression(child, true);
                     break;
                 case LOGICAL_CHECK:
-                    // Может быть в подзапросах
-                    processLogicalCheck(child, ConditionContext.SELECT);
+                    // Используем ConditionExtractor для обработки логических проверок
+                    ConditionNode condition = ConditionExtractor.extractCondition(
+                            child,
+                            ConditionContext.SELECT);
+                    if (condition != null) {
+                        // Добавляем как проекционное поле
+                        ProjectionField field = new ProjectionField();
+                        field.setField(condition.toString());
+                        field.setAlias(extractAlias(child));
+                        ir.getProjectionFields().add(field);
+                    }
                     break;
                 case QUERY:
                     processSubquery(child, SubqueryInfo.SubqueryType.SCALAR);
@@ -185,7 +213,7 @@ public class SqlToMongoIRGenerator {
         }
 
         ProjectionField field = new ProjectionField();
-        field.setField(buildExpressionString(arithNode));
+        field.setField(ExpressionBuilder.buildExpression(arithNode));
         field.setAlias(extractAlias(arithNode));
         ir.getProjectionFields().add(field);
     }
@@ -197,7 +225,7 @@ public class SqlToMongoIRGenerator {
         }
 
         ProjectionField field = new ProjectionField();
-        field.setField(buildCaseExpressionString(caseNode));
+        field.setField(ExpressionBuilder.buildExpression(caseNode));
         field.setAlias(extractAlias(caseNode));
         ir.getProjectionFields().add(field);
     }
@@ -244,7 +272,10 @@ public class SqlToMongoIRGenerator {
 
                 case LOGICAL_CONDITION:
                     if (currentJoin != null) {
-                        ConditionNode joinCondition = processJoinCondition(child);
+                        // Используем ConditionExtractor для условий JOIN
+                        ConditionNode joinCondition = ConditionExtractor.extractCondition(
+                                child,
+                                ConditionContext.JOIN);
                         currentJoin.setJoinCondition(joinCondition);
                     }
                     break;
@@ -314,172 +345,6 @@ public class SqlToMongoIRGenerator {
         return joinInfo;
     }
 
-    private ConditionNode processJoinCondition(Node conditionNode) throws IRGenerationException {
-        return processLogicalCondition(conditionNode, ConditionContext.JOIN);
-    }
-
-    private void processWhereCondition(Node conditionNode) throws IRGenerationException {
-        ConditionNode condition = processLogicalCondition(conditionNode, ConditionContext.WHERE);
-        ir.getWhereConditions().add(condition);
-    }
-
-    private void processHavingCondition(Node conditionNode) throws IRGenerationException {
-        ConditionNode condition = processLogicalCondition(conditionNode, ConditionContext.HAVING);
-        ir.getHavingConditions().add(condition);
-        ir.setHasHaving(true);
-    }
-
-    private ConditionNode processLogicalCondition(Node logicalNode, ConditionContext context)
-            throws IRGenerationException {
-
-        if (logicalNode.getChildren() == null || logicalNode.getChildren().isEmpty()) {
-            return null;
-        }
-
-        List<ConditionNode> conditions = new ArrayList<>();
-        String logicalCombine = null;
-
-        for (Node child : logicalNode.getChildren()) {
-
-            if (child.getNodeType() == NodeType.LOGICAL_CHECK) {
-
-                ConditionNode condition = processLogicalCheck(child, context);
-                if (condition != null) {
-                    conditions.add(condition);
-                }
-            } else if (child.getNodeType() == NodeType.TERMINAL) {
-
-                String lexeme = child.getToken().lexeme;
-                if ("AND".equals(lexeme) || "OR".equals(lexeme)) {
-                    logicalCombine = lexeme;
-                }
-            }
-        }
-
-        if (conditions.isEmpty()) {
-            return null;
-        }
-
-        if (conditions.size() == 1) {
-            return conditions.getFirst();
-        }
-
-        // Объединение условия
-        ConditionNode combined = new ConditionNode();
-        combined.setType("AND".equals(logicalCombine) ?
-                ConditionNode.ConditionType.AND : ConditionNode.ConditionType.OR);
-        combined.getChildren().addAll(conditions);
-
-        return combined;
-    }
-
-    private ConditionNode processLogicalCheck(Node logicalCheckNode,
-                                              ConditionContext context) throws IRGenerationException {
-
-        if (logicalCheckNode.getChildren() == null || logicalCheckNode.getChildren().isEmpty()) {
-            return null;
-        }
-
-        ConditionNode condition = new ConditionNode();
-        List<Node> operands = new ArrayList<>();
-        String operator = null;
-        boolean notFlag = false;
-
-        for (Node child : logicalCheckNode.getChildren()) {
-
-            switch (child.getNodeType()) {
-                case TERMINAL:
-                    Token token = child.getToken();
-                    String lexeme = token.lexeme;
-
-                    switch (token.category) {
-                        case LOGICAL_OPERATOR:
-                            operator = lexeme;
-                            break;
-                        case LOGICAL_COMBINE:
-                            break;
-                        case IDENTIFIER:
-                        case NUMBER:
-                        case LITERAL:
-                            operands.add(child);
-                            break;
-                        case NULL:
-                            condition.setType(ConditionNode.ConditionType.IS_NULL);
-                            break;
-                        case KEYWORD:
-                            if ("NOT".equals(lexeme)) {
-                                notFlag = true;
-                            } else if ("LIKE".equals(lexeme)) {
-                                operator = "LIKE";
-                            } else if ("BETWEEN".equals(lexeme)) {
-                                condition.setType(ConditionNode.ConditionType.BETWEEN);
-                            } else if ("IN".equals(lexeme)) {
-                                condition.setType(ConditionNode.ConditionType.IN);
-                            } else if ("EXISTS".equals(lexeme)) {
-                                condition.setType(notFlag ?
-                                        ConditionNode.ConditionType.NOT_EXISTS :
-                                        ConditionNode.ConditionType.EXISTS);
-                            } else if ("IS".equals(lexeme)) {
-                                operator = "IS";
-                            }
-                            break;
-                    }
-                    break;
-
-                case ARITHMETIC_EXP:
-                    condition.setField(buildExpressionString(child));
-                    break;
-
-                case AGGREGATE:
-                    if (context == ConditionContext.HAVING) {
-                        ir.setHasAggregateFunctions(true);
-                    }
-                    condition.setField(buildAggregateString(child));
-                    break;
-
-                case QUERY:
-                    SubqueryInfo subqueryInfo = processSubquery(child,
-                            determineSubqueryTypeFromCondition(operator, notFlag));
-
-                    if (subqueryInfo != null) {
-
-                        condition.setValue(subqueryInfo);
-
-                        if (subqueryInfo.getType() == SubqueryInfo.SubqueryType.EXISTS) {
-
-                            condition.setType(notFlag ?
-                                    ConditionNode.ConditionType.NOT_EXISTS :
-                                    ConditionNode.ConditionType.EXISTS);
-                        } else if (subqueryInfo.getType() == SubqueryInfo.SubqueryType.IN) {
-                            condition.setType(ConditionNode.ConditionType.IN);
-                        }
-                    }
-                    break;
-
-                case ATTRIBUTES:
-                    // Список значений для IN
-                    processAttributesForIn(child, condition);
-                    break;
-            }
-        }
-
-        // Устанавливаем тип условия если еще не установлен
-        if (condition.getType() == null) {
-
-            if (operator != null) {
-
-                condition.setType(ConditionNode.ConditionType.COMPARISON);
-                condition.setOperator(operator);
-            } else if (operands.size() >= 2) {
-                // Пытаемся определить поле и значение
-                condition.setType(ConditionNode.ConditionType.COMPARISON);
-                condition.setField(extractOperandValue(operands.get(0)));
-                condition.setValue(extractOperandValue(operands.get(1)));
-            }
-        }
-        return condition;
-    }
-
     private void processGroupBy(Node groupByNode) {
 
         ir.setHasGroupBy(true);
@@ -512,14 +377,14 @@ public class SqlToMongoIRGenerator {
                     if ("ASC".equals(lexeme)) {
 
                         ascending = true;
-                        // ???? ???? ????, ??????? SortField
+                        // Если есть поле, создаем SortField
                         if (currentField != null) {
                             addSortField(currentField, ascending);
                             currentField = null;
                         }
                     } else if ("DESC".equals(lexeme)) {
                         ascending = false;
-                        // ???? ???? ????, ??????? SortField
+                        // Если есть поле, создаем SortField
                         if (currentField != null) {
                             addSortField(currentField, ascending);
                             currentField = null;
@@ -528,13 +393,13 @@ public class SqlToMongoIRGenerator {
                 } else {
                     String field = extractFieldFromOrderBy(child);
                     if (field != null) {
-                        // ????????? ????, ???? ???????? ???????????
+                        // Сохраняем поле, ждем направления
                         currentField = field;
                     }
                 }
             }
 
-            // ????????? ?????????? ????, ???? ?? ???? ASC/DESC
+            // Обрабатываем последнее поле если не указано ASC/DESC
             if (currentField != null) {
                 addSortField(currentField, ascending);
             }
@@ -560,9 +425,11 @@ public class SqlToMongoIRGenerator {
             subqueryInfo.setType(type);
             subqueryInfo.setSubqueryIR(subqueryIR);
 
-            if (hasCorrelations(subqueryNode)) {
+            // Используем ConditionExtractor для извлечения корреляций
+            List<CorrelationCondition> correlations = ConditionExtractor.extractCorrelations(subqueryNode);
+            if (!correlations.isEmpty()) {
                 ir.setHasCorrelatedSubqueries(true);
-                subqueryInfo.setCorrelations(extractCorrelationConditions(subqueryNode));
+                subqueryInfo.setCorrelations(correlations);
             }
 
             nestedSubqueries.add(subqueryInfo);
@@ -587,74 +454,13 @@ public class SqlToMongoIRGenerator {
         }
     }
 
-    private void processAttributesForIn(Node attributesNode, ConditionNode condition) {
-
-        if (attributesNode.getChildren() == null) return;
-
-        List<Object> values = new ArrayList<>();
-        for (Node child : attributesNode.getChildren()) {
-
-            if (child.getNodeType() == NodeType.TERMINAL) {
-
-                values.add(extractTokenValue(child));
-
-            } else if (child.getNodeType() == NodeType.QUERY) {
-                // Подзапрос в IN
-                SubqueryInfo subquery = processSubquery(child, SubqueryInfo.SubqueryType.IN);
-                if (subquery != null) {
-                    condition.setValue(subquery);
-                    return;
-                }
-            }
-        }
-        condition.setValue(values);
-    }
-
     // ========== Вспомогательные методы извлечения информации ==========
-
-    private ProjectionField extractColumnExpressionInfo(Node columnExprNode) {
-        ProjectionField field = new ProjectionField();
-
-        if (columnExprNode.getChildren() != null) {
-            String source = null;
-            String column = null;
-
-            for (Node child : columnExprNode.getChildren()) {
-                if (child.getNodeType() == NodeType.IDENTIFIER) {
-                    if (child.getChildren() != null && child.getChildren().size() >= 2) {
-                        source = extractTokenValue(child.getChildren().get(0));
-                        column = extractTokenValue(child.getChildren().get(1));
-                    }
-                } else if (child.getNodeType() == NodeType.TERMINAL &&
-                        child.getToken().category == Category.IDENTIFIER) {
-                    column = child.getToken().lexeme;
-                }
-            }
-
-            field.setSource(source != null ? source :
-                    (!currentContext.isEmpty() ? currentContext.peek() : null));
-            field.setField(column);
-            field.setAlias(extractAlias(columnExprNode));
-        }
-
-        return field;
-    }
 
     private ProjectionField extractAggregateInfo(Node aggregateNode) {
         ProjectionField field = new ProjectionField();
-        StringBuilder functionCall = new StringBuilder();
+        String functionCall = ExpressionBuilder.buildExpression(aggregateNode);
 
-        if (aggregateNode.getChildren() != null) {
-            for (Node child : aggregateNode.getChildren()) {
-                if (child.getNodeType() == NodeType.TERMINAL) {
-                    functionCall.append(child.getToken().lexeme);
-                } else if (child.getNodeType() == NodeType.IDENTIFIER) {
-                    functionCall.append(extractIdentifierString(child));
-                }
-            }
-        }
-
-        field.setField(functionCall.toString());
+        field.setField(functionCall);
         field.setAlias(extractAlias(aggregateNode));
 
         if (!currentContext.isEmpty()) {
@@ -662,53 +468,6 @@ public class SqlToMongoIRGenerator {
         }
 
         return field;
-    }
-
-    private String buildExpressionString(Node exprNode) {
-        StringBuilder sb = new StringBuilder();
-
-        if (exprNode.getChildren() != null) {
-            for (Node child : exprNode.getChildren()) {
-                if (child.getNodeType() == NodeType.TERMINAL) {
-                    sb.append(child.getToken().lexeme).append(" ");
-                } else {
-                    sb.append(buildExpressionString(child)).append(" ");
-                }
-            }
-        }
-
-        return sb.toString().trim();
-    }
-
-    private String buildCaseExpressionString(Node caseNode) {
-        StringBuilder sb = new StringBuilder("CASE ");
-
-        if (caseNode.getChildren() != null) {
-            for (Node child : caseNode.getChildren()) {
-                if (child.getNodeType() == NodeType.TERMINAL) {
-                    sb.append(child.getToken().lexeme).append(" ");
-                } else {
-                    sb.append(buildExpressionString(child)).append(" ");
-                }
-            }
-        }
-
-        sb.append("END");
-        return sb.toString();
-    }
-
-    private String buildAggregateString(Node aggregateNode) {
-        StringBuilder sb = new StringBuilder();
-
-        if (aggregateNode.getChildren() != null) {
-            for (Node child : aggregateNode.getChildren()) {
-                if (child.getNodeType() == NodeType.TERMINAL) {
-                    sb.append(child.getToken().lexeme);
-                }
-            }
-        }
-
-        return sb.toString();
     }
 
     private String extractTokenValue(Node node) {
@@ -774,91 +533,14 @@ public class SqlToMongoIRGenerator {
         return extractFieldFromGroupBy(node);
     }
 
-    private String extractOperandValue(Node operandNode) {
-        if (operandNode.getNodeType() == NodeType.TERMINAL) {
-            return operandNode.getToken().lexeme;
-        } else if (operandNode.getNodeType() == NodeType.IDENTIFIER) {
-            return extractIdentifierString(operandNode);
-        }
-        return null;
-    }
-
     private String extractSubqueryAlias(Node subqueryNode) {
-        // ???? AS ? ???????????? ?????????
+        // Ищем AS в определении подзапроса
         return extractAlias(subqueryNode);
     }
-
-    private SubqueryInfo.SubqueryType determineSubqueryTypeFromCondition(String operator, boolean notFlag) {
-        if ("EXISTS".equals(operator) || "NOT".equals(operator)) {
-            return notFlag ? SubqueryInfo.SubqueryType.NOT_EXISTS : SubqueryInfo.SubqueryType.EXISTS;
-        } else if ("IN".equals(operator)) {
-            return SubqueryInfo.SubqueryType.IN;
-        } else if (operator != null && (operator.equals("=") || operator.equals("!=") ||
-                operator.equals("<") || operator.equals(">") ||
-                operator.equals("<=") || operator.equals(">="))) {
-            return SubqueryInfo.SubqueryType.COMPARISON;
-        }
-        return SubqueryInfo.SubqueryType.SCALAR;
-    }
-
-    private boolean hasCorrelations(Node subqueryNode) {
-        if (subqueryNode == null || outerTables.isEmpty()) {
-            return false;
-        }
-
-        CorrelationAnalyzer analyzer = new CorrelationAnalyzer();
-        return analyzer.analyzeForCorrelations(subqueryNode, outerTables, tableAliases);
-    }
-
-    private List<CorrelationCondition> extractCorrelationConditions(Node subqueryNode) {
-        if (subqueryNode == null) {
-            return new ArrayList<>();
-        }
-
-        // ???? WHERE ??????? ? ??????????
-        Node whereCondition = findWhereCondition(subqueryNode);
-
-        CorrelationAnalyzer analyzer = new CorrelationAnalyzer();
-        analyzer.analyzeForCorrelations(subqueryNode, outerTables, tableAliases);
-
-        if (whereCondition != null) {
-            return analyzer.extractCorrelationConditions(whereCondition);
-        }
-
-        return analyzer.getCorrelations();
-    }
-
-    private Node findWhereCondition(Node queryNode) {
-        if (queryNode.getChildren() == null) {
-            return null;
-        }
-
-        for (Node child : queryNode.getChildren()) {
-            if (child.getNodeType() == NodeType.LOGICAL_CONDITION) {
-                // ????????? ???????? - ??? WHERE ??? HAVING?
-                // ??? ???????? ??????? ?????? ?????????? ??????? WHERE
-                return child;
-            } else if (child.getNodeType() == NodeType.QUERY) {
-                // ??????????? ????? ? ???????????
-                Node where = findWhereCondition(child);
-                if (where != null) {
-                    return where;
-                }
-            }
-        }
-
-        return null;
-    }
-
-    // ========== ??????????????? ?????? ==========
 
     private static class TableInfo {
         String tableName;
         String alias;
         boolean isSubquery = false;
-    }
-
-    private enum ConditionContext {
-        WHERE, HAVING, JOIN, SELECT
     }
 }

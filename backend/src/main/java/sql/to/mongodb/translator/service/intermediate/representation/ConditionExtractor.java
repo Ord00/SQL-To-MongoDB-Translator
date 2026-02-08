@@ -220,22 +220,44 @@ public class ConditionExtractor {
         return values;
     }
 
-    //Извлечение условий корреляции из подзапроса
+    // Извлечение условий корреляции из подзапроса
     public static List<CorrelationCondition> extractCorrelations(Node subqueryNode) {
+
         List<CorrelationCondition> correlations = new ArrayList<>();
 
-        // В реальной реализации нужно анализировать WHERE подзапроса
-        // на наличие ссылок на внешние таблицы
+        if (subqueryNode == null) {
+            return correlations;
+        }
 
-        // Заглушка
-        CorrelationCondition correlation = new CorrelationCondition();
-        correlation.setOuterField("outer_field");
-        correlation.setInnerField("inner_field");
-        correlation.setOperator("=");
+        CorrelationAnalyzer analyzer = new CorrelationAnalyzer();
 
-        correlations.add(correlation);
+        Node whereCondition = findWhereCondition(subqueryNode);
+
+        if (whereCondition != null) {
+            return analyzer.extractCorrelationConditions(whereCondition);
+        }
 
         return correlations;
+    }
+
+    private static Node findWhereCondition(Node queryNode) {
+
+        if (queryNode == null || queryNode.getChildren() == null) {
+            return null;
+        }
+
+        for (Node child : queryNode.getChildren()) {
+            if (child.getNodeType() == NodeType.LOGICAL_CONDITION) {
+                // Первое логическое условие считаем WHERE
+                return child;
+            } else if (child.getNodeType() == NodeType.QUERY) {
+                Node where = findWhereCondition(child);
+                if (where != null) {
+                    return where;
+                }
+            }
+        }
+        return null;
     }
 
     public enum ConditionContext {
