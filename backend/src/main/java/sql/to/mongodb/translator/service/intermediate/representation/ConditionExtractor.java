@@ -8,19 +8,22 @@ import sql.to.mongodb.translator.service.parser.Node;
 import sql.to.mongodb.translator.service.scanner.Token;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
-import static sql.to.mongodb.translator.service.intermediate.representation.details.ConditionNode.ConditionType.COMPARISON;
-import static sql.to.mongodb.translator.service.intermediate.representation.details.ConditionNode.ConditionType.EXISTS;
-import static sql.to.mongodb.translator.service.intermediate.representation.details.ConditionNode.ConditionType.IN;
-import static sql.to.mongodb.translator.service.intermediate.representation.details.ConditionNode.ConditionType.NOT_EXISTS;
+import static sql.to.mongodb.translator.service.intermediate.representation.details.ConditionNode.ConditionType.*;
 
-// Извлекатель условий из AST
-public class ConditionExtractor {
+public record ConditionExtractor(Set<String> outerTables, Map<String, String> outerAliases) {
 
-    public static ConditionNode extractCondition(Node logicalNode,
-                                                 ConditionContext context) {
+    public ConditionExtractor(Set<String> outerTables, Map<String, String> outerAliases) {
+        this.outerTables = outerTables != null ? outerTables : new HashSet<>();
+        this.outerAliases = outerAliases != null ? outerAliases : new HashMap<>();
+    }
 
+    public ConditionNode extractCondition(Node logicalNode, ConditionContext context) {
         if (logicalNode == null || logicalNode.getChildren() == null) {
             return null;
         }
@@ -29,20 +32,17 @@ public class ConditionExtractor {
         ConditionNode.ConditionType combineType = null;
 
         for (Node child : logicalNode.getChildren()) {
-
             if (child.getNodeType() == NodeType.LOGICAL_CHECK) {
-
                 ConditionNode condition = extractLogicalCheck(child, context);
                 if (condition != null) {
                     subConditions.add(condition);
                 }
             } else if (child.getNodeType() == NodeType.TERMINAL) {
-
                 String lexeme = child.getToken().lexeme;
                 if ("AND".equals(lexeme)) {
-                    combineType = ConditionNode.ConditionType.AND;
+                    combineType = AND;
                 } else if ("OR".equals(lexeme)) {
-                    combineType = ConditionNode.ConditionType.OR;
+                    combineType = OR;
                 }
             }
         }
@@ -55,18 +55,13 @@ public class ConditionExtractor {
             return subConditions.getFirst();
         }
 
-        // Создаем комбинированное условие
         ConditionNode combined = new ConditionNode();
-        combined.setType(combineType != null ? combineType : ConditionNode.ConditionType.AND);
+        combined.setType(combineType != null ? combineType : AND);
         combined.getChildren().addAll(subConditions);
-
         return combined;
     }
 
-
-    private static ConditionNode extractLogicalCheck(Node logicalCheckNode,
-                                                     ConditionContext context) {
-
+    private ConditionNode extractLogicalCheck(Node logicalCheckNode, ConditionContext context) {
         if (logicalCheckNode.getChildren() == null) {
             return null;
         }
@@ -77,35 +72,37 @@ public class ConditionExtractor {
         boolean notFlag = false;
 
         for (Node child : logicalCheckNode.getChildren()) {
-
             switch (child.getNodeType()) {
                 case TERMINAL:
                     Token token = child.getToken();
-                    processTerminalInCondition(token, condition, operands, operator, notFlag);
+                    TerminalResult result = processTerminal(token, condition, notFlag);
+                    operator = result.operator;
+                    notFlag = result.notFlag;
+
+                    if (token.category == Category.IDENTIFIER ||
+                            token.category == Category.NUMBER) {
+                        operands.add(token.lexeme);
+                    } else if (token.category == Category.LITERAL) {
+                        operands.add("'" + token.lexeme + "'");
+                    }
                     break;
 
-                case ARITHMETIC_EXP:
+                case ARITHMETIC_EXP, IDENTIFIER:
                     String expr = ExpressionBuilder.buildExpression(child);
-                    condition.setField(expr);
+                    operands.add(expr);
                     break;
 
                 case AGGREGATE:
                     String aggExpr = ExpressionBuilder.buildExpression(child);
-                    condition.setField(aggExpr);
+                    operands.add(aggExpr);
                     if (context == ConditionContext.HAVING) {
                         condition.setType(COMPARISON);
                     }
                     break;
 
-                case IDENTIFIER:
-                    String identifier = ExpressionBuilder.buildExpression(child);
-                    operands.add(identifier);
-                    break;
-
                 case QUERY:
-                    // Подзапрос в условии
+                    condition.setType(determineSubqueryConditionType(operator, notFlag));
                     condition.setValue("SUBQUERY");
-                    setSubqueryConditionType(condition, operator, notFlag);
                     break;
 
                 case ATTRIBUTES:
@@ -116,52 +113,31 @@ public class ConditionExtractor {
             }
         }
 
+        // Устанавливаем поле и значение если не установлены
+        if (condition.getField() == null && !operands.isEmpty()) {
+            condition.setField(operands.getFirst());
+        }
+        if (condition.getValue() == null && operands.size() > 1) {
+            condition.setValue(operands.get(1));
+        }
+
         // Если тип еще не установлен, устанавливаем по умолчанию
-        if (condition.getType() == null) {
-
-            if (operator != null) {
-                condition.setType(COMPARISON);
-                condition.setOperator(operator);
-            }
-
-            // Устанавливаем поле и значение из операндов
-            if (operands.size() >= 2 && condition.getField() == null) {
-                condition.setField(operands.get(0));
-                condition.setValue(operands.get(1));
-            }
+        if (condition.getType() == null && operator != null) {
+            condition.setType(COMPARISON);
+            condition.setOperator(ExpressionBuilder.convertOperatorToMongo(operator));
         }
 
         return condition;
     }
 
-    private static void processTerminalInCondition(Token token,
-                                                   ConditionNode condition,
-                                                   List<String> operands,
-                                                   String operator,
-                                                   boolean notFlag) {
+    private TerminalResult processTerminal(Token token, ConditionNode condition, boolean currentNotFlag) {
         String lexeme = token.lexeme;
+        String operator = null;
+        boolean notFlag = currentNotFlag;
 
         switch (token.category) {
             case LOGICAL_OPERATOR:
                 operator = lexeme;
-                condition.setOperator(ExpressionBuilder.convertOperatorToMongo(lexeme));
-                break;
-
-            case IDENTIFIER:
-            case NUMBER:
-                operands.add(lexeme);
-                break;
-
-            case LITERAL:
-                operands.add("'" + lexeme + "'");
-                break;
-
-            case NULL:
-                if ("IS".equals(operator)) {
-                    condition.setType(notFlag ?
-                            ConditionNode.ConditionType.IS_NOT_NULL :
-                            ConditionNode.ConditionType.IS_NULL);
-                }
                 break;
 
             case KEYWORD:
@@ -171,43 +147,46 @@ public class ConditionExtractor {
                     operator = "LIKE";
                     condition.setOperator("$regex");
                 } else if ("BETWEEN".equals(lexeme)) {
-                    condition.setType(ConditionNode.ConditionType.BETWEEN);
+                    condition.setType(BETWEEN);
                 } else if ("IN".equals(lexeme)) {
                     condition.setType(IN);
                 } else if ("EXISTS".equals(lexeme)) {
-                    condition.setType(notFlag ?
-                            NOT_EXISTS :
-                            EXISTS);
+                    condition.setType(notFlag ? NOT_EXISTS : EXISTS);
                 } else if ("IS".equals(lexeme)) {
                     operator = "IS";
                 }
                 break;
+
+            case NULL:
+                if ("IS".equals(operator)) {
+                    condition.setType(notFlag ?
+                            IS_NOT_NULL :
+                            IS_NULL);
+                }
+                break;
         }
+
+        return new TerminalResult(operator, notFlag);
     }
 
-    private static void setSubqueryConditionType(ConditionNode condition,
-                                                 String operator,
-                                                 boolean notFlag) {
-
-        if ("EXISTS".equals(operator) || "NOT".equals(operator)) {
-            condition.setType(notFlag ? NOT_EXISTS : EXISTS);
-        } else if ("IN".equals(operator)) {
-            condition.setType(IN);
-        } else {
-            condition.setType(COMPARISON);
+    private ConditionNode.ConditionType determineSubqueryConditionType(String operator, boolean notFlag) {
+        if (operator == null) {
+            return COMPARISON;
         }
+
+        return switch (operator.toUpperCase()) {
+            case "EXISTS" -> notFlag ? NOT_EXISTS : EXISTS;
+            case "IN" -> IN;
+            default -> COMPARISON;
+        };
     }
 
-    private static List<Object> extractAttributes(Node attributesNode) {
-
+    private List<Object> extractAttributes(Node attributesNode) {
         List<Object> values = new ArrayList<>();
 
         if (attributesNode.getChildren() != null) {
-
             for (Node child : attributesNode.getChildren()) {
-
                 if (child.getNodeType() == NodeType.TERMINAL) {
-
                     Token token = child.getToken();
                     if (token.category == Category.LITERAL) {
                         values.add("'" + token.lexeme + "'");
@@ -221,8 +200,7 @@ public class ConditionExtractor {
     }
 
     // Извлечение условий корреляции из подзапроса
-    public static List<CorrelationCondition> extractCorrelations(Node subqueryNode) {
-
+    public List<CorrelationCondition> extractCorrelations(Node subqueryNode) {
         List<CorrelationCondition> correlations = new ArrayList<>();
 
         if (subqueryNode == null) {
@@ -231,24 +209,26 @@ public class ConditionExtractor {
 
         CorrelationAnalyzer analyzer = new CorrelationAnalyzer();
 
+        // Передаем информацию о внешних таблицах
+        analyzer.analyzeForCorrelations(subqueryNode, outerTables, outerAliases);
+
+        // Ищем WHERE условие
         Node whereCondition = findWhereCondition(subqueryNode);
 
         if (whereCondition != null) {
             return analyzer.extractCorrelationConditions(whereCondition);
         }
 
-        return correlations;
+        return analyzer.getCorrelations();
     }
 
-    private static Node findWhereCondition(Node queryNode) {
-
+    private Node findWhereCondition(Node queryNode) {
         if (queryNode == null || queryNode.getChildren() == null) {
             return null;
         }
 
         for (Node child : queryNode.getChildren()) {
             if (child.getNodeType() == NodeType.LOGICAL_CONDITION) {
-                // Первое логическое условие считаем WHERE
                 return child;
             } else if (child.getNodeType() == NodeType.QUERY) {
                 Node where = findWhereCondition(child);
@@ -258,6 +238,17 @@ public class ConditionExtractor {
             }
         }
         return null;
+    }
+
+    // Вспомогательный класс для возврата нескольких значений
+    private static class TerminalResult {
+        String operator;
+        boolean notFlag;
+
+        TerminalResult(String operator, boolean notFlag) {
+            this.operator = operator;
+            this.notFlag = notFlag;
+        }
     }
 
     public enum ConditionContext {

@@ -3,19 +3,15 @@ package sql.to.mongodb.translator.service.intermediate.representation;
 import sql.to.mongodb.translator.service.enums.Category;
 import sql.to.mongodb.translator.service.enums.NodeType;
 import sql.to.mongodb.translator.service.exceptions.IRGenerationException;
-import sql.to.mongodb.translator.service.intermediate.representation.details.ConditionNode;
-import sql.to.mongodb.translator.service.intermediate.representation.details.CorrelationCondition;
-import sql.to.mongodb.translator.service.intermediate.representation.details.JoinInfo;
-import sql.to.mongodb.translator.service.intermediate.representation.details.ProjectionField;
-import sql.to.mongodb.translator.service.intermediate.representation.details.SortField;
-import sql.to.mongodb.translator.service.intermediate.representation.details.SubqueryInfo;
+import sql.to.mongodb.translator.service.intermediate.representation.details.*;
 import sql.to.mongodb.translator.service.parser.Node;
 import sql.to.mongodb.translator.service.scanner.Token;
 
-import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.Stack;
 
 import static sql.to.mongodb.translator.service.intermediate.representation.ConditionExtractor.ConditionContext;
@@ -26,11 +22,19 @@ public class SqlToMongoIRGenerator {
     private final SqlToMongoIR ir;
     private final Map<String, String> tableAliases = new HashMap<>();
     private final Stack<String> currentContext = new Stack<>();
-    private final List<SubqueryInfo> nestedSubqueries = new ArrayList<>();
+    private final Set<String> outerTables = new HashSet<>();
+    private final ConditionExtractor conditionExtractor;
 
     public SqlToMongoIRGenerator(Node astRoot) {
+        this(astRoot, new HashSet<>(), new HashMap<>());
+    }
+
+    // Конструктор для подзапросов с информацией о внешних таблицах
+    public SqlToMongoIRGenerator(Node astRoot, Set<String> outerTables, Map<String, String> outerAliases) {
         this.astRoot = astRoot;
         this.ir = new SqlToMongoIR();
+        this.outerTables.addAll(outerTables);
+        this.conditionExtractor = new ConditionExtractor(outerTables, outerAliases);
     }
 
     public SqlToMongoIR generateIR() throws IRGenerationException {
@@ -43,74 +47,98 @@ public class SqlToMongoIRGenerator {
     }
 
     private void processQueryNode(Node queryNode) throws IRGenerationException {
-
         if (queryNode.getChildren() == null) return;
 
-        boolean hasWhere = false;
-        boolean hasHaving = false;
+        // Сначала собираем информацию о таблицах
+        processQueryStructure(queryNode);
 
+        // Затем обрабатываем остальные части
         for (Node child : queryNode.getChildren()) {
-            switch (child.getNodeType()) {
-                case TERMINAL:
-                    processTerminalInQuery(child);
-                    break;
-                case COLUMN_NAMES:
-                    processColumnNames(child);
-                    break;
-                case TABLE_NAMES:
-                    processTableNames(child);
-                    break;
-                case LOGICAL_CONDITION:
-                    // Используем ConditionExtractor для обработки условий
-                    ConditionNode condition = ConditionExtractor.extractCondition(child,
-                            determineConditionContext(child, hasWhere, hasHaving));
+            processQueryChild(child);
+        }
+    }
 
-                    if (condition != null) {
-                        if (!hasWhere) {
-                            ir.getWhereConditions().add(condition);
-                            hasWhere = true;
-                        } else if (!hasHaving) {
-                            ir.getHavingConditions().add(condition);
-                            ir.setHasHaving(true);
-                            hasHaving = true;
-                        }
-                    }
+    private void processQueryStructure(Node queryNode) throws IRGenerationException {
+        // Находим FROM и таблицы
+        for (Node child : queryNode.getChildren()) {
+            if (child.getNodeType() == NodeType.TABLE_NAMES) {
+                processTableNames(child);
+                break;
+            }
+        }
+    }
+
+    private void processQueryChild(Node child) throws IRGenerationException {
+        switch (child.getNodeType()) {
+            case TERMINAL:
+                processTerminalInQuery(child);
+                break;
+            case COLUMN_NAMES:
+                processColumnNames(child);
+                break;
+            case LOGICAL_CONDITION:
+                processConditionNode(child);
+                break;
+            case GROUP_BY:
+                processGroupBy(child);
+                break;
+            case ORDER_BY:
+                processOrderBy(child);
+                break;
+            case CASE:
+                processCaseExpression(child, true);
+                break;
+            case AGGREGATE:
+                processAggregateFunction(child, true);
+                break;
+            case ARITHMETIC_EXP:
+                processArithmeticExpression(child, true);
+                break;
+            case QUERY:
+                processSubquery(child);
+                break;
+        }
+    }
+
+    private void processConditionNode(Node conditionNode) {
+        // Определяем контекст на основе позиции в запросе
+        ConditionContext context = determineConditionContext();
+
+        ConditionNode extractedCondition = conditionExtractor.extractCondition(conditionNode, context);
+
+        if (extractedCondition != null) {
+            switch (context) {
+                case WHERE:
+                    ir.getWhereConditions().add(extractedCondition);
                     break;
-                case GROUP_BY:
-                    processGroupBy(child);
+                case HAVING:
+                    ir.getHavingConditions().add(extractedCondition);
+                    ir.setHasHaving(true);
                     break;
-                case ORDER_BY:
-                    processOrderBy(child);
+                case JOIN:
+                    // JOIN условия обрабатываются в processTableNames
+                    // Здесь мы их игнорируем
                     break;
-                case CASE:
-                    processCaseExpression(child, true);
-                    break;
-                case AGGREGATE:
-                    processAggregateFunction(child, true);
-                    break;
-                case ARITHMETIC_EXP:
-                    processArithmeticExpression(child, true);
-                    break;
-                case QUERY:
-                    processSubquery(child, SubqueryInfo.SubqueryType.SCALAR);
+                case SELECT:
+                    // Для SELECT условий создаем проекционное поле
+                    ProjectionField field = new ProjectionField();
+                    field.setField(extractedCondition.toString());
+                    ir.getProjectionFields().add(field);
                     break;
             }
         }
     }
 
-    private ConditionContext determineConditionContext(Node conditionNode,
-                                                       boolean hasWhere,
-                                                       boolean hasHaving) {
-        if (!hasWhere) {
-            return ConditionContext.WHERE;
-        } else if (!hasHaving) {
+    private ConditionContext determineConditionContext() {
+        // Упрощенная логика: если есть GROUP BY и еще нет HAVING, то это HAVING
+        // Иначе WHERE
+        if (ir.isHasGroupBy() && ir.getHavingConditions().isEmpty()) {
             return ConditionContext.HAVING;
         }
         return ConditionContext.WHERE;
     }
 
     private void processTerminalInQuery(Node terminalNode) {
-
         Token token = terminalNode.getToken();
         if (token == null) return;
 
@@ -120,7 +148,6 @@ public class SqlToMongoIRGenerator {
     }
 
     private void processColumnNames(Node columnNamesNode) throws IRGenerationException {
-
         if (columnNamesNode.getChildren() == null) return;
 
         for (Node child : columnNamesNode.getChildren()) {
@@ -143,27 +170,29 @@ public class SqlToMongoIRGenerator {
                     processCaseExpression(child, true);
                     break;
                 case LOGICAL_CHECK:
-                    // Используем ConditionExtractor для обработки логических проверок
-                    ConditionNode condition = ConditionExtractor.extractCondition(
-                            child,
-                            ConditionContext.SELECT);
-                    if (condition != null) {
-                        // Добавляем как проекционное поле
-                        ProjectionField field = new ProjectionField();
-                        field.setField(condition.toString());
-                        field.setAlias(extractAlias(child));
-                        ir.getProjectionFields().add(field);
-                    }
+                    processLogicalCheckInSelect(child);
                     break;
                 case QUERY:
-                    processSubquery(child, SubqueryInfo.SubqueryType.SCALAR);
+                    processSubquery(child);
                     break;
             }
         }
     }
 
-    private void processAllColumns() {
+    private void processLogicalCheckInSelect(Node logicalCheckNode) {
+        ConditionNode condition = conditionExtractor.extractCondition(
+                logicalCheckNode, ConditionContext.SELECT);
 
+        if (condition != null) {
+            ProjectionField field = new ProjectionField();
+            field.setField(ExpressionBuilder.buildExpression(logicalCheckNode));
+            field.setAlias(extractAlias(logicalCheckNode));
+            ir.getProjectionFields().add(field);
+            ir.setHasComplexProjections(true);
+        }
+    }
+
+    private void processAllColumns() {
         ProjectionField field = new ProjectionField();
         field.setField("*");
 
@@ -175,7 +204,6 @@ public class SqlToMongoIRGenerator {
     }
 
     private void processIdentifier(Node identifierNode) {
-
         if (identifierNode.getChildren() == null || identifierNode.getChildren().size() < 2)
             return;
 
@@ -195,7 +223,6 @@ public class SqlToMongoIRGenerator {
     }
 
     private void processAggregateFunction(Node aggregateNode, boolean inSelect) {
-
         ir.setHasAggregateFunctions(true);
 
         if (inSelect) {
@@ -207,7 +234,6 @@ public class SqlToMongoIRGenerator {
     }
 
     private void processArithmeticExpression(Node arithNode, boolean inSelect) {
-
         if (inSelect) {
             ir.setHasComplexProjections(true);
         }
@@ -219,7 +245,6 @@ public class SqlToMongoIRGenerator {
     }
 
     private void processCaseExpression(Node caseNode, boolean inSelect) {
-
         if (inSelect) {
             ir.setHasComplexProjections(true);
         }
@@ -230,14 +255,68 @@ public class SqlToMongoIRGenerator {
         ir.getProjectionFields().add(field);
     }
 
-    private void processTableNames(Node tableNamesNode) throws IRGenerationException {
+    private void processGroupBy(Node groupByNode) {
+        ir.setHasGroupBy(true);
+        ir.setRequiresAggregation(true);
 
+        if (groupByNode.getChildren() != null) {
+            for (Node child : groupByNode.getChildren()) {
+                String field = extractFieldFromGroupBy(child);
+                if (field != null && !field.isEmpty()) {
+                    ir.getGroupByFields().add(field);
+                }
+            }
+        }
+    }
+
+    private void processOrderBy(Node orderByNode) {
+        if (orderByNode.getChildren() != null) {
+            boolean ascending = true;
+            String currentField = null;
+
+            for (Node child : orderByNode.getChildren()) {
+                if (child.getNodeType() == NodeType.TERMINAL) {
+                    String lexeme = child.getToken().lexeme;
+                    if ("ASC".equals(lexeme)) {
+                        ascending = true;
+                        if (currentField != null) {
+                            addSortField(currentField, ascending);
+                            currentField = null;
+                        }
+                    } else if ("DESC".equals(lexeme)) {
+                        ascending = false;
+                        if (currentField != null) {
+                            addSortField(currentField, ascending);
+                            currentField = null;
+                        }
+                    }
+                } else {
+                    String field = extractFieldFromOrderBy(child);
+                    if (field != null) {
+                        currentField = field;
+                    }
+                }
+            }
+
+            if (currentField != null) {
+                addSortField(currentField, ascending);
+            }
+        }
+    }
+
+    private void addSortField(String field, boolean ascending) {
+        SortField sortField = new SortField();
+        sortField.setField(field);
+        sortField.setDirection(ascending ? "ASC" : "DESC");
+        ir.getOrderBy().add(sortField);
+    }
+
+    private void processTableNames(Node tableNamesNode) throws IRGenerationException {
         if (tableNamesNode.getChildren() == null) return;
 
         JoinInfo currentJoin = null;
 
         for (int i = 0; i < tableNamesNode.getChildren().size(); i++) {
-
             Node child = tableNamesNode.getChildren().get(i);
 
             switch (child.getNodeType()) {
@@ -249,12 +328,13 @@ public class SqlToMongoIRGenerator {
                         ir.setMainCollection(tableInfo.tableName);
                         currentContext.push(tableInfo.alias != null ? tableInfo.alias : tableInfo.tableName);
 
+                        // Добавляем таблицу во внешний контекст для подзапросов
+                        outerTables.add(tableInfo.tableName);
                         if (tableInfo.alias != null) {
                             tableAliases.put(tableInfo.alias, tableInfo.tableName);
                             ir.getAliases().put(tableInfo.alias, tableInfo.tableName);
                         }
                     } else if (currentJoin != null) {
-                        // Правая таблица для джойна
                         currentJoin.setRightTable(tableInfo.tableName);
                         currentJoin.setRightAlias(tableInfo.alias);
 
@@ -272,38 +352,28 @@ public class SqlToMongoIRGenerator {
 
                 case LOGICAL_CONDITION:
                     if (currentJoin != null) {
-                        // Используем ConditionExtractor для условий JOIN
-                        ConditionNode joinCondition = ConditionExtractor.extractCondition(
-                                child,
-                                ConditionContext.JOIN);
+                        ConditionNode joinCondition = conditionExtractor.extractCondition(
+                                child, ConditionContext.JOIN);
                         currentJoin.setJoinCondition(joinCondition);
                     }
                     break;
 
                 case QUERY:
-                    // Подзапрос в FROM
                     processSubqueryInFrom(child);
-                    break;
-
-                case TERMINAL:
                     break;
             }
         }
     }
 
     private TableInfo processTable(Node tableNode) {
-
         TableInfo info = new TableInfo();
 
         if (tableNode.getChildren() == null) return info;
 
         for (Node child : tableNode.getChildren()) {
-
             if (child.getNodeType() == NodeType.TERMINAL) {
-
                 Token token = child.getToken();
                 if (token.category == Category.IDENTIFIER) {
-
                     if (info.tableName == null) {
                         info.tableName = token.lexeme;
                     } else {
@@ -319,18 +389,16 @@ public class SqlToMongoIRGenerator {
     }
 
     private JoinInfo processJoin(Node joinNode) {
-
         JoinInfo joinInfo = new JoinInfo();
 
         if (joinNode.getChildren() != null && !joinNode.getChildren().isEmpty()) {
-
             Node firstChild = joinNode.getChildren().getFirst();
             if (firstChild.getNodeType() == NodeType.TERMINAL) {
-
                 String joinType = firstChild.getToken().lexeme;
 
                 switch (joinType) {
-                    case "JOIN", "INNER":
+                    case "JOIN":
+                    case "INNER":
                         joinInfo.setType(JoinInfo.JoinType.INNER);
                         break;
                     case "LEFT":
@@ -345,78 +413,16 @@ public class SqlToMongoIRGenerator {
         return joinInfo;
     }
 
-    private void processGroupBy(Node groupByNode) {
-
-        ir.setHasGroupBy(true);
-        ir.setRequiresAggregation(true);
-
-        if (groupByNode.getChildren() != null) {
-
-            for (Node child : groupByNode.getChildren()) {
-
-                String field = extractFieldFromGroupBy(child);
-                if (field != null && !field.isEmpty()) {
-                    ir.getGroupByFields().add(field);
-                }
-            }
-        }
-    }
-
-    private void processOrderBy(Node orderByNode) {
-
-        if (orderByNode.getChildren() != null) {
-
-            boolean ascending = true;
-            String currentField = null;
-
-            for (Node child : orderByNode.getChildren()) {
-
-                if (child.getNodeType() == NodeType.TERMINAL) {
-
-                    String lexeme = child.getToken().lexeme;
-                    if ("ASC".equals(lexeme)) {
-
-                        ascending = true;
-                        // Если есть поле, создаем SortField
-                        if (currentField != null) {
-                            addSortField(currentField, ascending);
-                            currentField = null;
-                        }
-                    } else if ("DESC".equals(lexeme)) {
-                        ascending = false;
-                        // Если есть поле, создаем SortField
-                        if (currentField != null) {
-                            addSortField(currentField, ascending);
-                            currentField = null;
-                        }
-                    }
-                } else {
-                    String field = extractFieldFromOrderBy(child);
-                    if (field != null) {
-                        // Сохраняем поле, ждем направления
-                        currentField = field;
-                    }
-                }
-            }
-
-            // Обрабатываем последнее поле если не указано ASC/DESC
-            if (currentField != null) {
-                addSortField(currentField, ascending);
-            }
-        }
-    }
-
-    private void addSortField(String field, boolean ascending) {
-        SortField sortField = new SortField();
-        sortField.setField(field);
-        sortField.setDirection(ascending ? "ASC" : "DESC");
-        ir.getOrderBy().add(sortField);
+    private SubqueryInfo processSubquery(Node subqueryNode) {
+        return processSubquery(subqueryNode, SubqueryInfo.SubqueryType.SCALAR);
     }
 
     private SubqueryInfo processSubquery(Node subqueryNode, SubqueryInfo.SubqueryType type) {
-
         ir.setHasSubqueries(true);
-        SqlToMongoIRGenerator subqueryGenerator = new SqlToMongoIRGenerator(subqueryNode);
+
+        // Создаем генератор для подзапроса с информацией о внешних таблицах
+        SqlToMongoIRGenerator subqueryGenerator = new SqlToMongoIRGenerator(
+                subqueryNode, outerTables, tableAliases);
 
         try {
             SqlToMongoIR subqueryIR = subqueryGenerator.generateIR();
@@ -425,36 +431,32 @@ public class SqlToMongoIRGenerator {
             subqueryInfo.setType(type);
             subqueryInfo.setSubqueryIR(subqueryIR);
 
-            // Используем ConditionExtractor для извлечения корреляций
-            List<CorrelationCondition> correlations = ConditionExtractor.extractCorrelations(subqueryNode);
+            // Используем conditionExtractor для извлечения корреляций
+            List<CorrelationCondition> correlations = conditionExtractor.extractCorrelations(subqueryNode);
             if (!correlations.isEmpty()) {
                 ir.setHasCorrelatedSubqueries(true);
                 subqueryInfo.setCorrelations(correlations);
             }
 
-            nestedSubqueries.add(subqueryInfo);
             return subqueryInfo;
 
         } catch (IRGenerationException e) {
-            // Ошибка обработки подзапроса
             return null;
         }
     }
 
     private void processSubqueryInFrom(Node subqueryNode) {
-        // Подзапрос в FROM должен иметь алиас
         String alias = extractSubqueryAlias(subqueryNode);
 
         SubqueryInfo subqueryInfo = processSubquery(subqueryNode, SubqueryInfo.SubqueryType.SCALAR);
         if (subqueryInfo != null && alias != null) {
-
             tableAliases.put(alias, "subquery");
             ir.getAliases().put(alias, "subquery");
             currentContext.push(alias);
         }
     }
 
-    // ========== Вспомогательные методы извлечения информации ==========
+    // ========== Вспомогательные методы ==========
 
     private ProjectionField extractAggregateInfo(Node aggregateNode) {
         ProjectionField field = new ProjectionField();
@@ -534,7 +536,6 @@ public class SqlToMongoIRGenerator {
     }
 
     private String extractSubqueryAlias(Node subqueryNode) {
-        // Ищем AS в определении подзапроса
         return extractAlias(subqueryNode);
     }
 
