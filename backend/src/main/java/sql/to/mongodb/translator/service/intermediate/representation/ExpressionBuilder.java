@@ -8,23 +8,20 @@ import sql.to.mongodb.translator.service.scanner.Token;
 import java.util.HashMap;
 import java.util.Map;
 
-/**
- * ????????? ????????? ??? ?????????????? ?????????????
- */
 public class ExpressionBuilder {
 
     private static final Map<String, String> AGGREGATE_MAPPING = new HashMap<>();
     private static final Map<String, String> OPERATOR_MAPPING = new HashMap<>();
 
     static {
-        // ??????? ?????????? ??????? SQL -> MongoDB
+        // Маппинг агрегатных функций SQL -> MongoDB
         AGGREGATE_MAPPING.put("COUNT", "$sum");
         AGGREGATE_MAPPING.put("SUM", "$sum");
         AGGREGATE_MAPPING.put("AVG", "$avg");
         AGGREGATE_MAPPING.put("MIN", "$min");
         AGGREGATE_MAPPING.put("MAX", "$max");
 
-        // ??????? ?????????? SQL -> MongoDB
+        // Маппинг операторов SQL -> MongoDB
         OPERATOR_MAPPING.put("=", "$eq");
         OPERATOR_MAPPING.put("!=", "$ne");
         OPERATOR_MAPPING.put("<>", "$ne");
@@ -38,38 +35,31 @@ public class ExpressionBuilder {
         OPERATOR_MAPPING.put("NOT", "$not");
         OPERATOR_MAPPING.put("IN", "$in");
         OPERATOR_MAPPING.put("NOT IN", "$nin");
-        OPERATOR_MAPPING.put("BETWEEN", "$and"); // ??????????? ?????????
+        OPERATOR_MAPPING.put("BETWEEN", "$and"); // Специальная обработка
     }
 
-    /**
-     * ?????????? ?????? ????????? ?? AST ????
-     */
+    //Построение строки выражения из AST узла
     public static String buildExpression(Node node) {
+
         if (node == null) return "";
 
-        switch (node.getNodeType()) {
-            case TERMINAL:
-                return buildTerminal(node);
-            case IDENTIFIER:
-                return buildIdentifier(node);
-            case ARITHMETIC_EXP:
-                return buildArithmeticExpression(node);
-            case AGGREGATE:
-                return buildAggregateFunction(node);
-            case CASE:
-                return buildCaseExpression(node);
-            case LOGICAL_CHECK:
-                return buildLogicalCheck(node);
-            default:
-                return "";
-        }
+        return switch (node.getNodeType()) {
+            case TERMINAL -> buildTerminal(node);
+            case IDENTIFIER -> buildIdentifier(node);
+            case ARITHMETIC_EXP -> buildArithmeticExpression(node);
+            case AGGREGATE -> buildAggregateFunction(node);
+            case CASE -> buildCaseExpression(node);
+            case LOGICAL_CHECK -> buildLogicalCheck(node);
+            default -> "";
+        };
     }
 
     private static String buildTerminal(Node terminalNode) {
+
         Token token = terminalNode.getToken();
         if (token == null) return "";
 
-        // ????????? ??????????? ???????
+        // Обработка специальных случаев
         if (token.category == Category.LITERAL) {
             return "'" + token.lexeme + "'";
         } else if (token.category == Category.NULL) {
@@ -80,6 +70,7 @@ public class ExpressionBuilder {
     }
 
     private static String buildIdentifier(Node identifierNode) {
+
         if (identifierNode.getChildren() == null || identifierNode.getChildren().size() < 2) {
             return "";
         }
@@ -88,6 +79,7 @@ public class ExpressionBuilder {
         String columnPart = "";
 
         for (Node child : identifierNode.getChildren()) {
+
             if (child.getNodeType() == NodeType.TERMINAL) {
                 if (tablePart.isEmpty()) {
                     tablePart = child.getToken().lexeme;
@@ -107,26 +99,32 @@ public class ExpressionBuilder {
     }
 
     private static String buildArithmeticExpression(Node arithNode) {
+
         StringBuilder sb = new StringBuilder();
 
         if (arithNode.getChildren() != null) {
+
             for (Node child : arithNode.getChildren()) {
+
                 String part = buildExpression(child);
                 if (!part.isEmpty()) {
                     sb.append(part).append(" ");
                 }
             }
         }
-
         return sb.toString().trim();
     }
 
     private static String buildAggregateFunction(Node aggregateNode) {
+
         StringBuilder sb = new StringBuilder();
 
         if (aggregateNode.getChildren() != null) {
+
             for (Node child : aggregateNode.getChildren()) {
+
                 if (child.getNodeType() == NodeType.TERMINAL) {
+
                     String funcName = child.getToken().lexeme;
                     String mongoFunc = AGGREGATE_MAPPING.getOrDefault(funcName.toUpperCase(), funcName);
                     sb.append(mongoFunc);
@@ -136,35 +134,35 @@ public class ExpressionBuilder {
                 }
             }
         }
-
         return sb.toString();
     }
 
     private static String buildCaseExpression(Node caseNode) {
+
         StringBuilder sb = new StringBuilder("CASE ");
         boolean hasWhen = false;
 
         if (caseNode.getChildren() != null) {
+
             for (Node child : caseNode.getChildren()) {
+
                 if (child.getNodeType() == NodeType.TERMINAL) {
+
                     String lexeme = child.getToken().lexeme;
-                    if ("WHEN".equals(lexeme)) {
-                        sb.append("WHEN ");
-                        hasWhen = true;
-                    } else if ("THEN".equals(lexeme)) {
-                        sb.append("THEN ");
-                    } else if ("ELSE".equals(lexeme)) {
-                        sb.append("ELSE ");
-                    } else if ("END".equals(lexeme)) {
-                        sb.append("END");
-                    } else {
-                        sb.append(lexeme).append(" ");
+                    switch (lexeme) {
+                        case "WHEN" -> {
+                            sb.append("WHEN ");
+                            hasWhen = true;
+                        }
+                        case "THEN" -> sb.append("THEN ");
+                        case "ELSE" -> sb.append("ELSE ");
+                        case "END" -> sb.append("END");
+                        case null, default -> sb.append(lexeme).append(" ");
                     }
                 } else {
                     String expr = buildExpression(child);
                     if (!expr.isEmpty()) {
                         if (hasWhen) {
-                            // ??? ??????? WHEN
                             sb.append(expr);
                             hasWhen = false;
                         } else {
@@ -174,23 +172,27 @@ public class ExpressionBuilder {
                 }
             }
         }
-
         return sb.toString().trim();
     }
 
     private static String buildLogicalCheck(Node logicalCheckNode) {
+
         StringBuilder sb = new StringBuilder();
 
         if (logicalCheckNode.getChildren() != null) {
+
             String operator = null;
             boolean inExpression = false;
 
             for (Node child : logicalCheckNode.getChildren()) {
+
                 if (child.getNodeType() == NodeType.TERMINAL) {
+
                     Token token = child.getToken();
                     String lexeme = token.lexeme;
 
                     if (token.category == Category.LOGICAL_OPERATOR) {
+
                         operator = OPERATOR_MAPPING.getOrDefault(lexeme, lexeme);
                         sb.append(operator).append(" ");
                     } else if ("IN".equals(lexeme)) {
@@ -226,7 +228,7 @@ public class ExpressionBuilder {
             }
 
             if (inExpression) {
-                // ??????? ????????? ??????? ? ??????
+                // Убираем последнюю запятую и пробел
                 if (sb.length() > 2 && sb.charAt(sb.length() - 2) == ',') {
                     sb.delete(sb.length() - 2, sb.length());
                 }
@@ -237,16 +239,10 @@ public class ExpressionBuilder {
         return sb.toString().trim();
     }
 
-    /**
-     * ??????????? SQL ????????? ? MongoDB ????????
-     */
     public static String convertOperatorToMongo(String sqlOperator) {
         return OPERATOR_MAPPING.getOrDefault(sqlOperator, sqlOperator);
     }
 
-    /**
-     * ??????????? SQL ?????????? ??????? ? MongoDB
-     */
     public static String convertAggregateToMongo(String sqlAggregate) {
         return AGGREGATE_MAPPING.getOrDefault(sqlAggregate.toUpperCase(), sqlAggregate);
     }

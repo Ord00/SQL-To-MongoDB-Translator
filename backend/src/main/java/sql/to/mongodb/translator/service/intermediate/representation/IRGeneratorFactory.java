@@ -3,14 +3,10 @@ package sql.to.mongodb.translator.service.intermediate.representation;
 import sql.to.mongodb.translator.service.exceptions.SQLParseException;
 import sql.to.mongodb.translator.service.parser.Node;
 
-/**
- * Фабрика для создания генераторов промежуточного представления
- */
+// Фабрика для создания генераторов промежуточного представления
 public class IRGeneratorFactory {
 
-    /**
-     * Создание и выполнение генератора
-     */
+    // Создание и выполнение генератора
     public static SqlToMongoIR generateFromAST(Node astRoot) throws SQLParseException {
         if (astRoot == null) {
             throw new SQLParseException("AST root cannot be null");
@@ -20,9 +16,7 @@ public class IRGeneratorFactory {
         return generator.generateIR();
     }
 
-    /**
-     * Получение сводной информации о запросе
-     */
+    // Получение сводной информации о запросе
     public static String getQuerySummary(SqlToMongoIR ir) {
         if (ir == null) return "Empty IR";
 

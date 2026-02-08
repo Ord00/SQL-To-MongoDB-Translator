@@ -7,7 +7,13 @@ import sql.to.mongodb.translator.service.intermediate.representation.details.*;
 import sql.to.mongodb.translator.service.parser.Node;
 import sql.to.mongodb.translator.service.scanner.Token;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.Stack;
 
 public class SqlToMongoIRGenerator {
 
@@ -51,7 +57,7 @@ public class SqlToMongoIRGenerator {
                     processTableNames(child);
                     break;
                 case LOGICAL_CONDITION:
-                    // ????? ?????????? ???????? - WHERE ??? HAVING
+                    // Нужно определить контекст - WHERE или HAVING
                     if (!hasWhere) {
                         processWhereCondition(child);
                         hasWhere = true;
