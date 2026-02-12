@@ -5,6 +5,7 @@ import lombok.Setter;
 
 @Getter
 public class SortField {
+
     @Setter
     private String field;
     private SortDirection direction = SortDirection.ASC;
@@ -23,6 +24,7 @@ public class SortField {
         }
 
         public static SortDirection fromString(String dir) {
+
             if (dir == null || dir.equalsIgnoreCase("ASC")) {
                 return ASC;
             } else if (dir.equalsIgnoreCase("DESC")) {

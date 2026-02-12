@@ -6,6 +6,7 @@ import lombok.Setter;
 @Getter
 @Setter
 public class JoinInfo {
+
     public enum JoinType { INNER, LEFT, RIGHT, FULL, CROSS }
 
     private JoinType type = JoinType.INNER;

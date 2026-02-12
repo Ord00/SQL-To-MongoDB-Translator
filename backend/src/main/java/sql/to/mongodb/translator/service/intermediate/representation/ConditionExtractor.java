@@ -23,7 +23,7 @@ public record ConditionExtractor(Set<String> outerTables, Map<String, String> ou
         this.outerAliases = outerAliases != null ? outerAliases : new HashMap<>();
     }
 
-    public ConditionNode extractCondition(Node logicalNode, ConditionContext context) {
+    public ConditionNode extractCondition(Node logicalNode) {
         if (logicalNode == null || logicalNode.getChildren() == null) {
             return null;
         }
@@ -33,7 +33,7 @@ public record ConditionExtractor(Set<String> outerTables, Map<String, String> ou
 
         for (Node child : logicalNode.getChildren()) {
             if (child.getNodeType() == NodeType.LOGICAL_CHECK) {
-                ConditionNode condition = extractLogicalCheck(child, context);
+                ConditionNode condition = extractLogicalCheck(child);
                 if (condition != null) {
                     subConditions.add(condition);
                 }
@@ -61,7 +61,7 @@ public record ConditionExtractor(Set<String> outerTables, Map<String, String> ou
         return combined;
     }
 
-    private ConditionNode extractLogicalCheck(Node logicalCheckNode, ConditionContext context) {
+    private ConditionNode extractLogicalCheck(Node logicalCheckNode) {
         if (logicalCheckNode.getChildren() == null) {
             return null;
         }
@@ -75,7 +75,7 @@ public record ConditionExtractor(Set<String> outerTables, Map<String, String> ou
             switch (child.getNodeType()) {
                 case TERMINAL:
                     Token token = child.getToken();
-                    TerminalResult result = processTerminal(token, condition, notFlag);
+                    TerminalResult result = processTerminal(token, condition, operator, notFlag);
                     operator = result.operator;
                     notFlag = result.notFlag;
 
@@ -87,17 +87,9 @@ public record ConditionExtractor(Set<String> outerTables, Map<String, String> ou
                     }
                     break;
 
-                case ARITHMETIC_EXP, IDENTIFIER:
+                case ARITHMETIC_EXP, IDENTIFIER, AGGREGATE:
                     String expr = ExpressionBuilder.buildExpression(child);
                     operands.add(expr);
-                    break;
-
-                case AGGREGATE:
-                    String aggExpr = ExpressionBuilder.buildExpression(child);
-                    operands.add(aggExpr);
-                    if (context == ConditionContext.HAVING) {
-                        condition.setType(COMPARISON);
-                    }
                     break;
 
                 case QUERY:
@@ -130,9 +122,12 @@ public record ConditionExtractor(Set<String> outerTables, Map<String, String> ou
         return condition;
     }
 
-    private TerminalResult processTerminal(Token token, ConditionNode condition, boolean currentNotFlag) {
+    private TerminalResult processTerminal(Token token,
+                                           ConditionNode condition,
+                                           String currentOperator,
+                                           boolean currentNotFlag) {
         String lexeme = token.lexeme;
-        String operator = null;
+        String operator = currentOperator;
         boolean notFlag = currentNotFlag;
 
         switch (token.category) {
@@ -159,9 +154,7 @@ public record ConditionExtractor(Set<String> outerTables, Map<String, String> ou
 
             case NULL:
                 if ("IS".equals(operator)) {
-                    condition.setType(notFlag ?
-                            IS_NOT_NULL :
-                            IS_NULL);
+                    condition.setType(notFlag ? IS_NOT_NULL : IS_NULL);
                 }
                 break;
         }
@@ -169,7 +162,8 @@ public record ConditionExtractor(Set<String> outerTables, Map<String, String> ou
         return new TerminalResult(operator, notFlag);
     }
 
-    private ConditionNode.ConditionType determineSubqueryConditionType(String operator, boolean notFlag) {
+    private ConditionNode.ConditionType determineSubqueryConditionType(String operator,
+                                                                       boolean notFlag) {
         if (operator == null) {
             return COMPARISON;
         }

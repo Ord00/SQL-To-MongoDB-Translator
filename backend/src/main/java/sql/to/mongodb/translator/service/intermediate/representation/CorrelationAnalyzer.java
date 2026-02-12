@@ -21,24 +21,24 @@ public class CorrelationAnalyzer {
     @Getter
     private final List<CorrelationCondition> correlations = new ArrayList<>();
 
-     // Анализ подзапроса на наличие корреляций с внешними таблицами
-    public boolean analyzeForCorrelations(Node subqueryNode,
-                                          Set<String> parentTables,
-                                          Map<String, String> parentAliases) {
-
-        if (subqueryNode == null || parentTables.isEmpty()) {
-            return false;
+    // Анализ подзапроса на наличие корреляций с внешними таблицами
+    public void analyzeForCorrelations(Node subqueryNode,
+                                       Set<String> parentTables,
+                                       Map<String, String> parentAliases) {
+        if (subqueryNode == null || parentTables == null) {
+            return;
         }
 
         this.outerTables.addAll(parentTables);
-        this.outerAliases.putAll(parentAliases);
+        if (parentAliases != null) {
+            this.outerAliases.putAll(parentAliases);
+        }
 
-        return hasExternalReferences(subqueryNode);
+        hasExternalReferences(subqueryNode);
     }
 
-     // Проверка наличия ссылок на внешние таблицы
+    // Проверка наличия ссылок на внешние таблицы
     private boolean hasExternalReferences(Node node) {
-
         if (node == null) {
             return false;
         }
@@ -50,9 +50,7 @@ public class CorrelationAnalyzer {
         }
 
         if (node.getChildren() != null) {
-
             for (Node child : node.getChildren()) {
-
                 if (hasExternalReferences(child)) {
                     hasCorrelations = true;
                 }

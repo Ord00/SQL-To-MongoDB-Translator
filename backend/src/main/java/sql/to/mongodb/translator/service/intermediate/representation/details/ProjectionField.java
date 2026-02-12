@@ -6,6 +6,7 @@ import lombok.Setter;
 @Getter
 @Setter
 public class ProjectionField {
+
     private String source;
     private String field;
     private String alias;

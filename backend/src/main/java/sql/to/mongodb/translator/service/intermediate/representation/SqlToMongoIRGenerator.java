@@ -15,6 +15,7 @@ import java.util.Set;
 import java.util.Stack;
 
 import static sql.to.mongodb.translator.service.intermediate.representation.ConditionExtractor.ConditionContext;
+import static sql.to.mongodb.translator.service.intermediate.representation.details.SubqueryInfo.SubqueryType.SCALAR;
 
 public class SqlToMongoIRGenerator {
 
@@ -86,16 +87,16 @@ public class SqlToMongoIRGenerator {
                 processOrderBy(child);
                 break;
             case CASE:
-                processCaseExpression(child, true);
+                processCaseExpression(child);
                 break;
             case AGGREGATE:
-                processAggregateFunction(child, true);
+                processAggregateFunction(child);
                 break;
             case ARITHMETIC_EXP:
-                processArithmeticExpression(child, true);
+                processArithmeticExpression(child);
                 break;
             case QUERY:
-                processSubquery(child);
+                processSubqueryInProjection(child);
                 break;
         }
     }
@@ -104,7 +105,7 @@ public class SqlToMongoIRGenerator {
         // Определяем контекст на основе позиции в запросе
         ConditionContext context = determineConditionContext();
 
-        ConditionNode extractedCondition = conditionExtractor.extractCondition(conditionNode, context);
+        ConditionNode extractedCondition = conditionExtractor.extractCondition(conditionNode);
 
         if (extractedCondition != null) {
             switch (context) {
@@ -161,19 +162,19 @@ public class SqlToMongoIRGenerator {
                     processIdentifier(child);
                     break;
                 case AGGREGATE:
-                    processAggregateFunction(child, true);
+                    processAggregateFunction(child);
                     break;
                 case ARITHMETIC_EXP:
-                    processArithmeticExpression(child, true);
+                    processArithmeticExpression(child);
                     break;
                 case CASE:
-                    processCaseExpression(child, true);
+                    processCaseExpression(child);
                     break;
                 case LOGICAL_CHECK:
                     processLogicalCheckInSelect(child);
                     break;
                 case QUERY:
-                    processSubquery(child);
+                    processSubqueryInProjection(child);
                     break;
             }
         }
@@ -181,7 +182,7 @@ public class SqlToMongoIRGenerator {
 
     private void processLogicalCheckInSelect(Node logicalCheckNode) {
         ConditionNode condition = conditionExtractor.extractCondition(
-                logicalCheckNode, ConditionContext.SELECT);
+                logicalCheckNode);
 
         if (condition != null) {
             ProjectionField field = new ProjectionField();
@@ -222,21 +223,15 @@ public class SqlToMongoIRGenerator {
         ir.getProjectionFields().add(field);
     }
 
-    private void processAggregateFunction(Node aggregateNode, boolean inSelect) {
+    private void processAggregateFunction(Node aggregateNode) {
         ir.setHasAggregateFunctions(true);
-
-        if (inSelect) {
-            ir.setRequiresAggregation(true);
-        }
 
         ProjectionField field = extractAggregateInfo(aggregateNode);
         ir.getProjectionFields().add(field);
     }
 
-    private void processArithmeticExpression(Node arithNode, boolean inSelect) {
-        if (inSelect) {
-            ir.setHasComplexProjections(true);
-        }
+    private void processArithmeticExpression(Node arithNode) {
+        ir.setHasComplexProjections(true);
 
         ProjectionField field = new ProjectionField();
         field.setField(ExpressionBuilder.buildExpression(arithNode));
@@ -244,10 +239,8 @@ public class SqlToMongoIRGenerator {
         ir.getProjectionFields().add(field);
     }
 
-    private void processCaseExpression(Node caseNode, boolean inSelect) {
-        if (inSelect) {
-            ir.setHasComplexProjections(true);
-        }
+    private void processCaseExpression(Node caseNode) {
+        ir.setHasComplexProjections(true);
 
         ProjectionField field = new ProjectionField();
         field.setField(ExpressionBuilder.buildExpression(caseNode));
@@ -270,37 +263,47 @@ public class SqlToMongoIRGenerator {
     }
 
     private void processOrderBy(Node orderByNode) {
-        if (orderByNode.getChildren() != null) {
-            boolean ascending = true;
-            String currentField = null;
+        if (orderByNode.getChildren() == null) return;
 
-            for (Node child : orderByNode.getChildren()) {
-                if (child.getNodeType() == NodeType.TERMINAL) {
-                    String lexeme = child.getToken().lexeme;
-                    if ("ASC".equals(lexeme)) {
-                        ascending = true;
-                        if (currentField != null) {
-                            addSortField(currentField, ascending);
-                            currentField = null;
-                        }
-                    } else if ("DESC".equals(lexeme)) {
-                        ascending = false;
-                        if (currentField != null) {
-                            addSortField(currentField, ascending);
-                            currentField = null;
-                        }
+        String currentField = null;
+        Boolean currentDirection = null; // true = ASC, false = DESC, null = не указано
+
+        for (Node child : orderByNode.getChildren()) {
+            if (child.getNodeType() == NodeType.TERMINAL) {
+                String lexeme = child.getToken().lexeme;
+
+                if ("ASC".equals(lexeme)) {
+                    if (currentField != null) {
+                        addSortField(currentField, true);
+                        currentField = null;
                     }
-                } else {
-                    String field = extractFieldFromOrderBy(child);
-                    if (field != null) {
-                        currentField = field;
+                    currentDirection = true;
+                } else if ("DESC".equals(lexeme)) {
+                    if (currentField != null) {
+                        addSortField(currentField, false);
+                        currentField = null;
                     }
+                    currentDirection = false;
+                }
+
+            } else {
+                // Это поле для сортировки
+                String field = extractFieldFromOrderBy(child);
+                if (field != null) {
+                    // Если есть предыдущее поле без направления, добавляем его с ASC по умолчанию
+                    if (currentField != null) {
+                        addSortField(currentField, true);
+                    }
+                    currentField = field;
+                    // Направление для этого поля будет определено следующим токеном
                 }
             }
+        }
 
-            if (currentField != null) {
-                addSortField(currentField, ascending);
-            }
+        // Обрабатываем последнее поле
+        if (currentField != null) {
+            // Используем указанное направление или ASC по умолчанию
+            addSortField(currentField, currentDirection != null ? currentDirection : true);
         }
     }
 
@@ -352,8 +355,7 @@ public class SqlToMongoIRGenerator {
 
                 case LOGICAL_CONDITION:
                     if (currentJoin != null) {
-                        ConditionNode joinCondition = conditionExtractor.extractCondition(
-                                child, ConditionContext.JOIN);
+                        ConditionNode joinCondition = conditionExtractor.extractCondition(child);
                         currentJoin.setJoinCondition(joinCondition);
                     }
                     break;
@@ -414,10 +416,6 @@ public class SqlToMongoIRGenerator {
     }
 
     private SubqueryInfo processSubquery(Node subqueryNode) {
-        return processSubquery(subqueryNode, SubqueryInfo.SubqueryType.SCALAR);
-    }
-
-    private SubqueryInfo processSubquery(Node subqueryNode, SubqueryInfo.SubqueryType type) {
         ir.setHasSubqueries(true);
 
         // Создаем генератор для подзапроса с информацией о внешних таблицах
@@ -428,7 +426,7 @@ public class SqlToMongoIRGenerator {
             SqlToMongoIR subqueryIR = subqueryGenerator.generateIR();
 
             SubqueryInfo subqueryInfo = new SubqueryInfo();
-            subqueryInfo.setType(type);
+            subqueryInfo.setType(SCALAR);
             subqueryInfo.setSubqueryIR(subqueryIR);
 
             // Используем conditionExtractor для извлечения корреляций
@@ -445,10 +443,24 @@ public class SqlToMongoIRGenerator {
         }
     }
 
+    private void processSubqueryInProjection(Node subqueryNode) {
+        SubqueryInfo subqueryInfo = processSubquery(subqueryNode);
+        if (subqueryInfo != null) {
+            // Добавляем подзапрос в IR и создаем проекционное поле
+            ir.getSubqueries().add(subqueryInfo);
+
+            ProjectionField field = new ProjectionField();
+            field.setField("subquery_" + ir.getSubqueries().size());
+            field.setAlias(extractAlias(subqueryNode));
+            ir.getProjectionFields().add(field);
+            ir.setHasComplexProjections(true);
+        }
+    }
+
     private void processSubqueryInFrom(Node subqueryNode) {
         String alias = extractSubqueryAlias(subqueryNode);
 
-        SubqueryInfo subqueryInfo = processSubquery(subqueryNode, SubqueryInfo.SubqueryType.SCALAR);
+        SubqueryInfo subqueryInfo = processSubquery(subqueryNode);
         if (subqueryInfo != null && alias != null) {
             tableAliases.put(alias, "subquery");
             ir.getAliases().put(alias, "subquery");

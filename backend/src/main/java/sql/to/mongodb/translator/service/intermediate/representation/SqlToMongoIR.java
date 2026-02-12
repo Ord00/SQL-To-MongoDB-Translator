@@ -16,6 +16,7 @@ import java.util.Map;
 @Getter
 @Setter
 public class SqlToMongoIR {
+
     private boolean requiresAggregation = false;
     private boolean distinct = false;
     private boolean hasJoins = false;

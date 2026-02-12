@@ -9,6 +9,7 @@ import java.util.List;
 @Getter
 @Setter
 public class ConditionNode {
+
     public enum ConditionType {
         SIMPLE, AND, OR, NOT,
         EXISTS, NOT_EXISTS,

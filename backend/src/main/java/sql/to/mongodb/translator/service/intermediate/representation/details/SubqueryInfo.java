@@ -10,6 +10,7 @@ import java.util.List;
 @Getter
 @Setter
 public class SubqueryInfo {
+
     public enum SubqueryType { EXISTS, NOT_EXISTS, IN, SCALAR, COMPARISON }
 
     private SubqueryType type;

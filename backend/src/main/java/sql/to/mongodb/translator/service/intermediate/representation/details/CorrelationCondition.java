@@ -6,6 +6,7 @@ import lombok.Setter;
 @Getter
 @Setter
 public class CorrelationCondition {
+
     private String outerField;
 
     private String innerField;
