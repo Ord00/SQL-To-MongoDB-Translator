@@ -1,324 +1,644 @@
 package sql.to.mongodb.translator.service.code.generator;
 
-import sql.to.mongodb.translator.service.enums.Category;
-import sql.to.mongodb.translator.service.enums.NodeType;
-import sql.to.mongodb.translator.service.interfaces.ExpressionConvertible;
-import sql.to.mongodb.translator.service.parser.Node;
-import sql.to.mongodb.translator.service.parser.ParserResult;
-import sql.to.mongodb.translator.service.scanner.Token;
+import sql.to.mongodb.translator.service.intermediate.representation.SqlToMongoIR;
+import sql.to.mongodb.translator.service.intermediate.representation.details.*;
+import sql.to.mongodb.translator.service.exceptions.CodeGenerationException;
 
-import java.util.Iterator;
-import java.util.List;
+import java.util.*;
 
+/**
+ * Генератор MongoDB кода из промежуточного представления
+ * Поддерживает два режима: find() и aggregate()
+ */
 public class CodeGenerator {
 
-    private Node parseTree;
-    private boolean isComplicatedQuery;
-    private boolean isComplicatedWhere;
+    private final SqlToMongoIR ir;
+    private final StringBuilder output = new StringBuilder();
+    private int indentLevel = 0;
 
-    private Node curNode;
-
-    public CodeGenerator(ParserResult parserResult) {
-
-        this.parseTree = parserResult.getParseTree();
-        this.isComplicatedQuery = parserResult.isComplicatedQuery();
-        this.isComplicatedWhere = parserResult.isComplicatedWhere();
-
+    public CodeGenerator(SqlToMongoIR ir) {
+        this.ir = ir;
     }
 
-    private void getNextNode(Iterator<Node> iterator) {
+    public String generate() throws CodeGenerationException {
+        output.setLength(0);
 
-        if (iterator.hasNext()) {
+        if (ir == null) {
+            throw new CodeGenerationException("IR cannot be null");
+        }
 
-            curNode = iterator.next();
+        if (ir.getMainCollection() == null) {
+            throw new CodeGenerationException("Main collection not specified");
+        }
 
+        if (ir.isRequiresAggregation() || ir.isHasJoins() || ir.isHasSubqueries() ||
+                ir.isHasGroupBy() || ir.isHasComplexProjections()) {
+            generateAggregationPipeline();
         } else {
-
-            curNode = new Node(NodeType.UNDEFINED, new Token("UNDEFINED", Category.UNDEFINED));
-
-        }
-    }
-
-    private String convertExpression(String keyword,
-                                     Iterator<Node> iterator,
-                                     boolean isComplicatedStructure,
-                                     ExpressionConvertible func) {
-
-        String res = "";
-
-        if (curNode.getToken().lexeme.equals(keyword)) {
-
-            res = isComplicatedStructure ?
-                    func.execute(iterator.next().getChildren().iterator()) :
-                    func.execute(iterator);
-
-            getNextNode(iterator);
-
+            generateFindQuery();
         }
 
-        return res;
-
+        return output.toString();
     }
 
-    public String generateCode() {
+    private void generateFindQuery() {
+        // db.collection.find(query, projection).sort().limit().skip()
+        String collection = escapeIdentifier(ir.getMainCollection());
 
-        List<Node> children = parseTree.getChildren();
-        Iterator<Node> iterator = children.iterator();
+        output.append("db.").append(collection).append(".find(");
 
-        return switch (iterator.next().getToken().lexeme) {
-            case "SELECT" -> convertSelect(iterator);
-            default -> null;
-        };
+        // Query part
+        String query = generateQueryDocument();
+        output.append(query.isEmpty() ? "{}" : query);
+
+        // Projection part
+        String projection = generateProjectionDocument();
+        if (!projection.isEmpty()) {
+            output.append(", ").append(projection);
+        }
+        output.append(")");
+
+        // Sort
+        if (!ir.getOrderBy().isEmpty()) {
+            output.append(".sort(").append(generateSortDocument()).append(")");
+        }
+
+        // Limit/Skip
+        if (ir.getLimit() != null) {
+            output.append(".limit(").append(ir.getLimit()).append(")");
+        }
+        if (ir.getOffset() != null) {
+            output.append(".skip(").append(ir.getOffset()).append(")");
+        }
+
+        output.append(";");
     }
 
-    private String convertSelect(Iterator<Node> iterator) {
+    private void generateAggregationPipeline() {
+        String collection = escapeIdentifier(ir.getMainCollection());
+        output.append("db.").append(collection).append(".aggregate([\n");
+        indentLevel++;
 
-        String columnNames = convertColumns(iterator.next().getChildren().iterator());
+        List<String> stages = new ArrayList<>();
 
-        iterator.next();
-        String from = convertFrom(iterator.next().getChildren().iterator());
+        // $match stage (WHERE conditions)
+        String matchStage = generateMatchStage();
+        if (!matchStage.isEmpty()) {
+            stages.add(matchStage);
+        }
 
-        getNextNode(iterator);
+        // $lookup stages (JOINs)
+        stages.addAll(generateLookupStages());
 
-        String where = convertExpression("WHERE",
-                iterator,
-                true,
-                this::convertWhere);
+        // $match stage for joined collections (JOIN conditions)
+        String joinMatchStage = generateJoinMatchStage();
+        if (!joinMatchStage.isEmpty()) {
+            stages.add(joinMatchStage);
+        }
 
-        String limit = convertExpression("LIMIT",
-                iterator,
-                false,
-                this::convertLimit);
+        // $group stage (GROUP BY + aggregations)
+        String groupStage = generateGroupStage();
+        if (!groupStage.isEmpty()) {
+            stages.add(groupStage);
+        }
 
-        String skip = convertExpression("OFFSET",
-                iterator,
-                false,
-                this::convertOffset);
+        // $match stage (HAVING)
+        String havingStage = generateHavingStage();
+        if (!havingStage.isEmpty()) {
+            stages.add(havingStage);
+        }
 
-        String sort = convertExpression("ORDER",
-                iterator,
-                true,
-                this::convertOrderBy);
+        // $sort stage
+        String sortStage = generateSortStage();
+        if (!sortStage.isEmpty()) {
+            stages.add(sortStage);
+        }
 
-        return String.format("%s.find({%s}%s)%s%s%s",
-                from,
-                where,
-                columnNames,
-                limit,
-                skip,
-                sort);
+        // $skip/$limit stages
+        if (ir.getOffset() != null) {
+            stages.add(indent() + "{ $skip: " + ir.getOffset() + " }");
+        }
+        if (ir.getLimit() != null) {
+            stages.add(indent() + "{ $limit: " + ir.getLimit() + " }");
+        }
 
+        // $project stage (final projection)
+        String projectStage = generateProjectStage();
+        if (!projectStage.isEmpty()) {
+            stages.add(projectStage);
+        }
+
+        output.append(String.join(",\n", stages));
+        output.append("\n"); indentLevel--;
+        output.append("]);");
     }
 
-    private String convertColumns(Iterator<Node> iterator) {
+    // ========== Генерация отдельных стадий ==========
 
-        String res = "";
+    private String generateMatchStage() {
+        if (ir.getWhereConditions().isEmpty()) {
+            return "";
+        }
 
-        if (iterator.hasNext()) {
+        ConditionNode root = combineConditions(ir.getWhereConditions());
+        String condition = translateCondition(root);
 
-            if (!isComplicatedQuery) {
+        return indent() + "{ $match: " + condition + " }";
+    }
 
-                String lexeme = iterator.next().getToken().lexeme;
-                return lexeme.equals("*") ? "" :
-                        String.format(", {%s: 1%s}",
-                                lexeme,
-                                convertColumnsRec(iterator));
+    private List<String> generateLookupStages() {
+        List<String> stages = new ArrayList<>();
 
+        for (JoinInfo join : ir.getJoins()) {
+            String from = escapeIdentifier(join.getRightTable());
+            String as = join.getRightAlias() != null ?
+                    escapeIdentifier(join.getRightAlias()) :
+                    escapeIdentifier(join.getRightTable());
+
+            // Определяем поля для связи
+            ConditionNode joinCondition = join.getJoinCondition();
+            String localField = "???";
+            String foreignField = "???";
+
+            if (joinCondition != null) {
+                // Извлекаем поля из условия JOIN
+                String[] fields = extractJoinFields(joinCondition);
+                localField = fields[0];
+                foreignField = fields[1];
             }
 
-        }
+            String lookup = indent() + "{ $lookup: {\n";
+            indentLevel++;
+            lookup += indent() + "from: \"" + from + "\",\n";
+            lookup += indent() + "localField: \"" + localField + "\",\n";
+            lookup += indent() + "foreignField: \"" + foreignField + "\",\n";
+            lookup += indent() + "as: \"" + as + "\"\n";
+            indentLevel--;
+            lookup += indent() + "} }";
 
-        return res;
-    }
+            stages.add(lookup);
 
-    private String convertColumnsRec(Iterator<Node> iterator) {
-
-        String res = "";
-
-        if (iterator.hasNext()) {
-
-            if (!isComplicatedQuery) {
-
-                res = String.format(", %s: 1%s",
-                        iterator.next().getToken().lexeme,
-                        convertColumnsRec(iterator));
-
-            }
-
-        }
-
-        return res;
-    }
-
-    private String convertFrom(Iterator<Node> iterator) {
-
-        String res = "";
-
-        if (!isComplicatedQuery) {
-
-            res = String.format("db.%s", convertTable(iterator.next().getChildren().iterator()));
-
-        }
-
-        return res;
-    }
-
-    private String convertTable(Iterator<Node> iterator) {
-
-        String res = "";
-
-        if (!isComplicatedQuery) {
-
-            res = iterator.next().getToken().lexeme;
-
-        }
-
-        return res;
-    }
-
-    private String convertLogicalOperator(String logOp) {
-
-        return switch (logOp) {
-            case "=": yield "$eq";
-            case "<>": yield "$ne";
-            case "<": yield "$lt";
-            case ">": yield  "$gt";
-            case "<=": yield "$lte";
-            case ">=": yield "$gte";
-            case "IN": yield "$in";
-            default: yield "$nin";
-        };
-    }
-
-    private String convertLogicalCheck(Iterator<Node> iterator) {
-
-        String res = "";
-
-        if (!isComplicatedQuery) {
-
-            String logOp = convertLogicalOperator(iterator.next().getToken().lexeme);
-
-            if (!isComplicatedWhere) {
-
-                res = String.format("{%s: %s}",
-                        logOp,
-                        iterator.next().getToken().lexeme);
-
+            // Разворачиваем массив для LEFT JOIN
+            if (join.getType() == JoinInfo.JoinType.LEFT) {
+                String unwind = indent() + "{ $unwind: {\n";
+                indentLevel++;
+                unwind += indent() + "path: \"$" + as + "\",\n";
+                unwind += indent() + "preserveNullAndEmptyArrays: true\n";
+                indentLevel--;
+                unwind += indent() + "} }";
+                stages.add(unwind);
+            } else {
+                String unwind = indent() + "{ $unwind: \"$" + as + "\" }";
+                stages.add(unwind);
             }
         }
 
-        return res;
+        return stages;
     }
 
-    private String convertWhereRec(Iterator<Node> iterator) {
+    private String generateJoinMatchStage() {
+        // Объединяем все условия JOIN
+        List<ConditionNode> joinConditions = new ArrayList<>();
+        for (JoinInfo join : ir.getJoins()) {
+            if (join.getJoinCondition() != null) {
+                joinConditions.add(join.getJoinCondition());
+            }
+        }
 
-        String res = "";
+        if (joinConditions.isEmpty()) {
+            return "";
+        }
 
-        if (iterator.hasNext()) {
+        ConditionNode root = combineConditions(joinConditions);
+        String condition = translateCondition(root, true);
 
-            if (!isComplicatedQuery) {
+        return indent() + "{ $match: " + condition + " }";
+    }
 
-                Iterator<Node> logCheck = iterator.next().getChildren().iterator();
+    private String generateGroupStage() {
+        if (!ir.isHasGroupBy() && !ir.isHasAggregateFunctions()) {
+            return "";
+        }
 
-                if (!isComplicatedWhere) {
+        StringBuilder group = new StringBuilder(indent() + "{ $group: {\n");
+        indentLevel++;
 
-                    return String.format(", %s: %s%s",
-                            logCheck.next().getToken().lexeme,
-                            convertLogicalCheck(logCheck),
-                            convertWhere(iterator));
-
-
+        // _id
+        group.append(indent()).append("_id: ");
+        if (ir.getGroupByFields().isEmpty()) {
+            group.append("null");
+        } else if (ir.getGroupByFields().size() == 1) {
+            group.append("\"$").append(ir.getGroupByFields().getFirst()).append("\"");
+        } else {
+            group.append("{\n");
+            indentLevel++;
+            for (int i = 0; i < ir.getGroupByFields().size(); i++) {
+                String field = ir.getGroupByFields().get(i);
+                group.append(indent()).append(field).append(": \"$").append(field).append("\"");
+                if (i < ir.getGroupByFields().size() - 1) {
+                    group.append(",\n");
                 }
             }
-
+            indentLevel--;
+            group.append("\n").append(indent()).append("}");
         }
 
-        return res;
+        // Агрегации из проекций
+        Map<String, String> aggregations = extractAggregations();
+        if (!aggregations.isEmpty()) {
+            group.append(",\n");
+            List<String> aggParts = new ArrayList<>();
+            for (Map.Entry<String, String> entry : aggregations.entrySet()) {
+                aggParts.add(indent() + entry.getKey() + ": " + entry.getValue());
+            }
+            group.append(String.join(",\n", aggParts));
+        }
+
+        indentLevel--;
+        group.append("\n").append(indent()).append("} }");
+
+        return group.toString();
     }
 
-    private String convertWhere(Iterator<Node> iterator) {
+    private String generateHavingStage() {
+        if (ir.getHavingConditions().isEmpty()) {
+            return "";
+        }
 
-        String res = "";
+        ConditionNode root = combineConditions(ir.getHavingConditions());
+        String condition = translateCondition(root, true);
 
-        if (iterator.hasNext()) {
+        return indent() + "{ $match: " + condition + " }";
+    }
 
-            if (!isComplicatedQuery) {
+    private String generateSortStage() {
+        if (ir.getOrderBy().isEmpty()) {
+            return "";
+        }
 
-                Iterator<Node> logCheck = iterator.next().getChildren().iterator();
+        StringBuilder sort = new StringBuilder(indent() + "{ $sort: { ");
 
-                return String.format("%s: %s%s",
-                        logCheck.next().getToken().lexeme,
-                        convertLogicalCheck(logCheck),
-                        convertWhereRec(iterator));
+        List<String> fields = new ArrayList<>();
+        for (SortField sf : ir.getOrderBy()) {
+            String field = sf.getFullField();
+            int direction = sf.getDirection() == SortField.SortDirection.ASC ? 1 : -1;
+            fields.add(field + ": " + direction);
+        }
 
+        sort.append(String.join(", ", fields));
+        sort.append(" } }");
+
+        return sort.toString();
+    }
+
+    private String generateProjectStage() {
+        if (ir.getProjectionFields().isEmpty()) {
+            return "";
+        }
+
+        boolean includeAll = ir.getProjectionFields().stream()
+                .anyMatch(ProjectionField::isAllFields);
+
+        if (includeAll) {
+            return "";
+        }
+
+        StringBuilder project = new StringBuilder(indent() + "{ $project: {\n");
+        indentLevel++;
+
+        // Исключаем _id по умолчанию, если не указан
+        boolean hasId = ir.getProjectionFields().stream()
+                .anyMatch(f -> "_id".equals(f.getField()) || "_id".equals(f.getAlias()));
+
+        if (!hasId) {
+            project.append(indent()).append("_id: 0,\n");
+        }
+
+        List<String> fields = new ArrayList<>();
+        for (ProjectionField pf : ir.getProjectionFields()) {
+            String name = pf.getAlias() != null ? pf.getAlias() : pf.getField();
+            String value;
+
+            if (pf.getField().contains("(")) { // Агрегатная функция
+                value = translateAggregateExpression(pf.getField());
+            } else if (pf.getField().equals("*")) {
+                continue;
+            } else {
+                String source = pf.getSource() != null ? pf.getSource() + "." : "";
+                value = "\"$" + source + pf.getField() + "\"";
             }
 
+            fields.add(indent() + name + ": " + value);
         }
 
-        return res;
+        project.append(String.join(",\n", fields));
+        indentLevel--;
+        project.append("\n").append(indent()).append("} }");
+
+        return project.toString();
     }
 
-    private String convertLimit(Iterator<Node> iterator) {
-
-        String res = "";
-
-        if (!isComplicatedQuery) {
-
-            res = String.format(".limit(%s)", iterator.next().getToken().lexeme);
-
+    private String generateProjectionDocument() {
+        if (ir.getProjectionFields().isEmpty()) {
+            return "";
         }
 
-        return res;
-    }
+        boolean includeAll = ir.getProjectionFields().stream()
+                .anyMatch(ProjectionField::isAllFields);
 
-    private String convertOffset(Iterator<Node> iterator) {
-
-        String res = "";
-
-        if (!isComplicatedQuery) {
-
-            res = String.format(".skip(%s)", iterator.next().getToken().lexeme);
-
+        if (includeAll) {
+            return "{}";
         }
 
-        return res;
-    }
+        StringBuilder proj = new StringBuilder("{ ");
 
-    private String convertOrderBy(Iterator<Node> iterator) {
+        // Исключаем _id по умолчанию
+        boolean hasId = ir.getProjectionFields().stream()
+                .anyMatch(f -> "_id".equals(f.getField()) || "_id".equals(f.getAlias()));
 
-        String res = "";
+        if (!hasId) {
+            proj.append("_id: 0, ");
+        }
 
-        if (iterator.hasNext()) {
-
-            if (!isComplicatedQuery) {
-
-                return String.format(".skip({ %s })", convertOrderByRec(iterator, true));
-
+        List<String> fields = new ArrayList<>();
+        for (ProjectionField pf : ir.getProjectionFields()) {
+            String name = pf.getAlias() != null ? pf.getAlias() : pf.getField();
+            if (!pf.getField().equals("*")) {
+                fields.add(name + ": 1");
             }
-
         }
 
-        return res;
+        proj.append(String.join(", ", fields));
+        proj.append(" }");
+
+        return proj.toString();
     }
 
-    private String convertOrderByRec(Iterator<Node> iterator, boolean isFirst) {
-
-        String res = "";
-
-        if (iterator.hasNext()) {
-
-            if (!isComplicatedQuery) {
-
-                return String.format("%s%s: %s%s",
-                        !isFirst ? ", " : "",
-                        iterator.next().getToken().lexeme,
-                        iterator.next().getToken().lexeme.equals("ABS") ? 1 : -1,
-                        convertOrderByRec(iterator, false));
-
-            }
-
+    private String generateQueryDocument() {
+        if (ir.getWhereConditions().isEmpty()) {
+            return "";
         }
 
-        return res;
+        ConditionNode root = combineConditions(ir.getWhereConditions());
+        return translateCondition(root);
+    }
+
+    private String generateSortDocument() {
+        if (ir.getOrderBy().isEmpty()) {
+            return "";
+        }
+
+        StringBuilder sort = new StringBuilder("{ ");
+        List<String> fields = new ArrayList<>();
+        for (SortField sf : ir.getOrderBy()) {
+            String field = sf.getFullField();
+            int direction = sf.getDirection() == SortField.SortDirection.ASC ? 1 : -1;
+            fields.add(field + ": " + direction);
+        }
+        sort.append(String.join(", ", fields));
+        sort.append(" }");
+
+        return sort.toString();
+    }
+
+    // ========== Трансляция условий ==========
+
+    private String translateCondition(ConditionNode node) {
+        return translateCondition(node, false);
+    }
+
+    private String translateCondition(ConditionNode node, boolean useAggregationSyntax) {
+        if (node == null) return "{}";
+
+        return switch (node.getType()) {
+            case AND, OR -> translateLogicalCondition(node, useAggregationSyntax);
+            case COMPARISON -> translateComparisonCondition(node, useAggregationSyntax);
+            case IS_NULL -> translateIsNullCondition(node, true, useAggregationSyntax);
+            case IS_NOT_NULL -> translateIsNullCondition(node, false, useAggregationSyntax);
+            case BETWEEN -> translateBetweenCondition(node, useAggregationSyntax);
+            case IN -> translateInCondition(node, useAggregationSyntax);
+            case EXISTS, NOT_EXISTS -> translateExistsCondition(node, useAggregationSyntax);
+            default -> "{}";
+        };
+    }
+
+    private String translateLogicalCondition(ConditionNode node, boolean useAggregationSyntax) {
+        List<String> parts = new ArrayList<>();
+        for (ConditionNode child : node.getChildren()) {
+            String childCond = translateCondition(child, useAggregationSyntax);
+            if (!childCond.isEmpty() && !childCond.equals("{}")) {
+                parts.add(childCond);
+            }
+        }
+
+        if (parts.isEmpty()) return "{}";
+        if (parts.size() == 1) return parts.getFirst();
+
+        String op = node.getType() == ConditionNode.ConditionType.AND ? "$and" : "$or";
+        return "{ " + op + ": [ " + String.join(", ", parts) + " ] }";
+    }
+
+    private String translateComparisonCondition(ConditionNode node, boolean useAggregationSyntax) {
+        String field = node.getField();
+        Object value = node.getValue();
+        String operator = node.getOperator() != null ? node.getOperator() : "=";
+
+        // Экранируем поле
+        field = escapeField(field, useAggregationSyntax);
+
+        // Преобразуем значение
+        String valueStr = formatValue(value, useAggregationSyntax);
+
+        // Маппинг операторов
+        String mongoOp = mapOperator(operator);
+
+        if (mongoOp.equals("$eq") && !useAggregationSyntax) {
+            return "{ " + field + ": " + valueStr + " }";
+        } else {
+            return "{ " + field + ": { " + mongoOp + ": " + valueStr + " } }";
+        }
+    }
+
+    private String translateIsNullCondition(ConditionNode node, boolean isNull, boolean useAggregationSyntax) {
+        String field = escapeField(node.getField(), useAggregationSyntax);
+
+        if (useAggregationSyntax) {
+            return "{ $expr: { " + (isNull ? "$eq" : "$ne") + ": [ \"$" + field + "\", null ] } }";
+        } else {
+            return "{ " + field + ": " + (isNull ? "null" : "{ $ne: null }") + " }";
+        }
+    }
+
+    private String translateBetweenCondition(ConditionNode node, boolean useAggregationSyntax) {
+        String field = escapeField(node.getField(), useAggregationSyntax);
+        List<?> values = (List<?>) node.getValue();
+
+        if (values == null || values.size() < 2) {
+            return "{}";
+        }
+
+        String from = formatValue(values.get(0), useAggregationSyntax);
+        String to = formatValue(values.get(1), useAggregationSyntax);
+
+        return "{ " + field + ": { $gte: " + from + ", $lte: " + to + " } }";
+    }
+
+    private String translateInCondition(ConditionNode node, boolean useAggregationSyntax) {
+        String field = escapeField(node.getField(), useAggregationSyntax);
+        Object value = node.getValue();
+
+        if (value instanceof List<?> list) {
+            List<String> formatted = new ArrayList<>();
+            for (Object item : list) {
+                formatted.add(formatValue(item, useAggregationSyntax));
+            }
+            return "{ " + field + ": { $in: [ " + String.join(", ", formatted) + " ] } }";
+        } else if (value instanceof SubqueryInfo) {
+            // Для подзапросов нужно специальная обработка
+            return "{ " + field + ": { $in: ... } }"; // TODO: обработка подзапросов
+        }
+
+        return "{}";
+    }
+
+    private String translateExistsCondition(ConditionNode node, boolean useAggregationSyntax) {
+        String field = escapeField(node.getField(), useAggregationSyntax);
+        boolean exists = node.getType() == ConditionNode.ConditionType.EXISTS;
+
+        if (useAggregationSyntax) {
+            return "{ $expr: { " + (exists ? "$ne" : "$eq") + ": [ { $type: \"$" + field + "\" }, \"missing\" ] } }";
+        } else {
+            return "{ " + field + ": { $exists: " + exists + " } }";
+        }
+    }
+
+    // ========== Вспомогательные методы ==========
+
+    private ConditionNode combineConditions(List<ConditionNode> conditions) {
+        if (conditions.isEmpty()) return null;
+        if (conditions.size() == 1) return conditions.getFirst();
+
+        ConditionNode root = new ConditionNode();
+        root.setType(ConditionNode.ConditionType.AND);
+        root.getChildren().addAll(conditions);
+        return root;
+    }
+
+    private String[] extractJoinFields(ConditionNode condition) {
+        // Упрощенная версия: ожидаем условие вида table1.field = table2.field
+        String field1 = condition.getField();
+        Object value = condition.getValue();
+
+        if (value instanceof String field2) {
+
+            // Определяем, какое поле из какой таблицы
+            if (field1.contains(".")) {
+                String[] parts1 = field1.split("\\.");
+                String[] parts2 = field2.split("\\.");
+
+                // Предполагаем, что первое поле из левой таблицы, второе из правой
+                return new String[] { parts1[1], parts2[1] };
+            }
+        }
+
+        return new String[] { "id", "id" }; // Значения по умолчанию
+    }
+
+    private Map<String, String> extractAggregations() {
+        Map<String, String> result = new LinkedHashMap<>();
+
+        for (ProjectionField pf : ir.getProjectionFields()) {
+            String field = pf.getField();
+            if (field.contains("(")) {
+                String alias = pf.getAlias() != null ? pf.getAlias() : field;
+                String aggExpr = translateAggregateExpression(field);
+                result.put(alias, aggExpr);
+            }
+        }
+
+        return result;
+    }
+
+    private String translateAggregateExpression(String expr) {
+        expr = expr.trim();
+
+        if (expr.startsWith("COUNT(")) {
+            String field = expr.substring(6, expr.length() - 1);
+            return "{ $sum: 1 }";
+        } else if (expr.startsWith("SUM(")) {
+            String field = expr.substring(4, expr.length() - 1);
+            return "{ $sum: \"$" + field + "\" }";
+        } else if (expr.startsWith("AVG(")) {
+            String field = expr.substring(4, expr.length() - 1);
+            return "{ $avg: \"$" + field + "\" }";
+        } else if (expr.startsWith("MIN(")) {
+            String field = expr.substring(4, expr.length() - 1);
+            return "{ $min: \"$" + field + "\" }";
+        } else if (expr.startsWith("MAX(")) {
+            String field = expr.substring(4, expr.length() - 1);
+            return "{ $max: \"$" + field + "\" }";
+        }
+
+        return "{ $first: \"$$ROOT\" }";
+    }
+
+    private String mapOperator(String sqlOp) {
+        return switch (sqlOp) {
+            case "!=", "<>" -> "$ne";
+            case "<" -> "$lt";
+            case "<=" -> "$lte";
+            case ">" -> "$gt";
+            case ">=" -> "$gte";
+            case "LIKE" -> "$regex";
+            default -> "$eq";
+        };
+    }
+
+    private String formatValue(Object value, boolean useAggregationSyntax) {
+        if (value == null) return "null";
+
+        if (value instanceof String str) {
+            if (str.startsWith("'") && str.endsWith("'")) {
+                return "\"" + str.substring(1, str.length() - 1) + "\"";
+            } else if (str.contains(".")) {
+                if (useAggregationSyntax) {
+                    return "\"$" + str + "\"";
+                } else {
+                    return str; // Поле в find()
+                }
+            }
+            return "\"" + str + "\"";
+        } else if (value instanceof Number) {
+            return value.toString();
+        } else if (value instanceof Boolean) {
+            return value.toString();
+        } else if (value instanceof SubqueryInfo) {
+            return "/* subquery */";
+        }
+
+        return String.valueOf(value);
+    }
+
+    private String escapeField(String field, boolean useAggregationSyntax) {
+        if (field == null) return "";
+
+        // Убираем кавычки, если есть
+        if (field.startsWith("'") && field.endsWith("'")) {
+            field = field.substring(1, field.length() - 1);
+        }
+
+        if (useAggregationSyntax) {
+            return field.replace(".", "__"); // Для агрегации экранируем точки
+        }
+
+        return field;
+    }
+
+    private String escapeIdentifier(String identifier) {
+        return identifier;
+    }
+
+    private String indent() {
+        return "  ".repeat(indentLevel);
     }
 }
