@@ -1,5 +1,6 @@
 package sql.to.mongodb.translator.service.code.generator.stages;
 
+import org.springframework.stereotype.Component;
 import sql.to.mongodb.translator.service.code.generator.base.BaseGenerator;
 import sql.to.mongodb.translator.service.code.generator.base.GenerationContext;
 import sql.to.mongodb.translator.service.code.generator.helpers.FieldHelper;
@@ -9,14 +10,14 @@ import sql.to.mongodb.translator.service.intermediate.representation.details.Sor
 import java.util.ArrayList;
 import java.util.List;
 
+@Component
 public class SortStageGenerator extends BaseGenerator {
 
-    public SortStageGenerator(SqlToMongoIR ir, GenerationContext context) {
-        super(ir, context);
-    }
-
     @Override
-    public String generate() {
+    public String generate(SqlToMongoIR ir, GenerationContext context) {
+        this.ir = ir;
+        this.context = context;
+
         if (ir.getOrderBy().isEmpty()) {
             return "";
         }

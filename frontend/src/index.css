@@ -19,3 +19,43 @@
 .tree-node:hover circle {
     fill: #818cf8;
 }
+
+/* Стили для подсветки синтаксиса MongoDB */
+pre {
+    counter-reset: line;
+}
+
+pre code {
+    counter-increment: line;
+}
+
+pre code:before {
+    content: counter(line);
+    display: inline-block;
+    width: 2rem;
+    margin-right: 1rem;
+    color: #6b7280;
+    text-align: right;
+    user-select: none;
+}
+
+/* Подсветка ключевых слов MongoDB */
+.token-keyword {
+    color: #f472b6;
+}
+
+.token-function {
+    color: #60a5fa;
+}
+
+.token-string {
+    color: #a3e635;
+}
+
+.token-number {
+    color: #fbbf24;
+}
+
+.token-operator {
+    color: #c084fc;
+}

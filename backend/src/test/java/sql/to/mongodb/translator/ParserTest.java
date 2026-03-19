@@ -3,9 +3,8 @@ package sql.to.mongodb.translator;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import sql.to.mongodb.translator.service.exceptions.SQLParseException;
-import sql.to.mongodb.translator.service.exceptions.SQLScanException;
-import sql.to.mongodb.translator.service.parser.Node;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
 import sql.to.mongodb.translator.service.parser.Parser;
 import sql.to.mongodb.translator.service.scanner.Scanner;
 import sql.to.mongodb.translator.service.scanner.Token;
@@ -13,8 +12,15 @@ import sql.to.mongodb.translator.service.scanner.Token;
 import java.util.ArrayList;
 import java.util.List;
 
+@SpringBootTest
 public class ParserTest {
-    private static final Scanner scanner = new Scanner();
+
+    @Autowired
+    private Scanner scanner = new Scanner();
+
+    @Autowired
+    private Parser parser;
+
     private static List<Token> tokens = new ArrayList<>();
     private static List<String> errors = new ArrayList<>();
 
@@ -33,8 +39,7 @@ public class ParserTest {
                 WHERE id IN (SELECT product_id
                              FROM sales)""", tokens, errors);
 
-        Parser parser = new Parser(tokens, errors);
-        Assertions.assertDoesNotThrow(parser::tryAnalyse);
+        Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(tokens, errors));
     }
 
     @Test
@@ -61,8 +66,7 @@ public class ParserTest {
                                         ) >= 1
                 				)""", tokens, errors);
 
-        Parser parser = new Parser(tokens, errors);
-        Assertions.assertDoesNotThrow(parser::tryAnalyse);
+        Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(tokens, errors));
     }
 
     @Test
@@ -71,8 +75,8 @@ public class ParserTest {
                 SELECT CompetitionName, Race.*
                 FROM Competition LEFT JOIN Race
                 	 ON Id_competition = Competition""", tokens, errors);
-        Parser parser = new Parser(tokens, errors);
-        Assertions.assertDoesNotThrow(parser::tryAnalyse);
+
+        Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(tokens, errors));
     }
 
     @Test
@@ -82,8 +86,8 @@ public class ParserTest {
                 FROM TeamProfit TP
                 WHERE TP.Profit >= ALL(SELECT TP2.Profit
                                        FROM TeamProfit TP2)""", tokens, errors);
-        Parser parser = new Parser(tokens, errors);
-        Assertions.assertDoesNotThrow(parser::tryAnalyse);
+
+        Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(tokens, errors));
     }
 
     @Test
@@ -92,8 +96,8 @@ public class ParserTest {
                 SELECT R.*, R.TicketPrice * R.SoldTickets AS Profit
                 FROM Race R
                 ORDER BY R.TicketPrice * R.SoldTickets DESC""", tokens, errors);
-        Parser parser = new Parser(tokens, errors);
-        Assertions.assertDoesNotThrow(parser::tryAnalyse);
+
+        Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(tokens, errors));
     }
 
     @Test
@@ -116,10 +120,8 @@ public class ParserTest {
                 										  FROM Race R
                 										  ORDER BY Profit DESC
                 										  LIMIT 3)""", tokens, errors);
-        Parser parser = new Parser(tokens, errors);
-/*        Node root = parser.tryAnalyse();
-        System.out.println(root);*/
-        Assertions.assertDoesNotThrow(parser::tryAnalyse);
+
+        Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(tokens, errors));
     }
 
     @Test
@@ -136,7 +138,6 @@ public class ParserTest {
                         ON Comp.CompetitionType = CT.Id_competition_type
                      ) AS CalcRes""", tokens, errors);
 
-        Parser parser = new Parser(tokens, errors);
-        Assertions.assertDoesNotThrow(parser::tryAnalyse);
+        Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(tokens, errors));
     }
 }

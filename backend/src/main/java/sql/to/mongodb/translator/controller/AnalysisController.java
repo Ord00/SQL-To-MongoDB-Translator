@@ -4,10 +4,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import sql.to.mongodb.translator.dto.AnalysisResult;
 import sql.to.mongodb.translator.dto.SqlRequest;
+import sql.to.mongodb.translator.service.code.generator.CodeGenerator;
+import sql.to.mongodb.translator.service.exceptions.CodeGenerationException;
 import sql.to.mongodb.translator.service.exceptions.SQLParseException;
 import sql.to.mongodb.translator.service.exceptions.SQLScanException;
+import sql.to.mongodb.translator.service.intermediate.representation.SqlToMongoIR;
+import sql.to.mongodb.translator.service.intermediate.representation.IRGenerator;
 import sql.to.mongodb.translator.service.parser.Node;
 import sql.to.mongodb.translator.service.parser.Parser;
 import sql.to.mongodb.translator.service.scanner.Scanner;
@@ -21,13 +24,20 @@ import java.util.List;
 @CrossOrigin(origins = "http://localhost:8080")
 public class AnalysisController {
 
-    private Scanner scanner;
-    private Parser parser;
+    private final Scanner scanner;
+    private final Parser parser;
+    private final IRGenerator irGenerator;
+    private final CodeGenerator codeGenerator;
 
     @Autowired
-    public AnalysisController(Scanner scanner, Parser parser) {
+    public AnalysisController(Scanner scanner,
+                              Parser parser,
+                              IRGenerator irGenerator,
+                              CodeGenerator codeGenerator) {
         this.scanner = scanner;
         this.parser = parser;
+        this.irGenerator = irGenerator;
+        this.codeGenerator = codeGenerator;
     }
 
     @PostMapping("/analyse")
@@ -40,13 +50,18 @@ public class AnalysisController {
             // Лексический анализ
             scanner.tryAnalyse(request.getSqlQuery(), lexicalResult, errors);
 
-            parser = new Parser(lexicalResult, errors);
             // Синтаксический анализ
-            Node syntaxResult = parser.tryAnalyse();
+            Node syntaxResult = parser.tryAnalyse(lexicalResult, errors);
 
-            return ResponseEntity.ok(new AnalysisResult(lexicalResult, syntaxResult));
+            // Генерация промежуточного представления
+            SqlToMongoIR ir = irGenerator.generateIR(syntaxResult);
 
-        } catch (SQLParseException | SQLScanException e) {
+            // Генерация MongoDB кода
+            String mongoCode = codeGenerator.generate(ir);
+
+            return ResponseEntity.ok(mongoCode);
+
+        } catch (SQLParseException | SQLScanException | CodeGenerationException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(e.getMessage());
         }

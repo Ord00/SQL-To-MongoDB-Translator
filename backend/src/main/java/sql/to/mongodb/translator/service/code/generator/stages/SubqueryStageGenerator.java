@@ -1,5 +1,6 @@
 package sql.to.mongodb.translator.service.code.generator.stages;
 
+import org.springframework.stereotype.Component;
 import sql.to.mongodb.translator.service.code.generator.base.BaseGenerator;
 import sql.to.mongodb.translator.service.code.generator.base.GenerationContext;
 import sql.to.mongodb.translator.service.code.generator.conditions.ConditionTranslator;
@@ -17,21 +18,24 @@ import java.util.stream.Collectors;
 
 import static sql.to.mongodb.translator.service.code.generator.conditions.ConditionTranslator.getConditionNode;
 
+@Component
 public class SubqueryStageGenerator extends BaseGenerator {
 
     private final ConditionTranslator conditionTranslator;
     private final GroupStageGenerator groupGenerator;
     private final ProjectStageGenerator projectGenerator;
 
-    public SubqueryStageGenerator(SqlToMongoIR ir, GenerationContext context) {
-        super(ir, context);
-        this.conditionTranslator = new ConditionTranslator(ir, context);
-        this.groupGenerator = new GroupStageGenerator(ir, context);
-        this.projectGenerator = new ProjectStageGenerator(ir, context);
+    public SubqueryStageGenerator(ConditionTranslator conditionTranslator, GroupStageGenerator groupGenerator, ProjectStageGenerator projectGenerator) {
+        this.conditionTranslator = conditionTranslator;
+        this.groupGenerator = groupGenerator;
+        this.projectGenerator = projectGenerator;
     }
 
     @Override
-    public String generate() throws CodeGenerationException {
+    public String generate(SqlToMongoIR ir, GenerationContext context) throws CodeGenerationException {
+        this.ir = ir;
+        this.context = context;
+
         List<String> stages = new ArrayList<>();
 
         for (SubqueryInfo subquery : ir.getSubqueries()) {
@@ -77,13 +81,13 @@ public class SubqueryStageGenerator extends BaseGenerator {
             context.setUseAggregationSyntax(true);
             ConditionNode whereRoot = combineConditions(subIR.getWhereConditions());
             String whereStage = indent() + "{ $match: " +
-                    conditionTranslator.translate(whereRoot) + " }";
+                    conditionTranslator.translate(whereRoot, context) + " }";
             pipeline.add(whereStage);
             context.setUseAggregationSyntax(false);
         }
 
         if (subIR.isHasGroupBy()) {
-            String groupStage = groupGenerator.generate();
+            String groupStage = groupGenerator.generate(ir, context);
             if (!groupStage.isEmpty()) pipeline.add(groupStage);
         }
 
@@ -104,13 +108,13 @@ public class SubqueryStageGenerator extends BaseGenerator {
             context.setUseAggregationSyntax(true);
             ConditionNode whereRoot = combineConditions(subIR.getWhereConditions());
             String whereStage = indent() + "{ $match: " +
-                    conditionTranslator.translate(whereRoot) + " }";
+                    conditionTranslator.translate(whereRoot, context) + " }";
             pipeline.add(whereStage);
             context.setUseAggregationSyntax(false);
         }
 
         if (subIR.isHasGroupBy()) {
-            String groupStage = groupGenerator.generate();
+            String groupStage = groupGenerator.generate(ir, context);
             if (!groupStage.isEmpty()) pipeline.add(groupStage);
         }
 
@@ -156,12 +160,12 @@ public class SubqueryStageGenerator extends BaseGenerator {
         return match.toString();
     }
 
-    private String generateSubqueryProjection(SqlToMongoIR subIR) throws CodeGenerationException {
+    private String generateSubqueryProjection(SqlToMongoIR subIR) {
         if (subIR.getProjectionFields().isEmpty()) {
             return null;
         }
 
-        return projectGenerator.generate();
+        return projectGenerator.generate(ir, context);
     }
 
     private String buildLookupWithPipeline(String from, List<CorrelationCondition> correlations,
@@ -229,13 +233,13 @@ public class SubqueryStageGenerator extends BaseGenerator {
         if (!subIR.getWhereConditions().isEmpty()) {
             ConditionNode whereRoot = combineConditions(subIR.getWhereConditions());
             String whereStage = "{ $match: " +
-                    conditionTranslator.translate(whereRoot) + " }";
+                    conditionTranslator.translate(whereRoot, context) + " }";
             stages.add(whereStage);
         }
 
         // GROUP BY
         if (subIR.isHasGroupBy()) {
-            String groupStage = groupGenerator.generate();
+            String groupStage = groupGenerator.generate(ir, context);
             if (!groupStage.isEmpty()) {
                 stages.add(groupStage);
             }
@@ -251,7 +255,7 @@ public class SubqueryStageGenerator extends BaseGenerator {
                 String project = "{ $project: { _id: 0, result: \"$" + pf.getField() + "\" } }";
                 stages.add(project);
             } else {
-                String projectStage = projectGenerator.generate();
+                String projectStage = projectGenerator.generate(ir, context);
                 if (!projectStage.isEmpty()) {
                     stages.add(projectStage);
                 }

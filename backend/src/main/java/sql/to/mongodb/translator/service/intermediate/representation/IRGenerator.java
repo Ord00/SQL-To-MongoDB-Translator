@@ -1,5 +1,6 @@
 package sql.to.mongodb.translator.service.intermediate.representation;
 
+import org.springframework.stereotype.Component;
 import sql.to.mongodb.translator.service.enums.Category;
 import sql.to.mongodb.translator.service.enums.NodeType;
 import sql.to.mongodb.translator.service.exceptions.IRGenerationException;
@@ -17,34 +18,75 @@ import java.util.Stack;
 import static sql.to.mongodb.translator.service.intermediate.representation.ConditionExtractor.ConditionContext;
 import static sql.to.mongodb.translator.service.intermediate.representation.details.SubqueryInfo.SubqueryType.SCALAR;
 
-public class SqlToMongoIRGenerator {
+@Component
+public class IRGenerator {
 
-    private final Node astRoot;
-    private final SqlToMongoIR ir;
+    // Состояние для текущего запроса
+    private SqlToMongoIR ir;
     private final Map<String, String> tableAliases = new HashMap<>();
     private final Stack<String> currentContext = new Stack<>();
     private final Set<String> outerTables = new HashSet<>();
-    private final ConditionExtractor conditionExtractor;
+    private ConditionExtractor conditionExtractor;
 
-    public SqlToMongoIRGenerator(Node astRoot) {
-        this(astRoot, new HashSet<>(), new HashMap<>());
-    }
+    // Для вложенных подзапросов
+    private final ThreadLocal<GenerationState> currentState = new ThreadLocal<>();
 
-    // Конструктор для подзапросов с информацией о внешних таблицах
-    public SqlToMongoIRGenerator(Node astRoot, Set<String> outerTables, Map<String, String> outerAliases) {
-        this.astRoot = astRoot;
+    /**
+     * Инициализация генератора для нового запроса
+     */
+    private void initialize(Set<String> parentTables, Map<String, String> parentAliases) {
         this.ir = new SqlToMongoIR();
-        this.outerTables.addAll(outerTables);
-        this.conditionExtractor = new ConditionExtractor(outerTables, outerAliases);
+        this.tableAliases.clear();
+        this.currentContext.clear();
+        this.outerTables.clear();
+        this.outerTables.addAll(parentTables);
+        this.conditionExtractor = new ConditionExtractor(parentTables, parentAliases);
     }
 
-    public SqlToMongoIR generateIR() throws IRGenerationException {
-        if (astRoot == null || astRoot.getNodeType() != NodeType.QUERY) {
-            throw new IRGenerationException("Invalid AST root node");
-        }
+    /**
+     * Генерация IR для корневого запроса
+     */
+    public SqlToMongoIR generateIR(Node astRoot) throws IRGenerationException {
+        return generateIR(astRoot, new HashSet<>(), new HashMap<>());
+    }
 
-        processQueryNode(astRoot);
-        return ir;
+    /**
+     * Генерация IR для запроса (основной или подзапрос)
+     */
+    public SqlToMongoIR generateIR(Node astRoot,
+                                   Set<String> outerTables,
+                                   Map<String, String> outerAliases) throws IRGenerationException {
+
+        // Сохраняем предыдущее состояние для восстановления
+        GenerationState previousState = currentState.get();
+
+        try {
+            // Инициализация для нового запроса
+            initialize(outerTables, outerAliases);
+
+            // Создаем новое состояние для текущего потока
+            currentState.set(new GenerationState(
+                    ir,
+                    tableAliases,
+                    currentContext,
+                    this.outerTables,
+                    conditionExtractor));
+
+            if (astRoot == null || astRoot.getNodeType() != NodeType.QUERY) {
+                throw new IRGenerationException("Invalid AST root node");
+            }
+
+            processQueryNode(astRoot);
+            return ir;
+
+        } finally {
+            // Восстанавливаем предыдущее состояние
+            if (previousState != null) {
+                currentState.set(previousState);
+            } else {
+                currentState.remove();
+            }
+        }
     }
 
     private void processQueryNode(Node queryNode) throws IRGenerationException {
@@ -102,9 +144,7 @@ public class SqlToMongoIRGenerator {
     }
 
     private void processConditionNode(Node conditionNode) {
-        // Определяем контекст на основе позиции в запросе
         ConditionContext context = determineConditionContext();
-
         ConditionNode extractedCondition = conditionExtractor.extractCondition(conditionNode);
 
         if (extractedCondition != null) {
@@ -118,10 +158,8 @@ public class SqlToMongoIRGenerator {
                     break;
                 case JOIN:
                     // JOIN условия обрабатываются в processTableNames
-                    // Здесь мы их игнорируем
                     break;
                 case SELECT:
-                    // Для SELECT условий создаем проекционное поле
                     ProjectionField field = new ProjectionField();
                     field.setField(extractedCondition.toString());
                     ir.getProjectionFields().add(field);
@@ -131,8 +169,6 @@ public class SqlToMongoIRGenerator {
     }
 
     private ConditionContext determineConditionContext() {
-        // Упрощенная логика: если есть GROUP BY и еще нет HAVING, то это HAVING
-        // Иначе WHERE
         if (ir.isHasGroupBy() && ir.getHavingConditions().isEmpty()) {
             return ConditionContext.HAVING;
         }
@@ -181,8 +217,7 @@ public class SqlToMongoIRGenerator {
     }
 
     private void processLogicalCheckInSelect(Node logicalCheckNode) {
-        ConditionNode condition = conditionExtractor.extractCondition(
-                logicalCheckNode);
+        ConditionNode condition = conditionExtractor.extractCondition(logicalCheckNode);
 
         if (condition != null) {
             ProjectionField field = new ProjectionField();
@@ -225,14 +260,12 @@ public class SqlToMongoIRGenerator {
 
     private void processAggregateFunction(Node aggregateNode) {
         ir.setHasAggregateFunctions(true);
-
         ProjectionField field = extractAggregateInfo(aggregateNode);
         ir.getProjectionFields().add(field);
     }
 
     private void processArithmeticExpression(Node arithNode) {
         ir.setHasComplexProjections(true);
-
         ProjectionField field = new ProjectionField();
         field.setField(ExpressionBuilder.buildExpression(arithNode));
         field.setAlias(extractAlias(arithNode));
@@ -241,7 +274,6 @@ public class SqlToMongoIRGenerator {
 
     private void processCaseExpression(Node caseNode) {
         ir.setHasComplexProjections(true);
-
         ProjectionField field = new ProjectionField();
         field.setField(ExpressionBuilder.buildExpression(caseNode));
         field.setAlias(extractAlias(caseNode));
@@ -266,7 +298,7 @@ public class SqlToMongoIRGenerator {
         if (orderByNode.getChildren() == null) return;
 
         String currentField = null;
-        Boolean currentDirection = null; // true = ASC, false = DESC, null = не указано
+        Boolean currentDirection = null;
 
         for (Node child : orderByNode.getChildren()) {
             if (child.getNodeType() == NodeType.TERMINAL) {
@@ -285,24 +317,18 @@ public class SqlToMongoIRGenerator {
                     }
                     currentDirection = false;
                 }
-
             } else {
-                // Это поле для сортировки
                 String field = extractFieldFromOrderBy(child);
                 if (field != null) {
-                    // Если есть предыдущее поле без направления, добавляем его с ASC по умолчанию
                     if (currentField != null) {
                         addSortField(currentField, true);
                     }
                     currentField = field;
-                    // Направление для этого поля будет определено следующим токеном
                 }
             }
         }
 
-        // Обрабатываем последнее поле
         if (currentField != null) {
-            // Используем указанное направление или ASC по умолчанию
             addSortField(currentField, currentDirection != null ? currentDirection : true);
         }
     }
@@ -327,11 +353,9 @@ public class SqlToMongoIRGenerator {
                     TableInfo tableInfo = processTable(child);
 
                     if (ir.getMainCollection() == null) {
-                        // Первая таблица - основная коллекция
                         ir.setMainCollection(tableInfo.tableName);
                         currentContext.push(tableInfo.alias != null ? tableInfo.alias : tableInfo.tableName);
 
-                        // Добавляем таблицу во внешний контекст для подзапросов
                         outerTables.add(tableInfo.tableName);
                         if (tableInfo.alias != null) {
                             tableAliases.put(tableInfo.alias, tableInfo.tableName);
@@ -415,38 +439,28 @@ public class SqlToMongoIRGenerator {
         return joinInfo;
     }
 
-    private SubqueryInfo processSubquery(Node subqueryNode) {
+    private SubqueryInfo processSubquery(Node subqueryNode) throws IRGenerationException {
         ir.setHasSubqueries(true);
 
-        // Создаем генератор для подзапроса с информацией о внешних таблицах
-        SqlToMongoIRGenerator subqueryGenerator = new SqlToMongoIRGenerator(
-                subqueryNode, outerTables, tableAliases);
+        // Используем текущий экземпляр для подзапроса с новыми внешними таблицами
+        SqlToMongoIR subqueryIR = generateIR(subqueryNode, outerTables, tableAliases);
 
-        try {
-            SqlToMongoIR subqueryIR = subqueryGenerator.generateIR();
+        SubqueryInfo subqueryInfo = new SubqueryInfo();
+        subqueryInfo.setType(SCALAR);
+        subqueryInfo.setSubqueryIR(subqueryIR);
 
-            SubqueryInfo subqueryInfo = new SubqueryInfo();
-            subqueryInfo.setType(SCALAR);
-            subqueryInfo.setSubqueryIR(subqueryIR);
-
-            // Используем conditionExtractor для извлечения корреляций
-            List<CorrelationCondition> correlations = conditionExtractor.extractCorrelations(subqueryNode);
-            if (!correlations.isEmpty()) {
-                ir.setHasCorrelatedSubqueries(true);
-                subqueryInfo.setCorrelations(correlations);
-            }
-
-            return subqueryInfo;
-
-        } catch (IRGenerationException e) {
-            return null;
+        List<CorrelationCondition> correlations = conditionExtractor.extractCorrelations(subqueryNode);
+        if (!correlations.isEmpty()) {
+            ir.setHasCorrelatedSubqueries(true);
+            subqueryInfo.setCorrelations(correlations);
         }
+
+        return subqueryInfo;
     }
 
-    private void processSubqueryInProjection(Node subqueryNode) {
+    private void processSubqueryInProjection(Node subqueryNode) throws IRGenerationException {
         SubqueryInfo subqueryInfo = processSubquery(subqueryNode);
         if (subqueryInfo != null) {
-            // Добавляем подзапрос в IR и создаем проекционное поле
             ir.getSubqueries().add(subqueryInfo);
 
             ProjectionField field = new ProjectionField();
@@ -457,7 +471,7 @@ public class SqlToMongoIRGenerator {
         }
     }
 
-    private void processSubqueryInFrom(Node subqueryNode) {
+    private void processSubqueryInFrom(Node subqueryNode) throws IRGenerationException {
         String alias = extractSubqueryAlias(subqueryNode);
 
         SubqueryInfo subqueryInfo = processSubquery(subqueryNode);
@@ -550,6 +564,28 @@ public class SqlToMongoIRGenerator {
     private String extractSubqueryAlias(Node subqueryNode) {
         return extractAlias(subqueryNode);
     }
+
+    /**
+         * Класс для хранения состояния генерации в ThreadLocal
+         */
+        private record GenerationState(SqlToMongoIR ir,
+                                       Map<String, String> tableAliases,
+                                       Stack<String> currentContext,
+                                       Set<String> outerTables,
+                                       ConditionExtractor conditionExtractor) {
+            private GenerationState(SqlToMongoIR ir,
+                                    Map<String, String> tableAliases,
+                                    Stack<String> currentContext,
+                                    Set<String> outerTables,
+                                    ConditionExtractor conditionExtractor) {
+                this.ir = ir;
+                this.tableAliases = new HashMap<>(tableAliases);
+                this.currentContext = new Stack<>();
+                this.currentContext.addAll(currentContext);
+                this.outerTables = new HashSet<>(outerTables);
+                this.conditionExtractor = conditionExtractor;
+            }
+        }
 
     private static class TableInfo {
         String tableName;

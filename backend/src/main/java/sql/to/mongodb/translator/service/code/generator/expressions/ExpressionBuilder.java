@@ -1,5 +1,6 @@
 package sql.to.mongodb.translator.service.code.generator.expressions;
 
+import org.springframework.stereotype.Component;
 import sql.to.mongodb.translator.service.code.generator.base.GenerationContext;
 import sql.to.mongodb.translator.service.code.generator.helpers.FormatHelper;
 import sql.to.mongodb.translator.service.enums.Category;
@@ -13,9 +14,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+@Component
 public class ExpressionBuilder {
 
-    private final GenerationContext context;
     private final AggregateExpressionBuilder aggBuilder;
 
     private static final Map<String, String> OPERATOR_MAPPING = new HashMap<>();
@@ -44,24 +45,23 @@ public class ExpressionBuilder {
         LOGICAL_OPERATOR_MAPPING.put("IN", "$in");
     }
 
-    public ExpressionBuilder(SqlToMongoIR ir, GenerationContext context) {
-        this.context = context;
-        this.aggBuilder = new AggregateExpressionBuilder(ir, context);
+    public ExpressionBuilder(AggregateExpressionBuilder aggBuilder) {
+        this.aggBuilder = aggBuilder;
     }
 
     /**
      * Построение выражения из узла AST
      */
-    public String build(Node node) {
+    public String build(Node node, SqlToMongoIR ir, GenerationContext context) {
         if (node == null) return "";
 
         return switch (node.getNodeType()) {
-            case TERMINAL -> buildTerminal(node);
-            case IDENTIFIER -> buildIdentifier(node);
-            case ARITHMETIC_EXP -> buildArithmetic(node);
-            case AGGREGATE -> aggBuilder.build(node);
-            case CASE -> buildCase(node);
-            case LOGICAL_CHECK -> buildLogical(node);
+            case TERMINAL -> buildTerminal(node, context);
+            case IDENTIFIER -> buildIdentifier(node, context);
+            case ARITHMETIC_EXP -> buildArithmetic(node, ir, context);
+            case AGGREGATE -> aggBuilder.build(node, ir, context);
+            case CASE -> buildCase(node,  ir, context);
+            case LOGICAL_CHECK -> buildLogical(node,  ir, context);
             default -> "";
         };
     }
@@ -69,7 +69,7 @@ public class ExpressionBuilder {
     /**
      * Построение терминального узла (токена)
      */
-    private String buildTerminal(Node node) {
+    private String buildTerminal(Node node, GenerationContext context) {
         Token token = node.getToken();
         if (token == null) return "";
 
@@ -93,7 +93,7 @@ public class ExpressionBuilder {
     /**
      * Построение идентификатора (поля)
      */
-    private String buildIdentifier(Node node) {
+    private String buildIdentifier(Node node, GenerationContext context) {
         if (node.getChildren() == null || node.getChildren().size() < 2) {
             return "";
         }
@@ -123,7 +123,7 @@ public class ExpressionBuilder {
     /**
      * Построение арифметического выражения
      */
-    private String buildArithmetic(Node node) {
+    private String buildArithmetic(Node node, SqlToMongoIR ir, GenerationContext context) {
         if (node.getChildren() == null || node.getChildren().size() < 3) {
             return "";
         }
@@ -132,8 +132,8 @@ public class ExpressionBuilder {
         Node operator = node.getChildren().get(1);
         Node right = node.getChildren().get(2);
 
-        String leftExpr = build(left);
-        String rightExpr = build(right);
+        String leftExpr = build(left, ir, context);
+        String rightExpr = build(right, ir, context);
         String op = operator.getToken().lexeme;
 
         if (context.isUseAggregationSyntax()) {
@@ -149,7 +149,7 @@ public class ExpressionBuilder {
     /**
      * Построение CASE выражения
      */
-    private String buildCase(Node node) {
+    private String buildCase(Node node, SqlToMongoIR ir, GenerationContext context) {
         if (node.getChildren() == null) return "";
 
         StringBuilder result = new StringBuilder();
@@ -218,7 +218,7 @@ public class ExpressionBuilder {
                         break;
                 }
             } else {
-                String expr = build(child);
+                String expr = build(child, ir, context);
                 if (inWhen) {
                     // Если есть caseValue, используем его для сравнения
                     if (caseValue != null && context.isUseAggregationSyntax()) {
@@ -262,18 +262,18 @@ public class ExpressionBuilder {
     /**
      * Построение логического выражения
      */
-    private String buildLogical(Node node) {
+    private String buildLogical(Node node, SqlToMongoIR ir, GenerationContext context) {
         if (context.isUseAggregationSyntax()) {
-            return buildLogicalForAggregation(node);
+            return buildLogicalForAggregation(node, ir, context);
         } else {
-            return buildLogicalForFind(node);
+            return buildLogicalForFind(node, ir, context);
         }
     }
 
     /**
      * Построение логического выражения для aggregation pipeline
      */
-    private String buildLogicalForAggregation(Node node) {
+    private String buildLogicalForAggregation(Node node, SqlToMongoIR ir, GenerationContext context) {
         if (node == null || node.getChildren() == null) return "{}";
 
         // Определяем тип логической операции
@@ -300,7 +300,7 @@ public class ExpressionBuilder {
                 }
             } else {
                 // Рекурсивно строим вложенное выражение
-                String expr = build(child);
+                String expr = build(child,  ir, context);
                 if (!expr.isEmpty()) {
                     operands.add(expr);
                 }
@@ -321,7 +321,7 @@ public class ExpressionBuilder {
     /**
      * Построение логического выражения для find() запроса
      */
-    private String buildLogicalForFind(Node node) {
+    private String buildLogicalForFind(Node node, SqlToMongoIR ir, GenerationContext context) {
         if (node == null || node.getChildren() == null) return "{}";
 
         StringBuilder result = new StringBuilder();
@@ -341,7 +341,7 @@ public class ExpressionBuilder {
                 }
             } else if (child.getNodeType() == NodeType.IDENTIFIER) {
                 // Это поле
-                String field = buildIdentifier(child);
+                String field = buildIdentifier(child, context);
                 // Ищем следующий токен для оператора и значения
                 String operator = "=";
                 String value = "null";
@@ -357,7 +357,7 @@ public class ExpressionBuilder {
                 }
                 if (index + 2 < node.getChildren().size()) {
                     Node nextNext = node.getChildren().get(index + 2);
-                    value = build(nextNext);
+                    value = build(nextNext, ir, context);
                 }
 
                 String condition = buildComparisonForFind(field, operator, value);

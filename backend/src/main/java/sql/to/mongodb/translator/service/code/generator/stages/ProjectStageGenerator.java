@@ -1,27 +1,30 @@
 package sql.to.mongodb.translator.service.code.generator.stages;
 
+import org.springframework.stereotype.Component;
 import sql.to.mongodb.translator.service.code.generator.base.BaseGenerator;
 import sql.to.mongodb.translator.service.code.generator.base.GenerationContext;
 import sql.to.mongodb.translator.service.code.generator.expressions.AggregateExpressionBuilder;
 import sql.to.mongodb.translator.service.code.generator.helpers.FieldHelper;
-import sql.to.mongodb.translator.service.exceptions.CodeGenerationException;
 import sql.to.mongodb.translator.service.intermediate.representation.SqlToMongoIR;
 import sql.to.mongodb.translator.service.intermediate.representation.details.ProjectionField;
 
 import java.util.ArrayList;
 import java.util.List;
 
+@Component
 public class ProjectStageGenerator extends BaseGenerator {
 
     private final AggregateExpressionBuilder aggBuilder;
 
-    public ProjectStageGenerator(SqlToMongoIR ir, GenerationContext context) {
-        super(ir, context);
-        this.aggBuilder = new AggregateExpressionBuilder(ir, context);
+    public ProjectStageGenerator(AggregateExpressionBuilder aggBuilder) {
+        this.aggBuilder = aggBuilder;
     }
 
     @Override
-    public String generate() throws CodeGenerationException {
+    public String generate(SqlToMongoIR ir, GenerationContext context) {
+        this.ir = ir;
+        this.context = context;
+
         if (ir.getProjectionFields().isEmpty()) {
             return "";
         }

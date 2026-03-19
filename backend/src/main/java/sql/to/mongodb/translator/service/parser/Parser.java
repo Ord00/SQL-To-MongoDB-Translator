@@ -15,16 +15,12 @@ import static sql.to.mongodb.translator.service.parser.dml.SelectParser.analyseS
 public class Parser {
 
     PushdownAutomaton pA;
-    List<String> errors;
 
-    public Parser(List<Token> tokens, List<String> errors) {
-
-        pA = new PushdownAutomaton(tokens);
-        this.errors = errors;
-
+    public Parser(PushdownAutomaton pA) {
+        this.pA = pA;
     }
 
-    public Node tryAnalyse() throws SQLParseException, SQLScanException {
+    public Node tryAnalyse(List<Token> tokens, List<String> errors) throws SQLParseException, SQLScanException {
 
         for (String error : errors) {
 
@@ -32,6 +28,7 @@ public class Parser {
 
         }
 
+        pA.init(tokens);
         List<Node> children = new ArrayList<>();
 
         pA.getNextToken();

@@ -1,6 +1,6 @@
 package sql.to.mongodb.translator.service.code.generator.conditions;
 
-import sql.to.mongodb.translator.service.code.generator.base.BaseGenerator;
+import org.springframework.stereotype.Component;
 import sql.to.mongodb.translator.service.code.generator.base.GenerationContext;
 import sql.to.mongodb.translator.service.code.generator.helpers.FormatHelper;
 import sql.to.mongodb.translator.service.code.generator.helpers.SubqueryHelper;
@@ -19,24 +19,20 @@ import java.util.stream.Collectors;
  * Транслятор условий сравнения в MongoDB синтаксис
  * Поддерживает все типы сравнений и подзапросы
  */
-public class ComparisonTranslator extends BaseGenerator {
+@Component
+public class ComparisonTranslator {
 
     private final SubqueryStageGenerator subqueryGenerator;
 
-    public ComparisonTranslator(SqlToMongoIR ir, GenerationContext context) {
-        super(ir, context);
-        this.subqueryGenerator = new SubqueryStageGenerator(ir, context);
-    }
-
-    @Override
-    public String generate() throws CodeGenerationException {
-        return "";
+    public ComparisonTranslator(SubqueryStageGenerator subqueryGenerator1) {
+        this.subqueryGenerator = subqueryGenerator1;
     }
 
     /**
      * Трансляция условия сравнения
      */
-    public String translate(ConditionNode node) throws CodeGenerationException {
+    public String translate(ConditionNode node,
+                            GenerationContext context) throws CodeGenerationException {
         String field = node.getField();
         Object value = node.getValue();
         String operator = node.getOperator() != null ? node.getOperator() : "=";
@@ -45,28 +41,31 @@ public class ComparisonTranslator extends BaseGenerator {
 
         // Обработка подзапросов
         if (value instanceof SubqueryInfo subquery) {
-            return translateWithSubquery(field, subquery, operator);
+            return translateWithSubquery(field, subquery, operator, context);
         }
 
         // Обработка списка значений (для IN)
         if (value instanceof List<?> list) {
-            return translateListComparison(field, list, operator);
+            return translateListComparison(field, list, operator, context);
         }
 
         // Обычное сравнение с константой
         String valueStr = FormatHelper.formatValue(value, context);
-        return translateSimpleComparison(field, valueStr, operator);
+        return translateSimpleComparison(field, valueStr, operator, context);
     }
 
     /**
      * Трансляция простого сравнения с константой
      */
-    private String translateSimpleComparison(String field, String valueStr, String operator) {
+    private String translateSimpleComparison(String field,
+                                             String valueStr,
+                                             String operator,
+                                             GenerationContext context) {
         String mongoOp = mapOperator(operator);
 
         // Специальная обработка для LIKE
         if ("LIKE".equalsIgnoreCase(operator)) {
-            return translateLike(field, valueStr);
+            return translateLike(field, valueStr, context);
         }
 
         // Для aggregation syntax
@@ -103,7 +102,7 @@ public class ComparisonTranslator extends BaseGenerator {
     /**
      * Трансляция условия LIKE
      */
-    private String translateLike(String field, String pattern) {
+    private String translateLike(String field, String pattern, GenerationContext context) {
         // Убираем кавычки из паттерна
         String cleanPattern = pattern.replace("'", "").replace("\"", "");
 
@@ -124,13 +123,14 @@ public class ComparisonTranslator extends BaseGenerator {
      */
     private String translateListComparison(String field,
                                            List<?> values,
-                                           String operator) throws CodeGenerationException {
+                                           String operator,
+                                           GenerationContext context) throws CodeGenerationException {
         List<String> formatted = new ArrayList<>();
 
         for (Object item : values) {
             if (item instanceof SubqueryInfo subquery) {
                 // Для подзапросов в списке
-                String subqueryResult = generateSubqueryReference(subquery);
+                String subqueryResult = generateSubqueryReference(subquery, context);
                 formatted.add(subqueryResult);
             } else {
                 formatted.add(FormatHelper.formatValue(item, context));
@@ -138,19 +138,19 @@ public class ComparisonTranslator extends BaseGenerator {
         }
 
         if ("IN".equalsIgnoreCase(operator)) {
-            return translateIn(field, formatted);
+            return translateIn(field, formatted, context);
         } else if ("NOT IN".equalsIgnoreCase(operator)) {
-            return translateNotIn(field, formatted);
+            return translateNotIn(field, formatted, context);
         } else {
             // Для других операторов со списком (например, = ANY)
-            return translateAnyComparison(field, formatted, operator);
+            return translateAnyComparison(field, formatted, operator, context);
         }
     }
 
     /**
      * Трансляция условия IS NULL / IS NOT NULL
      */
-    public String translateIsNull(ConditionNode node) {
+    public String translateIsNull(ConditionNode node, GenerationContext context) {
         String field = FormatHelper.escapeField(node.getField(), context);
         boolean isNull = node.getType() == ConditionNode.ConditionType.IS_NULL;
 
@@ -165,7 +165,7 @@ public class ComparisonTranslator extends BaseGenerator {
     /**
      * Трансляция условия BETWEEN
      */
-    public String translateBetween(ConditionNode node) {
+    public String translateBetween(ConditionNode node, GenerationContext context) {
         String field = FormatHelper.escapeField(node.getField(), context);
         List<?> values = (List<?>) node.getValue();
 
@@ -188,15 +188,15 @@ public class ComparisonTranslator extends BaseGenerator {
     /**
      * Трансляция условия IN
      */
-    public String translateIn(ConditionNode node) throws CodeGenerationException {
+    public String translateIn(ConditionNode node, GenerationContext context) throws CodeGenerationException {
         String field = FormatHelper.escapeField(node.getField(), context);
         Object value = node.getValue();
 
         if (value instanceof SubqueryInfo subquery) {
-            return translateInWithSubquery(field, subquery);
+            return translateInWithSubquery(field, subquery, context);
         } else if (value instanceof List<?> list) {
-            List<String> formatted = formatValueList(list);
-            return translateIn(field, formatted);
+            List<String> formatted = formatValueList(list, context);
+            return translateIn(field, formatted, context);
         }
 
         return "{}";
@@ -205,7 +205,7 @@ public class ComparisonTranslator extends BaseGenerator {
     /**
      * Трансляция условия IN со списком значений
      */
-    private String translateIn(String field, List<String> values) {
+    private String translateIn(String field, List<String> values, GenerationContext context) {
         if (values.isEmpty()) {
             return "{}";
         }
@@ -222,7 +222,7 @@ public class ComparisonTranslator extends BaseGenerator {
     /**
      * Трансляция условия NOT IN
      */
-    private String translateNotIn(String field, List<String> values) {
+    private String translateNotIn(String field, List<String> values, GenerationContext context) {
         if (values.isEmpty()) {
             return "{}";
         }
@@ -239,7 +239,10 @@ public class ComparisonTranslator extends BaseGenerator {
     /**
      * Трансляция условия ANY/SOME
      */
-    private String translateAnyComparison(String field, List<String> values, String operator) {
+    private String translateAnyComparison(String field,
+                                          List<String> values,
+                                          String operator,
+                                          GenerationContext context) {
         String mongoOp = mapOperator(operator);
         List<String> conditions = new ArrayList<>();
 
@@ -257,31 +260,32 @@ public class ComparisonTranslator extends BaseGenerator {
     /**
      * Трансляция условия EXISTS / NOT EXISTS
      */
-    public String translateExists(ConditionNode node) throws CodeGenerationException {
+    public String translateExists(ConditionNode node, GenerationContext context) throws CodeGenerationException {
         Object value = node.getValue();
 
         if (value instanceof SubqueryInfo subquery) {
             boolean exists = node.getType() == ConditionNode.ConditionType.EXISTS;
-            return translateExistsWithSubquery(subquery, exists);
+            return translateExistsWithSubquery(subquery, exists, context);
         }
 
-        return translateIsNull(node);
+        return translateIsNull(node, context);
     }
 
     /**
      * Трансляция EXISTS с подзапросом
      */
-    private String translateExistsWithSubquery(SubqueryInfo subquery, boolean exists)
-            throws CodeGenerationException {
+    private String translateExistsWithSubquery(SubqueryInfo subquery,
+                                               boolean exists,
+                                               GenerationContext context) throws CodeGenerationException {
 
         String subqueryRef;
 
         if (SubqueryHelper.isCorrelated(subquery)) {
             // Для коррелированного подзапроса
-            subqueryRef = generateCorrelatedSubqueryReference(subquery);
+            subqueryRef = generateCorrelatedSubqueryReference(subquery, context);
         } else {
             // Для некоррелированного подзапроса
-            subqueryRef = generateSubqueryReference(subquery);
+            subqueryRef = generateSubqueryReference(subquery, context);
         }
 
         if (context.isUseAggregationSyntax()) {
@@ -296,16 +300,19 @@ public class ComparisonTranslator extends BaseGenerator {
     /**
      * Трансляция сравнения с подзапросом
      */
-    private String translateWithSubquery(String field, SubqueryInfo subquery, String operator)
+    private String translateWithSubquery(String field,
+                                         SubqueryInfo subquery,
+                                         String operator,
+                                         GenerationContext context)
             throws CodeGenerationException {
 
         String mongoOp = mapOperator(operator);
         String subqueryRef;
 
         if (SubqueryHelper.isCorrelated(subquery)) {
-            subqueryRef = generateCorrelatedSubqueryReference(subquery);
+            subqueryRef = generateCorrelatedSubqueryReference(subquery, context);
         } else {
-            subqueryRef = generateSubqueryReference(subquery);
+            subqueryRef = generateSubqueryReference(subquery, context);
         }
 
         if (context.isUseAggregationSyntax()) {
@@ -318,15 +325,17 @@ public class ComparisonTranslator extends BaseGenerator {
     /**
      * Трансляция IN с подзапросом
      */
-    private String translateInWithSubquery(String field, SubqueryInfo subquery)
+    private String translateInWithSubquery(String field,
+                                           SubqueryInfo subquery,
+                                           GenerationContext context)
             throws CodeGenerationException {
 
         String subqueryRef;
 
         if (SubqueryHelper.isCorrelated(subquery)) {
-            subqueryRef = generateCorrelatedSubqueryReference(subquery);
+            subqueryRef = generateCorrelatedSubqueryReference(subquery, context);
         } else {
-            subqueryRef = generateSubqueryReference(subquery);
+            subqueryRef = generateSubqueryReference(subquery, context);
         }
 
         if (context.isUseAggregationSyntax()) {
@@ -339,7 +348,7 @@ public class ComparisonTranslator extends BaseGenerator {
     /**
      * Генерация ссылки на результат подзапроса
      */
-    private String generateSubqueryReference(SubqueryInfo subquery) throws CodeGenerationException {
+    private String generateSubqueryReference(SubqueryInfo subquery, GenerationContext context) throws CodeGenerationException {
         String resultName = context.nextSubqueryResult();
         context.getSubqueryResults().put(resultName, "subquery");
 
@@ -354,7 +363,7 @@ public class ComparisonTranslator extends BaseGenerator {
     /**
      * Генерация ссылки на результат коррелированного подзапроса
      */
-    private String generateCorrelatedSubqueryReference(SubqueryInfo subquery) {
+    private String generateCorrelatedSubqueryReference(SubqueryInfo subquery, GenerationContext context) {
         String subqueryName = context.nextSubqueryName();
 
         List<CorrelationCondition> correlations = subquery.getCorrelations();
@@ -371,7 +380,7 @@ public class ComparisonTranslator extends BaseGenerator {
     /**
      * Форматирование списка значений
      */
-    private List<String> formatValueList(List<?> values) {
+    private List<String> formatValueList(List<?> values, GenerationContext context) {
         List<String> formatted = new ArrayList<>();
         for (Object item : values) {
             if (item instanceof String) {

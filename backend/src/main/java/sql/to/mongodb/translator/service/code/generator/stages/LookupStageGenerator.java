@@ -1,9 +1,9 @@
 package sql.to.mongodb.translator.service.code.generator.stages;
 
+import org.springframework.stereotype.Component;
 import sql.to.mongodb.translator.service.code.generator.base.BaseGenerator;
 import sql.to.mongodb.translator.service.code.generator.base.GenerationContext;
 import sql.to.mongodb.translator.service.code.generator.helpers.FormatHelper;
-import sql.to.mongodb.translator.service.exceptions.CodeGenerationException;
 import sql.to.mongodb.translator.service.intermediate.representation.SqlToMongoIR;
 import sql.to.mongodb.translator.service.intermediate.representation.details.ConditionNode;
 import sql.to.mongodb.translator.service.intermediate.representation.details.JoinInfo;
@@ -11,14 +11,14 @@ import sql.to.mongodb.translator.service.intermediate.representation.details.Joi
 import java.util.ArrayList;
 import java.util.List;
 
+@Component
 public class LookupStageGenerator extends BaseGenerator {
 
-    public LookupStageGenerator(SqlToMongoIR ir, GenerationContext context) {
-        super(ir, context);
-    }
-
     @Override
-    public String generate() throws CodeGenerationException {
+    public String generate(SqlToMongoIR ir, GenerationContext context) {
+        this.ir = ir;
+        this.context = context;
+
         return String.join(",\n", generateLookupStages());
     }
 

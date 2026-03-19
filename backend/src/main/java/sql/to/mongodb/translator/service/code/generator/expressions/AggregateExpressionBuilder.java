@@ -1,5 +1,6 @@
 package sql.to.mongodb.translator.service.code.generator.expressions;
 
+import org.springframework.stereotype.Component;
 import sql.to.mongodb.translator.service.code.generator.base.GenerationContext;
 import sql.to.mongodb.translator.service.enums.NodeType;
 import sql.to.mongodb.translator.service.intermediate.representation.SqlToMongoIR;
@@ -8,6 +9,7 @@ import sql.to.mongodb.translator.service.parser.Node;
 import java.util.HashMap;
 import java.util.Map;
 
+@Component
 public class AggregateExpressionBuilder {
 
     private final ExpressionBuilder exprBuilder;
@@ -28,14 +30,14 @@ public class AggregateExpressionBuilder {
         AGGREGATE_MAPPING.put("VAR_SAMP", "$varianceSamp");
     }
 
-    public AggregateExpressionBuilder(SqlToMongoIR ir, GenerationContext context) {
-        this.exprBuilder = new ExpressionBuilder(ir, context);
+    public AggregateExpressionBuilder(ExpressionBuilder exprBuilder) {
+        this.exprBuilder = exprBuilder;
     }
 
     /**
      * Построение агрегатного выражения из узла AST
      */
-    public String build(Node node) {
+    public String build(Node node, SqlToMongoIR ir, GenerationContext context) {
         if (node == null || node.getChildren() == null) return "";
 
         String functionName = "";
@@ -51,7 +53,7 @@ public class AggregateExpressionBuilder {
                     distinct = true;
                 }
             } else {
-                argument = exprBuilder.build(child);
+                argument = exprBuilder.build(child, ir, context);
             }
         }
 

@@ -1,23 +1,29 @@
 package sql.to.mongodb.translator.service.parser;
 
+import org.springframework.stereotype.Component;
 import sql.to.mongodb.translator.service.enums.Category;
 import sql.to.mongodb.translator.service.scanner.Token;
 
 import java.util.List;
 import java.util.Stack;
 
+@Component
 public class PushdownAutomaton {
 
     private List<Token> tokens;
     private int curTokenPos;
     private Token curToken;
-    private Stack<Token> stack;
+    private final Stack<Token> stack;
 
-    public PushdownAutomaton(List<Token> tokens) {
+    public PushdownAutomaton() {
+        stack = new Stack<>();
+    }
+
+    public void init(List<Token> tokens) {
 
         this.tokens = tokens;
         curTokenPos = 0;
-        stack = new Stack<>();
+        stack.clear();
 
     }
 

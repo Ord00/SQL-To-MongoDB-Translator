@@ -2,6 +2,8 @@ package sql.to.mongodb.translator;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
 import sql.to.mongodb.translator.service.scanner.Scanner;
 import sql.to.mongodb.translator.service.scanner.Token;
 import sql.to.mongodb.translator.service.enums.Category;
@@ -9,8 +11,11 @@ import sql.to.mongodb.translator.service.enums.Category;
 import java.util.ArrayList;
 import java.util.List;
 
+@SpringBootTest
 public class ScannerTest {
-    private static final Scanner scanner = new Scanner();
+
+    @Autowired
+    private Scanner scanner;
 
     @Test
     public void testSubqueryWithIn() {

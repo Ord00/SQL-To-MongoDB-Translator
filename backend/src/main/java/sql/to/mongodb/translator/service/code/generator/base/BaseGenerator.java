@@ -5,13 +5,8 @@ import sql.to.mongodb.translator.service.intermediate.representation.SqlToMongoI
 
 public abstract class BaseGenerator {
 
-    protected final SqlToMongoIR ir;
-    protected final GenerationContext context;
-
-    public BaseGenerator(SqlToMongoIR ir, GenerationContext context) {
-        this.ir = ir;
-        this.context = context;
-    }
+    protected SqlToMongoIR ir;
+    protected GenerationContext context;
 
     protected String indent() {
         return "  ".repeat(context.getIndentLevel());
@@ -25,5 +20,6 @@ public abstract class BaseGenerator {
         context.setIndentLevel(context.getIndentLevel() - 1);
     }
 
-    public abstract String generate() throws CodeGenerationException;
+    public abstract String generate(SqlToMongoIR ir,
+                                    GenerationContext context) throws CodeGenerationException;
 }

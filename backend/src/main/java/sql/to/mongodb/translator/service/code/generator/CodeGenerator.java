@@ -1,5 +1,6 @@
 package sql.to.mongodb.translator.service.code.generator;
 
+import org.springframework.stereotype.Component;
 import sql.to.mongodb.translator.service.code.generator.base.GenerationContext;
 import sql.to.mongodb.translator.service.code.generator.conditions.ConditionTranslator;
 import sql.to.mongodb.translator.service.code.generator.helpers.FormatHelper;
@@ -21,10 +22,11 @@ import static sql.to.mongodb.translator.service.code.generator.conditions.Condit
  * Генератор MongoDB кода из промежуточного представления
  * Поддерживает два режима: find() и aggregate()
  */
-public class MongoCodeGenerator {
+@Component
+public class CodeGenerator {
 
-    private final SqlToMongoIR ir;
-    private final GenerationContext context;
+    private SqlToMongoIR ir;
+    private GenerationContext context;
     private final StringBuilder output = new StringBuilder();
 
     // Генераторы стадий
@@ -36,21 +38,27 @@ public class MongoCodeGenerator {
     private final SubqueryStageGenerator subqueryGenerator;
     private final ConditionTranslator conditionTranslator;
 
-    public MongoCodeGenerator(SqlToMongoIR ir) {
+    public CodeGenerator(MatchStageGenerator matchGenerator,
+                         LookupStageGenerator lookupGenerator,
+                         GroupStageGenerator groupGenerator,
+                         ProjectStageGenerator projectGenerator,
+                         SortStageGenerator sortGenerator,
+                         SubqueryStageGenerator subqueryGenerator,
+                         ConditionTranslator conditionTranslator) {
+        this.matchGenerator = matchGenerator;
+        this.lookupGenerator = lookupGenerator;
+        this.groupGenerator = groupGenerator;
+        this.projectGenerator = projectGenerator;
+        this.sortGenerator = sortGenerator;
+        this.subqueryGenerator = subqueryGenerator;
+        this.conditionTranslator = conditionTranslator;
+    }
+
+    public String generate(SqlToMongoIR ir) throws CodeGenerationException {
+
         this.ir = ir;
         this.context = new GenerationContext();
 
-        // Инициализация генераторов
-        this.matchGenerator = new MatchStageGenerator(ir, context);
-        this.lookupGenerator = new LookupStageGenerator(ir, context);
-        this.groupGenerator = new GroupStageGenerator(ir, context);
-        this.projectGenerator = new ProjectStageGenerator(ir, context);
-        this.sortGenerator = new SortStageGenerator(ir, context);
-        this.subqueryGenerator = new SubqueryStageGenerator(ir, context);
-        this.conditionTranslator = new ConditionTranslator(ir, context);
-    }
-
-    public String generate() throws CodeGenerationException {
         output.setLength(0);
 
         if (ir == null) {
@@ -116,13 +124,13 @@ public class MongoCodeGenerator {
         List<String> stages = new ArrayList<>();
 
         // Коррелированные подзапросы
-        String correlatedSubqueries = subqueryGenerator.generate();
+        String correlatedSubqueries = subqueryGenerator.generate(ir, context);
         if (!correlatedSubqueries.isEmpty()) {
             stages.add(correlatedSubqueries);
         }
 
         // $match (WHERE)
-        String matchStage = matchGenerator.generate();
+        String matchStage = matchGenerator.generate(ir, context);
         if (!matchStage.isEmpty()) {
             stages.add(matchStage);
         }
@@ -145,7 +153,7 @@ public class MongoCodeGenerator {
         stages.addAll(subqueryGenerator.generateProjectionSubqueries());
 
         // $group
-        String groupStage = groupGenerator.generate();
+        String groupStage = groupGenerator.generate(ir, context);
         if (!groupStage.isEmpty()) {
             stages.add(groupStage);
         }
@@ -157,7 +165,7 @@ public class MongoCodeGenerator {
         }
 
         // $sort
-        String sortStage = sortGenerator.generate();
+        String sortStage = sortGenerator.generate(ir, context);
         if (!sortStage.isEmpty()) {
             stages.add(sortStage);
         }
@@ -171,7 +179,7 @@ public class MongoCodeGenerator {
         }
 
         // $project
-        String projectStage = projectGenerator.generate();
+        String projectStage = projectGenerator.generate(ir, context);
         if (!projectStage.isEmpty()) {
             stages.add(projectStage);
         }
@@ -189,7 +197,7 @@ public class MongoCodeGenerator {
 
         context.setUseAggregationSyntax(false);
         ConditionNode root = combineConditions(ir.getWhereConditions());
-        String result = conditionTranslator.translate(root);
+        String result = conditionTranslator.translate(root, context);
         context.setUseAggregationSyntax(false);
 
         return result;
