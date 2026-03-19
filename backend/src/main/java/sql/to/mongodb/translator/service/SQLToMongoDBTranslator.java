@@ -1,6 +1,6 @@
 package sql.to.mongodb.translator.service;
 
-import sql.to.mongodb.translator.service.code.generator.CodeGenerator;
+import sql.to.mongodb.translator.service.code.generator.MongoCodeGenerator;
 import sql.to.mongodb.translator.service.exceptions.CodeGenerationException;
 import sql.to.mongodb.translator.service.exceptions.SQLParseException;
 import sql.to.mongodb.translator.service.exceptions.SQLScanException;
@@ -38,9 +38,9 @@ public class SQLToMongoDBTranslator {
             SqlToMongoIRGenerator irGenerator = new SqlToMongoIRGenerator(parseTree);
             SqlToMongoIR sqlToMongoIR = irGenerator.generateIR();
 
-            CodeGenerator codeGenerator = new CodeGenerator(sqlToMongoIR);
+            MongoCodeGenerator mongoCodeGenerator = new MongoCodeGenerator(sqlToMongoIR);
 
-            return codeGenerator.generate();
+            return mongoCodeGenerator.generate();
 
         } catch (SQLScanException | SQLParseException e) {
 
