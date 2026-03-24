@@ -2,11 +2,10 @@ package sql.to.mongodb.translator.service.intermediate.representation;
 
 import lombok.Getter;
 import lombok.Setter;
-import sql.to.mongodb.translator.service.intermediate.representation.details.ConditionNode;
-import sql.to.mongodb.translator.service.intermediate.representation.details.JoinInfo;
-import sql.to.mongodb.translator.service.intermediate.representation.details.ProjectionField;
-import sql.to.mongodb.translator.service.intermediate.representation.details.SortField;
-import sql.to.mongodb.translator.service.intermediate.representation.details.SubqueryInfo;
+import sql.to.mongodb.translator.service.intermediate.representation.model.condition.ConditionNode;
+import sql.to.mongodb.translator.service.intermediate.representation.model.join.JoinInfo;
+import sql.to.mongodb.translator.service.intermediate.representation.model.projection.Projectionable;
+import sql.to.mongodb.translator.service.intermediate.representation.model.SortField;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -31,11 +30,10 @@ public class SqlToMongoIR {
 
     private String mainCollection;
     private List<JoinInfo> joins = new ArrayList<>();
-    private List<SubqueryInfo> subqueries = new ArrayList<>();
     private List<ConditionNode> whereConditions = new ArrayList<>();
     private List<ConditionNode> havingConditions = new ArrayList<>();
     private List<String> groupByFields = new ArrayList<>();
-    private List<ProjectionField> projectionFields = new ArrayList<>();
+    private List<Projectionable> projectionFields = new ArrayList<>();
     private Map<String, String> aliases = new HashMap<>();
 
     private Integer limit;

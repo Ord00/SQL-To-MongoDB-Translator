@@ -5,6 +5,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import sql.to.mongodb.translator.service.exceptions.SQLParseException;
+import sql.to.mongodb.translator.service.exceptions.SQLScanException;
 import sql.to.mongodb.translator.service.parser.Parser;
 import sql.to.mongodb.translator.service.scanner.Scanner;
 import sql.to.mongodb.translator.service.scanner.Token;
@@ -70,13 +72,15 @@ public class ParserTest {
     }
 
     @Test
-    public void testAllWithSpecificTable() {
+    public void testAllWithSpecificTable() throws SQLScanException, SQLParseException {
         scanner.tryAnalyse("""
                 SELECT CompetitionName, Race.*
                 FROM Competition LEFT JOIN Race
                 	 ON Id_competition = Competition""", tokens, errors);
 
         Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(tokens, errors));
+
+        System.out.println(parser.tryAnalyse(tokens, errors));
     }
 
     @Test

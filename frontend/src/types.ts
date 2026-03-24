@@ -14,4 +14,6 @@ export interface ASTNode {
 export interface AnalysisResult {
     lexicalResult: Token[];
     syntaxResult: ASTNode;
+    ir: never; // Можно уточнить тип при необходимости
+    mongoCode: string;
 }

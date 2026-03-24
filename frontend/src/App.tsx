@@ -1,20 +1,18 @@
 import { useState } from 'react';
 import { Code2, Database, FileSearch, Maximize2, Minimize2, Braces } from 'lucide-react';
 import SyntaxTree from './SyntaxTree';
-import {AnalysisResult} from "./types.ts";
+import { AnalysisResult } from "./types.ts";
 
 function App() {
     const [sqlQuery, setSqlQuery] = useState('');
     const [activeTab, setActiveTab] = useState<'lexical' | 'syntax' | 'code' | null>(null);
     const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
-    const [mongoCode, setMongoCode] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [isTreeFullscreen, setIsTreeFullscreen] = useState(false);
 
     const analyseSql = async () => {
         setActiveTab(null);
         setError(null);
-        setMongoCode(null);
         try {
             const response = await fetch('http://localhost:8080/api/analyse', {
                 method: 'POST',
@@ -29,7 +27,7 @@ function App() {
                 throw new Error(errorText);
             }
 
-            const result = await response.json();
+            const result: AnalysisResult = await response.json();
             setAnalysisResult(result);
             setError(null);
         } catch (err) {
@@ -38,35 +36,9 @@ function App() {
         }
     };
 
-    const generateMongoCode = async () => {
-        setActiveTab('code');
-        setError(null);
-        try {
-            const response = await fetch('http://localhost:8080/api/generate', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ sqlQuery }),
-            });
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(errorText);
-            }
-
-            const result = await response.text();
-            setMongoCode(result);
-            setError(null);
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Произошла ошибка');
-            setMongoCode(null);
-        }
-    };
-
     const copyToClipboard = () => {
-        if (mongoCode) {
-            navigator.clipboard.writeText(mongoCode);
+        if (analysisResult?.mongoCode) {
+            navigator.clipboard.writeText(analysisResult.mongoCode);
         }
     };
 
@@ -114,25 +86,26 @@ function App() {
                                 Синтаксический анализ
                             </button>
                             <button
-                                onClick={generateMongoCode}
+                                onClick={() => analysisResult && setActiveTab('code')}
                                 className={`flex items-center gap-2 px-4 py-2 rounded-md transition-colors ${
                                     activeTab === 'code'
                                         ? 'bg-amber-600 text-white'
                                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                                 }`}
+                                disabled={!analysisResult}
                             >
                                 <Braces size={20} />
                                 Генерация кода
                             </button>
                         </div>
                         <div className="h-[calc(100%-68px)] overflow-auto p-6">
-              <textarea
-                  id="sqlQuery"
-                  value={sqlQuery}
-                  onChange={(e) => setSqlQuery(e.target.value)}
-                  className="w-full h-full min-h-[300px] px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
-                  placeholder="Введите SQL-запрос здесь..."
-              />
+                            <textarea
+                                id="sqlQuery"
+                                value={sqlQuery}
+                                onChange={(e) => setSqlQuery(e.target.value)}
+                                className="w-full h-full min-h-[300px] px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                                placeholder="Введите SQL-запрос здесь..."
+                            />
                         </div>
                     </div>
 
@@ -147,7 +120,7 @@ function App() {
                                                 'Сгенерированный MongoDB код'}
                                 </h2>
                                 <div className="flex gap-2">
-                                    {activeTab === 'code' && mongoCode && (
+                                    {activeTab === 'code' && analysisResult?.mongoCode && (
                                         <button
                                             onClick={copyToClipboard}
                                             className="text-gray-500 hover:text-gray-700 p-1"
@@ -214,11 +187,11 @@ function App() {
                                     <SyntaxTree data={analysisResult.syntaxResult} isFullscreen={isTreeFullscreen} />
                                 )}
 
-                                {activeTab === 'code' && mongoCode && (
+                                {activeTab === 'code' && analysisResult?.mongoCode && (
                                     <div className="bg-gray-900 rounded-lg p-4 font-mono text-sm">
-                          <pre className="text-green-400 overflow-x-auto whitespace-pre-wrap">
-                            {mongoCode}
-                          </pre>
+                                        <pre className="text-green-400 overflow-x-auto whitespace-pre-wrap">
+                                            {analysisResult.mongoCode}
+                                        </pre>
                                     </div>
                                 )}
                             </div>
