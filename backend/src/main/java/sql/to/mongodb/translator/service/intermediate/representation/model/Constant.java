@@ -2,13 +2,11 @@ package sql.to.mongodb.translator.service.intermediate.representation.model;
 
 import lombok.Getter;
 import lombok.Setter;
-import sql.to.mongodb.translator.service.intermediate.representation.model.expression.Expressionable;
-
-import static sql.to.mongodb.translator.service.intermediate.representation.model.Constant.ConstantType.NULL;
+import sql.to.mongodb.translator.service.intermediate.representation.model.expression.Arithmetical;
 
 @Getter
 @Setter
-public class Constant implements Expressionable {
+public class Constant implements Arithmetical {
     private ConstantType type;
     private Object value;
 

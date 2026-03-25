@@ -3,18 +3,13 @@ package sql.to.mongodb.translator.service.intermediate.representation.model.expr
 import lombok.Getter;
 import lombok.Setter;
 
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
 @Getter
 @Setter
-public class UnaryOperation extends ArithmeticExpression {
-    private ArithmeticExpression operand;
+public class UnaryOperation implements Arithmetical {
+    private Arithmetical operand;
     private UnaryOperator operator;
 
-    public UnaryOperation(ArithmeticExpression operand,
+    public UnaryOperation(Arithmetical operand,
                           UnaryOperator unaryOperator) {
         this.operand = operand;
         this.operator = unaryOperator;

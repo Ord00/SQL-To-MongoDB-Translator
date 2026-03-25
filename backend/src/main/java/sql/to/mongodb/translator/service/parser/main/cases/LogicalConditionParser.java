@@ -175,8 +175,8 @@ public class LogicalConditionParser {
 
                 analyseSubquery(pA, children);
 
-               checkToken(pA,
-                       t -> t.lexeme.equals(")"),
+                checkToken(pA,
+                        t -> t.lexeme.equals(")"),
                         ")");
 
                 if (pA.peek().category == Category.PROC_NUMBER) {
@@ -250,7 +250,7 @@ public class LogicalConditionParser {
             Token prevAttribute = pA.peek();
 
             if ((curAttribute.category == Category.NUMBER || curAttribute.category == Category.LITERAL)
-            && curAttribute.category != prevAttribute.category) {
+                    && curAttribute.category != prevAttribute.category) {
 
                 throw new SQLParseException(String.format("Invalid attribute of \"IN\" on %d!",
                         pA.curTokenPos()));
@@ -262,7 +262,7 @@ public class LogicalConditionParser {
 
             pA.push(curAttribute);
             newIsCheckStack = true;
-            
+
         }
 
         return switch (pA.curToken().lexeme) {

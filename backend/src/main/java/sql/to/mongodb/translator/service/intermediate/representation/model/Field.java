@@ -2,11 +2,11 @@ package sql.to.mongodb.translator.service.intermediate.representation.model;
 
 import lombok.Getter;
 import lombok.Setter;
-import sql.to.mongodb.translator.service.intermediate.representation.model.expression.Expressionable;
+import sql.to.mongodb.translator.service.intermediate.representation.model.expression.Arithmetical;
 
 @Getter
 @Setter
-public class Field implements Expressionable {
+public class Field implements Arithmetical {
 
     protected String source;
     protected String field;

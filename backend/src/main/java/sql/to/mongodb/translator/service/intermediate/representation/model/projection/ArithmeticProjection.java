@@ -2,11 +2,11 @@ package sql.to.mongodb.translator.service.intermediate.representation.model.proj
 
 import lombok.Getter;
 import lombok.Setter;
-import sql.to.mongodb.translator.service.intermediate.representation.model.expression.ArithmeticExpression;
+import sql.to.mongodb.translator.service.intermediate.representation.model.expression.Arithmetical;
 
 @Getter
 @Setter
 public class ArithmeticProjection implements Projectionable {
-    private ArithmeticExpression expression;
+    private Arithmetical expression;
     private String alias;
 }

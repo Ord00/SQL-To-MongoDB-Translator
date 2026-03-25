@@ -4,36 +4,32 @@ import org.springframework.stereotype.Component;
 import sql.to.mongodb.translator.service.enums.Category;
 import sql.to.mongodb.translator.service.enums.NodeType;
 import sql.to.mongodb.translator.service.exceptions.IRGenerationException;
-import sql.to.mongodb.translator.service.intermediate.representation.details.*;
+import sql.to.mongodb.translator.service.intermediate.representation.model.*;
+import sql.to.mongodb.translator.service.intermediate.representation.model.condition.*;
+import sql.to.mongodb.translator.service.intermediate.representation.model.expression.*;
+import sql.to.mongodb.translator.service.intermediate.representation.model.join.*;
+import sql.to.mongodb.translator.service.intermediate.representation.model.projection.*;
+import sql.to.mongodb.translator.service.intermediate.representation.processors.ConditionExtractor;
+import sql.to.mongodb.translator.service.intermediate.representation.processors.ExpressionBuilder;
+import sql.to.mongodb.translator.service.intermediate.representation.processors.CaseBuilder;
 import sql.to.mongodb.translator.service.parser.Node;
 import sql.to.mongodb.translator.service.scanner.Token;
 
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.Stack;
+import java.util.*;
 
-import static sql.to.mongodb.translator.service.intermediate.representation.ConditionExtractor.ConditionContext;
-import static sql.to.mongodb.translator.service.intermediate.representation.details.SubqueryInfo.SubqueryType.SCALAR;
+import static sql.to.mongodb.translator.service.intermediate.representation.processors.ConditionExtractor.ConditionContext;
 
 @Component
 public class IRGenerator {
 
-    // Состояние для текущего запроса
     private SqlToMongoIR ir;
     private final Map<String, String> tableAliases = new HashMap<>();
     private final Stack<String> currentContext = new Stack<>();
     private final Set<String> outerTables = new HashSet<>();
     private ConditionExtractor conditionExtractor;
 
-    // Для вложенных подзапросов
     private final ThreadLocal<GenerationState> currentState = new ThreadLocal<>();
 
-    /**
-     * Инициализация генератора для нового запроса
-     */
     private void initialize(Set<String> parentTables, Map<String, String> parentAliases) {
         this.ir = new SqlToMongoIR();
         this.tableAliases.clear();
@@ -43,28 +39,19 @@ public class IRGenerator {
         this.conditionExtractor = new ConditionExtractor(parentTables, parentAliases);
     }
 
-    /**
-     * Генерация IR для корневого запроса
-     */
     public SqlToMongoIR generateIR(Node astRoot) throws IRGenerationException {
         return generateIR(astRoot, new HashSet<>(), new HashMap<>());
     }
 
-    /**
-     * Генерация IR для запроса (основной или подзапрос)
-     */
     public SqlToMongoIR generateIR(Node astRoot,
                                    Set<String> outerTables,
                                    Map<String, String> outerAliases) throws IRGenerationException {
 
-        // Сохраняем предыдущее состояние для восстановления
         GenerationState previousState = currentState.get();
 
         try {
-            // Инициализация для нового запроса
             initialize(outerTables, outerAliases);
 
-            // Создаем новое состояние для текущего потока
             currentState.set(new GenerationState(
                     ir,
                     tableAliases,
@@ -80,7 +67,6 @@ public class IRGenerator {
             return ir;
 
         } finally {
-            // Восстанавливаем предыдущее состояние
             if (previousState != null) {
                 currentState.set(previousState);
             } else {
@@ -92,17 +78,14 @@ public class IRGenerator {
     private void processQueryNode(Node queryNode) throws IRGenerationException {
         if (queryNode.getChildren() == null) return;
 
-        // Сначала собираем информацию о таблицах
         processQueryStructure(queryNode);
 
-        // Затем обрабатываем остальные части
         for (Node child : queryNode.getChildren()) {
             processQueryChild(child);
         }
     }
 
     private void processQueryStructure(Node queryNode) throws IRGenerationException {
-        // Находим FROM и таблицы
         for (Node child : queryNode.getChildren()) {
             if (child.getNodeType() == NodeType.TABLE_NAMES) {
                 processTableNames(child);
@@ -113,33 +96,25 @@ public class IRGenerator {
 
     private void processQueryChild(Node child) throws IRGenerationException {
         switch (child.getNodeType()) {
-            case TERMINAL:
-                processTerminalInQuery(child);
-                break;
-            case COLUMN_NAMES:
-                processColumnNames(child);
-                break;
-            case LOGICAL_CONDITION:
-                processConditionNode(child);
-                break;
-            case GROUP_BY:
-                processGroupBy(child);
-                break;
-            case ORDER_BY:
-                processOrderBy(child);
-                break;
-            case CASE:
-                processCaseExpression(child);
-                break;
-            case AGGREGATE:
-                processAggregateFunction(child);
-                break;
-            case ARITHMETIC_EXP:
-                processArithmeticExpression(child);
-                break;
-            case QUERY:
-                processSubqueryInProjection(child);
-                break;
+            case TERMINAL -> processTerminalInQuery(child);
+            case COLUMN_NAMES -> processColumnNames(child);
+            case LOGICAL_CONDITION -> processConditionNode(child);
+            case GROUP_BY -> processGroupBy(child);
+            case ORDER_BY -> processOrderBy(child);
+            default -> {
+                if (child.getChildren() != null) {
+                    for (Node grandChild : child.getChildren()) {
+                        processQueryChild(grandChild);
+                    }
+                }
+            }
+        }
+    }
+
+    private void processTerminalInQuery(Node terminalNode) {
+        Token token = terminalNode.getToken();
+        if (token != null && "DISTINCT".equals(token.lexeme)) {
+            ir.setDistinct(true);
         }
     }
 
@@ -149,21 +124,12 @@ public class IRGenerator {
 
         if (extractedCondition != null) {
             switch (context) {
-                case WHERE:
-                    ir.getWhereConditions().add(extractedCondition);
-                    break;
-                case HAVING:
+                case WHERE -> ir.getWhereConditions().add(extractedCondition);
+                case HAVING -> {
                     ir.getHavingConditions().add(extractedCondition);
                     ir.setHasHaving(true);
-                    break;
-                case JOIN:
-                    // JOIN условия обрабатываются в processTableNames
-                    break;
-                case SELECT:
-                    ProjectionField field = new ProjectionField();
-                    field.setField(extractedCondition.toString());
-                    ir.getProjectionFields().add(field);
-                    break;
+                }
+                default -> {}
             }
         }
     }
@@ -175,109 +141,264 @@ public class IRGenerator {
         return ConditionContext.WHERE;
     }
 
-    private void processTerminalInQuery(Node terminalNode) {
-        Token token = terminalNode.getToken();
-        if (token == null) return;
-
-        if (token.lexeme.equals("DISTINCT")) {
-            ir.setDistinct(true);
-        }
-    }
-
     private void processColumnNames(Node columnNamesNode) throws IRGenerationException {
         if (columnNamesNode.getChildren() == null) return;
 
         for (Node child : columnNamesNode.getChildren()) {
-            switch (child.getNodeType()) {
-                case TERMINAL:
-                    if ("*".equals(child.getToken().lexeme)) {
-                        processAllColumns();
-                    }
-                    break;
-                case IDENTIFIER:
-                    processIdentifier(child);
-                    break;
-                case AGGREGATE:
-                    processAggregateFunction(child);
-                    break;
-                case ARITHMETIC_EXP:
-                    processArithmeticExpression(child);
-                    break;
-                case CASE:
-                    processCaseExpression(child);
-                    break;
-                case LOGICAL_CHECK:
-                    processLogicalCheckInSelect(child);
-                    break;
-                case QUERY:
-                    processSubqueryInProjection(child);
-                    break;
-            }
-        }
-    }
-
-    private void processLogicalCheckInSelect(Node logicalCheckNode) {
-        ConditionNode condition = conditionExtractor.extractCondition(logicalCheckNode);
-
-        if (condition != null) {
-            ProjectionField field = new ProjectionField();
-            field.setField(ExpressionBuilder.buildExpression(logicalCheckNode));
-            field.setAlias(extractAlias(logicalCheckNode));
-            ir.getProjectionFields().add(field);
-            ir.setHasComplexProjections(true);
+            processProjection(child);
         }
     }
 
     private void processAllColumns() {
         ProjectionField field = new ProjectionField();
         field.setField("*");
-
         if (!currentContext.isEmpty()) {
             field.setSource(currentContext.peek());
         }
-
         ir.getProjectionFields().add(field);
     }
 
-    private void processIdentifier(Node identifierNode) {
-        if (identifierNode.getChildren() == null || identifierNode.getChildren().size() < 2)
-            return;
+    private void processProjection(Node projectionNode) throws IRGenerationException {
+        switch (projectionNode.getNodeType()) {
+            case TERMINAL -> {
+                if ("*".equals(projectionNode.getToken().lexeme)) {
+                    processAllColumns();
+                } else {
+                    ProjectionField field = new ProjectionField();
+                    field.setField(ExpressionBuilder.buildExpressionString(projectionNode));
+                    field.setAlias(extractAlias(projectionNode));
+                    ir.getProjectionFields().add(field);
+                }
+            }
+            case IDENTIFIER -> {
+                ProjectionField field = ExpressionBuilder.buildFieldProjection(projectionNode);
+                ir.getProjectionFields().add(field);
+            }
+            case AGGREGATE -> {
+                AggregateProjection aggregate = ExpressionBuilder.buildAggregateFunction(projectionNode);
+                if (aggregate != null) {
+                    ir.getProjectionFields().add(aggregate);
+                    ir.setHasAggregateFunctions(true);
+                }
+            }
+            case ARITHMETIC_EXP -> {
+                Arithmetical arithmeticExpr = ExpressionBuilder.buildArithmeticExpression(projectionNode);
+                if (arithmeticExpr != null) {
+                    ArithmeticProjection arithmetic = new ArithmeticProjection();
+                    arithmetic.setExpression(arithmeticExpr);
+                    arithmetic.setAlias(extractAlias(projectionNode));
+                    ir.getProjectionFields().add(arithmetic);
+                    ir.setHasComplexProjections(true);
+                }
+            }
+            case CASE -> {
+                CaseExpression caseExpr = parseCaseExpression(projectionNode);
+                if (caseExpr != null) {
+                    CaseProjection caseProjection = new CaseProjection();
+                    caseProjection.setExpression(caseExpr);
+                    caseProjection.setAlias(extractAlias(projectionNode));
+                    ir.getProjectionFields().add(caseProjection);
+                    ir.setHasComplexProjections(true);
+                }
+            }
+            case QUERY -> processSubqueryInProjection(projectionNode);
+            default -> {
+                ProjectionField defaultField = new ProjectionField();
+                defaultField.setField(ExpressionBuilder.buildExpressionString(projectionNode));
+                defaultField.setAlias(extractAlias(projectionNode));
+                ir.getProjectionFields().add(defaultField);
+            }
+        }
+    }
 
-        String tableOrAlias = extractTokenValue(identifierNode.getChildren().get(0));
-        String column = extractTokenValue(identifierNode.getChildren().get(1));
-
-        ProjectionField field = new ProjectionField();
-        field.setSource(tableOrAlias);
-        field.setField(column);
-
-        if (identifierNode.getChildren().size() > 2) {
-            String alias = extractAliasFromChildren(identifierNode.getChildren());
-            field.setAlias(alias);
+    private CaseExpression parseCaseExpression(Node caseNode) throws IRGenerationException {
+        if (caseNode.getChildren() == null) {
+            return null;
         }
 
-        ir.getProjectionFields().add(field);
+        CaseBuilder builder = CaseBuilder.create();
+
+        List<Node> children = caseNode.getChildren();
+        int i = 0;
+
+        // Пропускаем "CASE"
+        while (i < children.size()) {
+            Node child = children.get(i);
+            if (child.getNodeType() == NodeType.TERMINAL &&
+                    "CASE".equals(child.getToken().lexeme)) {
+                i++;
+                break;
+            }
+            i++;
+        }
+
+        // Обрабатываем WHEN ... THEN ... пары
+        while (i < children.size()) {
+            Node child = children.get(i);
+
+            if (child.getNodeType() == NodeType.TERMINAL) {
+                String lexeme = child.getToken().lexeme;
+
+                if ("WHEN".equals(lexeme)) {
+                    i++;
+                    Expressionable condition = parseConditionFromNodes(children, i);
+
+                    while (i < children.size()) {
+                        Node condNode = children.get(i);
+                        if (condNode.getNodeType() == NodeType.TERMINAL &&
+                                "THEN".equals(condNode.getToken().lexeme)) {
+                            i++;
+                            break;
+                        }
+                        i++;
+                    }
+
+                    Expressionable result = parseResultFromNodes(children, i);
+
+                    while (i < children.size()) {
+                        Node resNode = children.get(i);
+                        if (resNode.getNodeType() == NodeType.TERMINAL &&
+                                ("WHEN".equals(resNode.getToken().lexeme) ||
+                                        "ELSE".equals(resNode.getToken().lexeme) ||
+                                        "END".equals(resNode.getToken().lexeme))) {
+                            break;
+                        }
+                        i++;
+                    }
+
+                    if (condition != null && result != null) {
+                        builder.when(condition, result);
+                    }
+                    continue;
+
+                } else if ("ELSE".equals(lexeme)) {
+                    i++;
+                    Expressionable elseExpr = parseResultFromNodes(children, i);
+
+                    while (i < children.size()) {
+                        Node endNode = children.get(i);
+                        if (endNode.getNodeType() == NodeType.TERMINAL &&
+                                "END".equals(endNode.getToken().lexeme)) {
+                            i++;
+                            break;
+                        }
+                        i++;
+                    }
+
+                    if (elseExpr != null) {
+                        builder.otherwise(elseExpr);
+                    }
+                    break;
+
+                } else if ("END".equals(lexeme)) {
+                    i++;
+                    break;
+                }
+            }
+            i++;
+        }
+
+        return builder.build();
     }
 
-    private void processAggregateFunction(Node aggregateNode) {
-        ir.setHasAggregateFunctions(true);
-        ProjectionField field = extractAggregateInfo(aggregateNode);
-        ir.getProjectionFields().add(field);
+    private Expressionable parseConditionFromNodes(List<Node> nodes, int startIndex) {
+        if (startIndex >= nodes.size()) {
+            return null;
+        }
+
+        StringBuilder conditionBuilder = new StringBuilder();
+        int i = startIndex;
+
+        while (i < nodes.size()) {
+            Node node = nodes.get(i);
+
+            if (node.getNodeType() == NodeType.TERMINAL &&
+                    "THEN".equals(node.getToken().lexeme)) {
+                break;
+            }
+
+            String expr = ExpressionBuilder.buildExpressionString(node);
+            if (!expr.isEmpty()) {
+                conditionBuilder.append(expr).append(" ");
+            }
+            i++;
+        }
+
+        String conditionStr = conditionBuilder.toString().trim();
+        if (conditionStr.isEmpty()) {
+            return null;
+        }
+
+        return parseExpressionString(conditionStr);
     }
 
-    private void processArithmeticExpression(Node arithNode) {
-        ir.setHasComplexProjections(true);
-        ProjectionField field = new ProjectionField();
-        field.setField(ExpressionBuilder.buildExpression(arithNode));
-        field.setAlias(extractAlias(arithNode));
-        ir.getProjectionFields().add(field);
+    private Expressionable parseResultFromNodes(List<Node> nodes, int startIndex) {
+        if (startIndex >= nodes.size()) {
+            return null;
+        }
+
+        StringBuilder resultBuilder = new StringBuilder();
+        int i = startIndex;
+
+        while (i < nodes.size()) {
+            Node node = nodes.get(i);
+
+            if (node.getNodeType() == NodeType.TERMINAL) {
+                String lexeme = node.getToken().lexeme;
+                if ("WHEN".equals(lexeme) || "ELSE".equals(lexeme) || "END".equals(lexeme)) {
+                    break;
+                }
+            }
+
+            String expr = ExpressionBuilder.buildExpressionString(node);
+            if (!expr.isEmpty()) {
+                resultBuilder.append(expr).append(" ");
+            }
+            i++;
+        }
+
+        String resultStr = resultBuilder.toString().trim();
+        if (resultStr.isEmpty()) {
+            return null;
+        }
+
+        return parseExpressionString(resultStr);
     }
 
-    private void processCaseExpression(Node caseNode) {
-        ir.setHasComplexProjections(true);
-        ProjectionField field = new ProjectionField();
-        field.setField(ExpressionBuilder.buildExpression(caseNode));
-        field.setAlias(extractAlias(caseNode));
-        ir.getProjectionFields().add(field);
+    private Expressionable parseExpressionString(String expr) {
+        if (expr == null || expr.trim().isEmpty()) {
+            return null;
+        }
+
+        expr = expr.trim();
+
+        if (expr.startsWith("'") && expr.endsWith("'")) {
+            String value = expr.substring(1, expr.length() - 1);
+            return Constant.ofString(value);
+        }
+
+        try {
+            Double.parseDouble(expr);
+            return Constant.ofNumber(expr);
+        } catch (NumberFormatException e) {
+            // не число
+        }
+
+        if (expr.contains(".")) {
+            String[] parts = expr.split("\\.");
+            if (parts.length == 2) {
+                Field field = new Field();
+                field.setSource(parts[0]);
+                field.setField(parts[1]);
+                return field;
+            }
+        } else {
+            Field field = new Field();
+            field.setField(expr);
+            return field;
+        }
+
+        return null;
     }
 
     private void processGroupBy(Node groupByNode) {
@@ -303,7 +424,6 @@ public class IRGenerator {
         for (Node child : orderByNode.getChildren()) {
             if (child.getNodeType() == NodeType.TERMINAL) {
                 String lexeme = child.getToken().lexeme;
-
                 if ("ASC".equals(lexeme)) {
                     if (currentField != null) {
                         addSortField(currentField, true);
@@ -336,7 +456,7 @@ public class IRGenerator {
     private void addSortField(String field, boolean ascending) {
         SortField sortField = new SortField();
         sortField.setField(field);
-        sortField.setDirection(ascending ? "ASC" : "DESC");
+        sortField.setDirection(ascending);
         ir.getOrderBy().add(sortField);
     }
 
@@ -344,86 +464,139 @@ public class IRGenerator {
         if (tableNamesNode.getChildren() == null) return;
 
         JoinInfo currentJoin = null;
+        Joinable lastOperand = null;
 
-        for (int i = 0; i < tableNamesNode.getChildren().size(); i++) {
-            Node child = tableNamesNode.getChildren().get(i);
-
+        for (Node child : tableNamesNode.getChildren()) {
             switch (child.getNodeType()) {
-                case TABLE:
-                    TableInfo tableInfo = processTable(child);
+                case TABLE -> {
+                    Joinable operand = extractJoinableFromTable(child);
 
                     if (ir.getMainCollection() == null) {
-                        ir.setMainCollection(tableInfo.tableName);
-                        currentContext.push(tableInfo.alias != null ? tableInfo.alias : tableInfo.tableName);
-
-                        outerTables.add(tableInfo.tableName);
-                        if (tableInfo.alias != null) {
-                            tableAliases.put(tableInfo.alias, tableInfo.tableName);
-                            ir.getAliases().put(tableInfo.alias, tableInfo.tableName);
+                        if (operand instanceof JoinTable table) {
+                            ir.setMainCollection(table.getValue());
+                        } else if (operand instanceof JoinSubquery) {
+                            ir.setMainCollection("subquery");
                         }
+                        if (operand.getAlias() != null) {
+                            currentContext.push(operand.getAlias());
+                            tableAliases.put(operand.getAlias(), operand instanceof JoinTable t ? t.getValue() : "subquery");
+                            ir.getAliases().put(operand.getAlias(), operand instanceof JoinTable t ? t.getValue() : "subquery");
+                        } else {
+                            currentContext.push(operand instanceof JoinTable t ? t.getValue() : "subquery");
+                        }
+                        outerTables.add(operand instanceof JoinTable t ? t.getValue() : "subquery");
                     } else if (currentJoin != null) {
-                        currentJoin.setRightTable(tableInfo.tableName);
-                        currentJoin.setRightAlias(tableInfo.alias);
-
-                        if (tableInfo.alias != null) {
-                            tableAliases.put(tableInfo.alias, tableInfo.tableName);
-                        }
+                        currentJoin.setRight(operand);
                     }
-                    break;
-
-                case JOIN:
+                    lastOperand = operand;
+                }
+                case JOIN -> {
+                    if (currentJoin != null) {
+                        ir.getJoins().add(currentJoin);
+                    }
                     currentJoin = processJoin(child);
-                    ir.getJoins().add(currentJoin);
+                    if (lastOperand != null) {
+                        currentJoin.setLeft(lastOperand);
+                    }
                     ir.setHasJoins(true);
-                    break;
-
-                case LOGICAL_CONDITION:
+                }
+                case LOGICAL_CONDITION -> {
                     if (currentJoin != null) {
                         ConditionNode joinCondition = conditionExtractor.extractCondition(child);
                         currentJoin.setJoinCondition(joinCondition);
                     }
-                    break;
-
-                case QUERY:
-                    processSubqueryInFrom(child);
-                    break;
+                }
+                case QUERY -> {
+                    Joinable operand = processSubqueryAsJoinable(child);
+                    if (ir.getMainCollection() == null) {
+                        ir.setMainCollection("subquery");
+                        if (operand.getAlias() != null) {
+                            currentContext.push(operand.getAlias());
+                            tableAliases.put(operand.getAlias(), "subquery");
+                            ir.getAliases().put(operand.getAlias(), "subquery");
+                        }
+                    } else if (currentJoin != null) {
+                        currentJoin.setRight(operand);
+                    }
+                    lastOperand = operand;
+                }
             }
+        }
+
+        if (currentJoin != null) {
+            ir.getJoins().add(currentJoin);
         }
     }
 
-    private TableInfo processTable(Node tableNode) {
-        TableInfo info = new TableInfo();
-
-        if (tableNode.getChildren() == null) return info;
+    private Joinable extractJoinableFromTable(Node tableNode) throws IRGenerationException {
+        String tableName = null;
+        String alias = null;
 
         for (Node child : tableNode.getChildren()) {
             if (child.getNodeType() == NodeType.TERMINAL) {
                 Token token = child.getToken();
                 if (token.category == Category.IDENTIFIER) {
-                    if (info.tableName == null) {
-                        info.tableName = token.lexeme;
+                    if (tableName == null) {
+                        tableName = token.lexeme;
                     } else {
-                        info.alias = token.lexeme;
+                        alias = token.lexeme;
                     }
                 }
             } else if (child.getNodeType() == NodeType.QUERY) {
-                info.isSubquery = true;
-                info.tableName = "subquery_" + System.identityHashCode(child);
+                return processSubqueryAsJoinable(child);
             }
         }
-        return info;
+
+        JoinTable joinTable = new JoinTable();
+        joinTable.setValue(tableName);
+        joinTable.setAlias(alias);
+        return joinTable;
+    }
+
+    private Joinable processSubqueryAsJoinable(Node subqueryNode) throws IRGenerationException {
+        String alias = extractAlias(subqueryNode);
+
+        SqlToMongoIR subqueryIR = generateIR(subqueryNode, outerTables, tableAliases);
+
+        JoinSubquery joinSubquery = new JoinSubquery();
+        joinSubquery.setSubqueryIR(subqueryIR);
+        joinSubquery.setAlias(alias);
+
+        if (alias != null) {
+            tableAliases.put(alias, "subquery");
+            ir.getAliases().put(alias, "subquery");
+            currentContext.push(alias);
+        }
+
+        return joinSubquery;
     }
 
     private JoinInfo processJoin(Node joinNode) {
         JoinInfo joinInfo = new JoinInfo();
 
-        if (joinNode.getChildren() != null && !joinNode.getChildren().isEmpty()) {
-            Node firstChild = joinNode.getChildren().getFirst();
-            if (firstChild.getNodeType() == NodeType.TERMINAL) {
-                String joinType = firstChild.getToken().lexeme;
+        if (joinNode.getChildren() == null || joinNode.getChildren().isEmpty()) {
+            // По умолчанию INNER JOIN
+            joinInfo.setType(JoinInfo.JoinType.INNER);
+            return joinInfo;
+        }
 
-                switch (joinType) {
+        // Проверяем детей узла JOIN
+        // Структура может быть:
+        // 1. [TERMINAL|(KEYWORD|JOIN)] - для INNER JOIN или просто JOIN
+        // 2. [TERMINAL|(KEYWORD|RIGHT), TERMINAL|(KEYWORD|JOIN)] - для RIGHT JOIN
+        // 3. [TERMINAL|(KEYWORD|LEFT), TERMINAL|(KEYWORD|JOIN)] - для LEFT JOIN
+
+        for (Node child : joinNode.getChildren()) {
+            if (child.getNodeType() == NodeType.TERMINAL) {
+                String lexeme = child.getToken().lexeme;
+
+                switch (lexeme) {
                     case "JOIN":
+                        // Если до JOIN не было LEFT/RIGHT, то это INNER JOIN
+                        if (joinInfo.getType() == null) {
+                            joinInfo.setType(JoinInfo.JoinType.INNER);
+                        }
+                        break;
                     case "INNER":
                         joinInfo.setType(JoinInfo.JoinType.INNER);
                         break;
@@ -433,88 +606,117 @@ public class IRGenerator {
                     case "RIGHT":
                         joinInfo.setType(JoinInfo.JoinType.RIGHT);
                         break;
+                    case "FULL":
+                        joinInfo.setType(JoinInfo.JoinType.FULL);
+                        break;
+                    case "CROSS":
+                        joinInfo.setType(JoinInfo.JoinType.CROSS);
+                        break;
+                    default:
+                        break;
                 }
             }
         }
+
+        // Если тип не определен, по умолчанию INNER
+        if (joinInfo.getType() == null) {
+            joinInfo.setType(JoinInfo.JoinType.INNER);
+        }
+
         return joinInfo;
     }
 
-    private SubqueryInfo processSubquery(Node subqueryNode) throws IRGenerationException {
-        ir.setHasSubqueries(true);
-
-        // Используем текущий экземпляр для подзапроса с новыми внешними таблицами
+    private void processSubqueryInProjection(Node subqueryNode) throws IRGenerationException {
         SqlToMongoIR subqueryIR = generateIR(subqueryNode, outerTables, tableAliases);
 
-        SubqueryInfo subqueryInfo = new SubqueryInfo();
-        subqueryInfo.setType(SCALAR);
-        subqueryInfo.setSubqueryIR(subqueryIR);
+        SubqueryProjection projection = new SubqueryProjection();
+        projection.setSubqueryIR(subqueryIR);
+        projection.setAlias(extractAlias(subqueryNode));
 
-        List<CorrelationCondition> correlations = conditionExtractor.extractCorrelations(subqueryNode);
-        if (!correlations.isEmpty()) {
-            ir.setHasCorrelatedSubqueries(true);
-            subqueryInfo.setCorrelations(correlations);
-        }
-
-        return subqueryInfo;
+        ir.getProjectionFields().add(projection);
+        ir.setHasSubqueries(true);
+        ir.setHasComplexProjections(true);
     }
 
-    private void processSubqueryInProjection(Node subqueryNode) throws IRGenerationException {
-        SubqueryInfo subqueryInfo = processSubquery(subqueryNode);
-        if (subqueryInfo != null) {
-            ir.getSubqueries().add(subqueryInfo);
+    private void processSubqueryInCondition(Node subqueryNode, ConditionNode parentCondition) throws IRGenerationException {
+        SqlToMongoIR subqueryIR = generateIR(subqueryNode, outerTables, tableAliases);
 
-            ProjectionField field = new ProjectionField();
-            field.setField("subquery_" + ir.getSubqueries().size());
-            field.setAlias(extractAlias(subqueryNode));
-            ir.getProjectionFields().add(field);
-            ir.setHasComplexProjections(true);
+        Subquery subquery = new Subquery();
+        subquery.setSubqueryIR(subqueryIR);
+
+        // Извлекаем корреляции
+        List<CorrelationCondition> correlations = conditionExtractor.extractCorrelations(subqueryNode);
+
+        if (parentCondition instanceof ExistsCondition exists) {
+            CorrelationSubquery correlationSubquery = new CorrelationSubquery();
+            correlationSubquery.setSubqueryIR(subqueryIR);
+            correlationSubquery.getCorrelations().addAll(correlations);
+            exists.setSubquery(correlationSubquery);
+            if (!correlations.isEmpty()) {
+                ir.setHasCorrelatedSubqueries(true);
+            }
+        } else if (parentCondition instanceof InCondition inCondition) {
+            inCondition.getInValues().add(subquery);
+            if (!correlations.isEmpty()) {
+                ir.setHasCorrelatedSubqueries(true);
+            }
+        } else if (parentCondition instanceof Comparison comparison) {
+            // Сравнение с подзапросом
+            comparison.setValue(subquery);
+            if (!correlations.isEmpty()) {
+                ir.setHasCorrelatedSubqueries(true);
+            }
         }
+
+        ir.setHasSubqueries(true);
     }
 
     private void processSubqueryInFrom(Node subqueryNode) throws IRGenerationException {
-        String alias = extractSubqueryAlias(subqueryNode);
+        String alias = extractAlias(subqueryNode);
+        if (alias == null) {
+            throw new IRGenerationException("Subquery in FROM must have an alias");
+        }
 
-        SubqueryInfo subqueryInfo = processSubquery(subqueryNode);
-        if (subqueryInfo != null && alias != null) {
-            tableAliases.put(alias, "subquery");
-            ir.getAliases().put(alias, "subquery");
-            currentContext.push(alias);
+        SqlToMongoIR subqueryIR = generateIR(subqueryNode, outerTables, tableAliases);
+
+        JoinSubquery subqueryOperand = new JoinSubquery();
+        subqueryOperand.setSubqueryIR(subqueryIR);
+        subqueryOperand.setAlias(alias);
+
+        if (ir.getMainCollection() == null) {
+            ir.setMainCollection("subquery");
+        } else {
+            JoinInfo join = new JoinInfo();
+            join.setType(JoinInfo.JoinType.INNER);
+            join.setRight(subqueryOperand);
+            ir.getJoins().add(join);
+            ir.setHasJoins(true);
+        }
+
+        tableAliases.put(alias, "subquery");
+        ir.getAliases().put(alias, "subquery");
+        currentContext.push(alias);
+    }
+
+    private void processSubqueriesInCondition(Node node, ConditionNode parentCondition) {
+        if (node == null) return;
+
+        if (node.getNodeType() == NodeType.QUERY) {
+            try {
+                processSubqueryInCondition(node, parentCondition);
+            } catch (IRGenerationException e) {
+                // логирование ошибки
+            }
+        }
+
+        if (node.getChildren() != null) {
+            for (Node child : node.getChildren()) {
+                processSubqueriesInCondition(child, parentCondition);
+            }
         }
     }
 
     // ========== Вспомогательные методы ==========
-
-    private ProjectionField extractAggregateInfo(Node aggregateNode) {
-        ProjectionField field = new ProjectionField();
-        String functionCall = ExpressionBuilder.buildExpression(aggregateNode);
-
-        field.setField(functionCall);
-        field.setAlias(extractAlias(aggregateNode));
-
-        if (!currentContext.isEmpty()) {
-            field.setSource(currentContext.peek());
-        }
-
-        return field;
-    }
-
-    private String extractTokenValue(Node node) {
-        if (node.getNodeType() == NodeType.TERMINAL && node.getToken() != null) {
-            return node.getToken().lexeme;
-        }
-        return null;
-    }
-
-    private String extractIdentifierString(Node identifierNode) {
-        if (identifierNode.getChildren() == null || identifierNode.getChildren().size() < 2) {
-            return "";
-        }
-
-        String table = extractTokenValue(identifierNode.getChildren().get(0));
-        String column = extractTokenValue(identifierNode.getChildren().get(1));
-
-        return table + "." + column;
-    }
 
     private String extractAlias(Node node) {
         if (node.getChildren() != null) {
@@ -533,26 +735,11 @@ public class IRGenerator {
         return null;
     }
 
-    private String extractAliasFromChildren(List<Node> children) {
-        for (int i = 0; i < children.size(); i++) {
-            Node child = children.get(i);
-            if (child.getNodeType() == NodeType.TERMINAL &&
-                    "AS".equals(child.getToken().lexeme) &&
-                    i + 1 < children.size()) {
-                Node aliasNode = children.get(i + 1);
-                if (aliasNode.getNodeType() == NodeType.TERMINAL) {
-                    return aliasNode.getToken().lexeme;
-                }
-            }
-        }
-        return null;
-    }
-
     private String extractFieldFromGroupBy(Node node) {
         if (node.getNodeType() == NodeType.TERMINAL) {
             return node.getToken().lexeme;
         } else if (node.getNodeType() == NodeType.IDENTIFIER) {
-            return extractIdentifierString(node);
+            return ExpressionBuilder.buildIdentifierString(node);
         }
         return null;
     }
@@ -561,35 +748,23 @@ public class IRGenerator {
         return extractFieldFromGroupBy(node);
     }
 
-    private String extractSubqueryAlias(Node subqueryNode) {
-        return extractAlias(subqueryNode);
-    }
+    private record GenerationState(SqlToMongoIR ir,
+                                   Map<String, String> tableAliases,
+                                   Stack<String> currentContext,
+                                   Set<String> outerTables,
+                                   ConditionExtractor conditionExtractor) {
 
-    /**
-         * Класс для хранения состояния генерации в ThreadLocal
-         */
-        private record GenerationState(SqlToMongoIR ir,
-                                       Map<String, String> tableAliases,
-                                       Stack<String> currentContext,
-                                       Set<String> outerTables,
-                                       ConditionExtractor conditionExtractor) {
-            private GenerationState(SqlToMongoIR ir,
-                                    Map<String, String> tableAliases,
-                                    Stack<String> currentContext,
-                                    Set<String> outerTables,
-                                    ConditionExtractor conditionExtractor) {
-                this.ir = ir;
-                this.tableAliases = new HashMap<>(tableAliases);
-                this.currentContext = new Stack<>();
-                this.currentContext.addAll(currentContext);
-                this.outerTables = new HashSet<>(outerTables);
-                this.conditionExtractor = conditionExtractor;
-            }
+        private GenerationState(SqlToMongoIR ir,
+                                Map<String, String> tableAliases,
+                                Stack<String> currentContext,
+                                Set<String> outerTables,
+                                ConditionExtractor conditionExtractor) {
+            this.ir = ir;
+            this.tableAliases = new HashMap<>(tableAliases);
+            this.currentContext = new Stack<>();
+            this.currentContext.addAll(currentContext);
+            this.outerTables = new HashSet<>(outerTables);
+            this.conditionExtractor = conditionExtractor;
         }
-
-    private static class TableInfo {
-        String tableName;
-        String alias;
-        boolean isSubquery = false;
     }
 }

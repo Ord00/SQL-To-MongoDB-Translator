@@ -110,7 +110,10 @@ public class TableNamesParser {
 
             case "LEFT", "RIGHT" -> {
 
-                pA.getNextToken();
+                children.add(terminal(pA,
+                        t -> t.lexeme.equals(pA.curToken().lexeme),
+                        pA.curToken().lexeme));
+
                 if (pA.curToken().lexeme.equals("OUTER")) {
 
                     pA.getNextToken();

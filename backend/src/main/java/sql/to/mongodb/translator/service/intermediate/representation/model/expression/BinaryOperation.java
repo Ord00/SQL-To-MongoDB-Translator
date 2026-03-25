@@ -3,20 +3,15 @@ package sql.to.mongodb.translator.service.intermediate.representation.model.expr
 import lombok.Getter;
 import lombok.Setter;
 
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
 @Getter
 @Setter
-public class BinaryOperation extends ArithmeticExpression {
-    private ArithmeticExpression left;
-    private ArithmeticExpression right;
+public class BinaryOperation implements Arithmetical {
+    private Arithmetical left;
+    private Arithmetical right;
     private Operator operator;
 
-    public BinaryOperation(ArithmeticExpression left,
-                           ArithmeticExpression right,
+    public BinaryOperation(Arithmetical left,
+                           Arithmetical right,
                            Operator operator) {
         this.left = left;
         this.right = right;
