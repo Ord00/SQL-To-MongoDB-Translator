@@ -2,11 +2,9 @@ package sql.to.mongodb.translator.service.intermediate.representation.model.cond
 
 import lombok.Getter;
 import lombok.Setter;
-import sql.to.mongodb.translator.service.intermediate.representation.model.expression.Expressionable;
 
 @Getter
 @Setter
-public class NullCheck extends LeafNode {
-    private Expressionable operand;
+public class NullCheck extends OperandLeafNode {
     private boolean isNull;
 }

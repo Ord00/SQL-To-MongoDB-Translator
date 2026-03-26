@@ -174,7 +174,7 @@ public record ConditionExtractor(SqlToMongoIR ir,
         // Простое сравнение
         if (operands.size() >= 2) {
             Comparison comparison = new Comparison();
-            comparison.setField(operands.get(0));
+            comparison.setOperand(operands.get(0));
             comparison.setOperator(operator != null ? operator : "=");
             comparison.setValue(operands.get(1));
             return comparison;
@@ -212,7 +212,7 @@ public record ConditionExtractor(SqlToMongoIR ir,
         InCondition inCondition = new InCondition();
 
         if (leftOperand != null) {
-            inCondition.setLeftOperand(leftOperand);
+            inCondition.setOperand(leftOperand);
         }
 
         try {

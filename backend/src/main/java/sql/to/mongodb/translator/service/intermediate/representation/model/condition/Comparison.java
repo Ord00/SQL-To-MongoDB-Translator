@@ -6,8 +6,7 @@ import sql.to.mongodb.translator.service.intermediate.representation.model.expre
 
 @Getter
 @Setter
-public class Comparison extends LeafNode {
-    private Expressionable field;
+public class Comparison extends OperandLeafNode {
     private Expressionable value;
     private String operator;
 }
