@@ -2,6 +2,7 @@ package sql.to.mongodb.translator.service.intermediate.representation.processors
 
 import sql.to.mongodb.translator.service.enums.Category;
 import sql.to.mongodb.translator.service.enums.NodeType;
+import sql.to.mongodb.translator.service.intermediate.representation.IRGenerator;
 import sql.to.mongodb.translator.service.intermediate.representation.SqlToMongoIR;
 import sql.to.mongodb.translator.service.intermediate.representation.model.Constant;
 import sql.to.mongodb.translator.service.intermediate.representation.model.CorrelationCondition;
@@ -15,14 +16,19 @@ import sql.to.mongodb.translator.service.scanner.Token;
 import java.math.BigDecimal;
 import java.util.*;
 
-public record ConditionExtractor(Set<String> outerTables, Map<String, String> outerAliases) {
+public record ConditionExtractor(SqlToMongoIR ir,
+                                 Set<String> outerTables,
+                                 Map<String, String> outerAliases) {
 
-    public ConditionExtractor(Set<String> outerTables, Map<String, String> outerAliases) {
+    public ConditionExtractor(SqlToMongoIR ir,
+                              Set<String> outerTables,
+                              Map<String, String> outerAliases) {
+        this.ir = ir;
         this.outerTables = outerTables != null ? outerTables : new HashSet<>();
         this.outerAliases = outerAliases != null ? outerAliases : new HashMap<>();
     }
 
-    public ConditionNode extractCondition(Node logicalNode) {
+    public ConditionNode extractCondition(Node logicalNode, IRGenerator irGenerator) {
         if (logicalNode == null || logicalNode.getChildren() == null) {
             return null;
         }
@@ -32,7 +38,7 @@ public record ConditionExtractor(Set<String> outerTables, Map<String, String> ou
 
         for (Node child : logicalNode.getChildren()) {
             if (child.getNodeType() == NodeType.LOGICAL_CHECK) {
-                ConditionNode condition = extractLogicalCheck(child);
+                ConditionNode condition = extractLogicalCheck(child, irGenerator);
                 if (condition != null) {
                     subConditions.add(condition);
                 }
@@ -60,7 +66,7 @@ public record ConditionExtractor(Set<String> outerTables, Map<String, String> ou
         return combined;
     }
 
-    private ConditionNode extractLogicalCheck(Node logicalCheckNode) {
+    private ConditionNode extractLogicalCheck(Node logicalCheckNode, IRGenerator irGenerator) {
         if (logicalCheckNode.getChildren() == null) {
             return null;
         }
@@ -73,6 +79,7 @@ public record ConditionExtractor(Set<String> outerTables, Map<String, String> ou
         String operator = null;
         List<Expressionable> operands = new ArrayList<>();
         Node subqueryNode = null;
+        Expressionable leftOperand = null;
 
         for (Node child : logicalCheckNode.getChildren()) {
             if (child.getNodeType() == NodeType.TERMINAL) {
@@ -110,47 +117,41 @@ public record ConditionExtractor(Set<String> outerTables, Map<String, String> ou
                 Expressionable expr = buildExpression(child);
                 if (expr != null) {
                     operands.add(expr);
+                    if (leftOperand == null && !hasIn && !hasExists) {
+                        leftOperand = expr;
+                    }
                 }
             }
         }
 
         // EXISTS (SELECT ...)
-        if (hasExists) {
-            ExistsCondition exists = new ExistsCondition();
-            exists.setExists(!hasNot);
-            // Подзапрос будет установлен позже через setSubqueryForExists
-            return exists;
+        if (hasExists && subqueryNode != null && irGenerator != null) {
+            return createExistsCondition(subqueryNode, irGenerator);
         }
 
-        // IN (value1, value2, ...) или IN (SELECT ...)
-        if (hasIn) {
-            InCondition inCondition = new InCondition();
+        // IN (SELECT ...)
+        if (hasIn && subqueryNode != null && irGenerator != null) {
+            return createInConditionWithSubquery(subqueryNode, irGenerator, leftOperand);
+        }
 
-            if (subqueryNode != null) {
-                // Это IN (SELECT ...) - подзапрос
-                // Создаем Subquery, который будет заполнен позже
-                Subquery subquery = new Subquery();
-                // subquery.setSubqueryIR(...) будет установлено позже
-                inCondition.getInValues().add(subquery);
-            } else {
-                // IN с константами/полями
-                for (Expressionable expr : operands) {
-                    // Фильтруем только поддерживаемые типы
-                    if (isSupportedForIn(expr)) {
-                        inCondition.getInValues().add(expr);
-                    }
+        // IN (value1, value2, ...)
+        if (hasIn && !operands.isEmpty()) {
+            InCondition inCondition = new InCondition();
+            for (Expressionable expr : operands) {
+                if (isSupportedForIn(expr)) {
+                    inCondition.getInValues().add(expr);
                 }
             }
-
             return inCondition;
         }
 
         // BETWEEN start AND end
         if (hasBetween && operands.size() >= 2) {
             BetweenCondition between = new BetweenCondition();
+            between.setOperand(operands.getFirst());
 
-            Expressionable startExpr = operands.get(0);
-            Expressionable endExpr = operands.get(1);
+            Expressionable startExpr = operands.size() > 1 ? operands.get(1) : null;
+            Expressionable endExpr = operands.size() > 2 ? operands.get(2) : null;
 
             if (startExpr instanceof Constant c1 && c1.getType() == Constant.ConstantType.NUMBER) {
                 between.setStart(new BigDecimal(c1.getValue().toString()));
@@ -170,7 +171,7 @@ public record ConditionExtractor(Set<String> outerTables, Map<String, String> ou
             return nullCheck;
         }
 
-        // Простое сравнение: field = value, field > value и т.д.
+        // Простое сравнение
         if (operands.size() >= 2) {
             Comparison comparison = new Comparison();
             comparison.setField(operands.get(0));
@@ -182,14 +183,69 @@ public record ConditionExtractor(Set<String> outerTables, Map<String, String> ou
         return null;
     }
 
-    /**
-     * Проверка, поддерживается ли выражение в IN
-     * В вашей логике: Constant, Field, Subquery
-     */
+    private ExistsCondition createExistsCondition(Node subqueryNode, IRGenerator irGenerator) {
+        ExistsCondition exists = new ExistsCondition();
+        exists.setExists(true);
+
+        try {
+            SqlToMongoIR subqueryIR = irGenerator.generateIR(subqueryNode, outerTables, outerAliases);
+            CorrelationSubquery correlationSubquery = new CorrelationSubquery();
+            correlationSubquery.setSubqueryIR(subqueryIR);
+
+            List<CorrelationCondition> correlations = extractCorrelations(subqueryNode);
+            correlationSubquery.getCorrelations().addAll(correlations);
+
+            exists.setSubquery(correlationSubquery);
+
+            if (ir != null && !correlations.isEmpty()) {
+                ir.setHasCorrelatedSubqueries(true);
+                ir.setHasSubqueries(true);
+            }
+        } catch (Exception e) {
+            // Логирование ошибки
+        }
+
+        return exists;
+    }
+
+    private InCondition createInConditionWithSubquery(Node subqueryNode, IRGenerator irGenerator, Expressionable leftOperand) {
+        InCondition inCondition = new InCondition();
+
+        if (leftOperand != null) {
+            inCondition.setLeftOperand(leftOperand);
+        }
+
+        try {
+            SqlToMongoIR subqueryIR = irGenerator.generateIR(subqueryNode, outerTables, outerAliases);
+            List<CorrelationCondition> correlations = extractCorrelations(subqueryNode);
+
+            if (!correlations.isEmpty()) {
+                CorrelationSubquery correlationSubquery = new CorrelationSubquery();
+                correlationSubquery.setSubqueryIR(subqueryIR);
+                correlationSubquery.getCorrelations().addAll(correlations);
+                inCondition.getInValues().add(correlationSubquery);
+
+                if (ir != null) {
+                    ir.setHasCorrelatedSubqueries(true);
+                }
+            } else {
+                Subquery subquery = new Subquery();
+                subquery.setSubqueryIR(subqueryIR);
+                inCondition.getInValues().add(subquery);
+            }
+
+            if (ir != null) {
+                ir.setHasSubqueries(true);
+            }
+        } catch (Exception e) {
+            // Логирование ошибки
+        }
+
+        return inCondition;
+    }
+
     private boolean isSupportedForIn(Expressionable expr) {
-        return expr instanceof Constant ||
-                expr instanceof Field ||
-                expr instanceof Subquery;
+        return expr instanceof Constant || expr instanceof Field || expr instanceof Subquery;
     }
 
     private Expressionable buildExpression(Node node) {
@@ -208,22 +264,14 @@ public record ConditionExtractor(Set<String> outerTables, Map<String, String> ou
                     return Constant.ofString(token.lexeme);
                 }
                 break;
-
             case IDENTIFIER:
                 return buildField(node);
-
             case ARITHMETIC_EXP:
-                // ArithmeticExpression не поддерживается в IN по вашей логике
-                return null;
-
             case CASE:
-                // CaseExpression не поддерживается в IN по вашей логике
                 return null;
-
             case QUERY:
                 return new Subquery();
         }
-
         return null;
     }
 
@@ -231,43 +279,6 @@ public record ConditionExtractor(Set<String> outerTables, Map<String, String> ou
         return ExpressionBuilder.buildField(identifierNode);
     }
 
-    /**
-     * Создание и заполнение подзапроса для EXISTS
-     */
-    public ExistsCondition createExistsCondition(Node subqueryNode, SqlToMongoIR subqueryIR) {
-        ExistsCondition exists = new ExistsCondition();
-        exists.setExists(true);
-
-        CorrelationSubquery correlationSubquery = new CorrelationSubquery();
-        correlationSubquery.setSubqueryIR(subqueryIR);
-
-        // Извлекаем корреляции
-        List<CorrelationCondition> correlations = extractCorrelations(subqueryNode);
-        correlationSubquery.getCorrelations().addAll(correlations);
-
-        exists.setSubquery(correlationSubquery);
-        return exists;
-    }
-
-    /**
-     * Создание и заполнение подзапроса для IN
-     */
-    public InCondition createInConditionWithSubquery(Node subqueryNode, SqlToMongoIR subqueryIR, Expressionable leftOperand) {
-        InCondition inCondition = new InCondition();
-
-        // Создаем подзапрос с корреляциями
-        Subquery subquery = new Subquery();
-        subquery.setSubqueryIR(subqueryIR);
-
-        // Добавляем подзапрос в inValues
-        inCondition.getInValues().add(subquery);
-
-        return inCondition;
-    }
-
-    /**
-     * Извлечение корреляций для подзапроса
-     */
     public List<CorrelationCondition> extractCorrelations(Node subqueryNode) {
         CorrelationAnalyzer analyzer = new CorrelationAnalyzer();
         analyzer.analyzeForCorrelations(subqueryNode, outerTables, outerAliases);

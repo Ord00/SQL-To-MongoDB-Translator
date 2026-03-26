@@ -192,6 +192,10 @@ public class ExpressionBuilder {
     }
 
     private static String buildArithmeticExpressionString(Node arithNode) {
+        return getString(arithNode);
+    }
+
+    private static String getString(Node arithNode) {
         StringBuilder sb = new StringBuilder();
         if (arithNode.getChildren() != null) {
             for (Node child : arithNode.getChildren()) {
@@ -249,16 +253,7 @@ public class ExpressionBuilder {
     }
 
     private static String buildLogicalCheckString(Node logicalCheckNode) {
-        StringBuilder sb = new StringBuilder();
-        if (logicalCheckNode.getChildren() != null) {
-            for (Node child : logicalCheckNode.getChildren()) {
-                String expr = buildExpressionString(child);
-                if (!expr.isEmpty()) {
-                    sb.append(expr).append(" ");
-                }
-            }
-        }
-        return sb.toString().trim();
+        return getString(logicalCheckNode);
     }
 
     private static List<Object> extractTokens(Node arithNode) {
@@ -291,20 +286,7 @@ public class ExpressionBuilder {
     }
 
     private static String extractAlias(Node node) {
-        if (node.getChildren() != null) {
-            for (int i = 0; i < node.getChildren().size(); i++) {
-                Node child = node.getChildren().get(i);
-                if (child.getNodeType() == NodeType.TERMINAL &&
-                        "AS".equals(child.getToken().lexeme) &&
-                        i + 1 < node.getChildren().size()) {
-                    Node aliasNode = node.getChildren().get(i + 1);
-                    if (aliasNode.getNodeType() == NodeType.TERMINAL) {
-                        return aliasNode.getToken().lexeme;
-                    }
-                }
-            }
-        }
-        return null;
+        return getString(node);
     }
 
     /**

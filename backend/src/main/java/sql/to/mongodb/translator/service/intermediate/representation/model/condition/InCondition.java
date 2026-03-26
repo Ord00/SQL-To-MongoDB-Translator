@@ -10,5 +10,6 @@ import java.util.List;
 @Getter
 @Setter
 public class InCondition extends LeafNode {
+    private Expressionable leftOperand;
     private List<Expressionable> inValues = new ArrayList<>();
 }

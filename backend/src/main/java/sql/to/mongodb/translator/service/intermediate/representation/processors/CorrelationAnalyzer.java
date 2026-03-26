@@ -193,6 +193,14 @@ public class CorrelationAnalyzer {
 
         // Извлекаем таблицу и поле из внешнего идентификатора
         String[] outerParts = outerIdentifier.split("\\.");
+        CorrelationCondition correlation = getCorrelationCondition(operator, outerParts, innerIdentifier);
+
+        if (containsCorrelation(correlation)) {
+            correlations.add(correlation);
+        }
+    }
+
+    private static CorrelationCondition getCorrelationCondition(String operator, String[] outerParts, String innerIdentifier) {
         String outerTable = outerParts[0];
         String outerColumn = outerParts.length > 1 ? outerParts[1] : outerParts[0];
 
@@ -208,10 +216,7 @@ public class CorrelationAnalyzer {
         innerField.setField(innerColumn);
 
         CorrelationCondition correlation = new CorrelationCondition(outerField, innerField, operator);
-
-        if (containsCorrelation(correlation)) {
-            correlations.add(correlation);
-        }
+        return correlation;
     }
 
     private String extractTablePart(Node identifierNode) {
@@ -241,10 +246,10 @@ public class CorrelationAnalyzer {
             if (existing.getOuterField().toString().equals(newCorrelation.getOuterField().toString())
                     && existing.getInnerField().toString().equals(newCorrelation.getInnerField().toString())
                     && existing.getOperator().equals(newCorrelation.getOperator())) {
-                return false;
+                return true; // Исправлено: если найден, возвращаем true
             }
         }
-        return true;
+        return false; // Если не найден, возвращаем false
     }
 
     public List<CorrelationCondition> extractCorrelationConditions(Node whereNode) {

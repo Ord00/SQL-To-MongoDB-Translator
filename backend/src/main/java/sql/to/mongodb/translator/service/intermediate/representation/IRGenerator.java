@@ -36,7 +36,7 @@ public class IRGenerator {
         this.currentContext.clear();
         this.outerTables.clear();
         this.outerTables.addAll(parentTables);
-        this.conditionExtractor = new ConditionExtractor(parentTables, parentAliases);
+        this.conditionExtractor = new ConditionExtractor(ir, parentTables, parentAliases);
     }
 
     public SqlToMongoIR generateIR(Node astRoot) throws IRGenerationException {
@@ -120,7 +120,9 @@ public class IRGenerator {
 
     private void processConditionNode(Node conditionNode) {
         ConditionContext context = determineConditionContext();
-        ConditionNode extractedCondition = conditionExtractor.extractCondition(conditionNode);
+
+        // Передаем this (IRGenerator) в extractCondition
+        ConditionNode extractedCondition = conditionExtractor.extractCondition(conditionNode, this);
 
         if (extractedCondition != null) {
             switch (context) {
@@ -279,7 +281,6 @@ public class IRGenerator {
                         Node endNode = children.get(i);
                         if (endNode.getNodeType() == NodeType.TERMINAL &&
                                 "END".equals(endNode.getToken().lexeme)) {
-                            i++;
                             break;
                         }
                         i++;
@@ -291,7 +292,6 @@ public class IRGenerator {
                     break;
 
                 } else if ("END".equals(lexeme)) {
-                    i++;
                     break;
                 }
             }
@@ -464,7 +464,6 @@ public class IRGenerator {
         if (tableNamesNode.getChildren() == null) return;
 
         JoinInfo currentJoin = null;
-        Joinable lastOperand = null;
 
         for (Node child : tableNamesNode.getChildren()) {
             switch (child.getNodeType()) {
@@ -488,21 +487,14 @@ public class IRGenerator {
                     } else if (currentJoin != null) {
                         currentJoin.setRight(operand);
                     }
-                    lastOperand = operand;
                 }
                 case JOIN -> {
-                    if (currentJoin != null) {
-                        ir.getJoins().add(currentJoin);
-                    }
                     currentJoin = processJoin(child);
-                    if (lastOperand != null) {
-                        currentJoin.setLeft(lastOperand);
-                    }
                     ir.setHasJoins(true);
                 }
                 case LOGICAL_CONDITION -> {
                     if (currentJoin != null) {
-                        ConditionNode joinCondition = conditionExtractor.extractCondition(child);
+                        ConditionNode joinCondition = conditionExtractor.extractCondition(child, this);
                         currentJoin.setJoinCondition(joinCondition);
                     }
                 }
@@ -518,7 +510,6 @@ public class IRGenerator {
                     } else if (currentJoin != null) {
                         currentJoin.setRight(operand);
                     }
-                    lastOperand = operand;
                 }
             }
         }
@@ -638,87 +629,13 @@ public class IRGenerator {
         ir.setHasComplexProjections(true);
     }
 
-    private void processSubqueryInCondition(Node subqueryNode, ConditionNode parentCondition) throws IRGenerationException {
-        SqlToMongoIR subqueryIR = generateIR(subqueryNode, outerTables, tableAliases);
-
-        Subquery subquery = new Subquery();
-        subquery.setSubqueryIR(subqueryIR);
-
-        // Извлекаем корреляции
-        List<CorrelationCondition> correlations = conditionExtractor.extractCorrelations(subqueryNode);
-
-        if (parentCondition instanceof ExistsCondition exists) {
-            CorrelationSubquery correlationSubquery = new CorrelationSubquery();
-            correlationSubquery.setSubqueryIR(subqueryIR);
-            correlationSubquery.getCorrelations().addAll(correlations);
-            exists.setSubquery(correlationSubquery);
-            if (!correlations.isEmpty()) {
-                ir.setHasCorrelatedSubqueries(true);
-            }
-        } else if (parentCondition instanceof InCondition inCondition) {
-            inCondition.getInValues().add(subquery);
-            if (!correlations.isEmpty()) {
-                ir.setHasCorrelatedSubqueries(true);
-            }
-        } else if (parentCondition instanceof Comparison comparison) {
-            // Сравнение с подзапросом
-            comparison.setValue(subquery);
-            if (!correlations.isEmpty()) {
-                ir.setHasCorrelatedSubqueries(true);
-            }
-        }
-
-        ir.setHasSubqueries(true);
-    }
-
-    private void processSubqueryInFrom(Node subqueryNode) throws IRGenerationException {
-        String alias = extractAlias(subqueryNode);
-        if (alias == null) {
-            throw new IRGenerationException("Subquery in FROM must have an alias");
-        }
-
-        SqlToMongoIR subqueryIR = generateIR(subqueryNode, outerTables, tableAliases);
-
-        JoinSubquery subqueryOperand = new JoinSubquery();
-        subqueryOperand.setSubqueryIR(subqueryIR);
-        subqueryOperand.setAlias(alias);
-
-        if (ir.getMainCollection() == null) {
-            ir.setMainCollection("subquery");
-        } else {
-            JoinInfo join = new JoinInfo();
-            join.setType(JoinInfo.JoinType.INNER);
-            join.setRight(subqueryOperand);
-            ir.getJoins().add(join);
-            ir.setHasJoins(true);
-        }
-
-        tableAliases.put(alias, "subquery");
-        ir.getAliases().put(alias, "subquery");
-        currentContext.push(alias);
-    }
-
-    private void processSubqueriesInCondition(Node node, ConditionNode parentCondition) {
-        if (node == null) return;
-
-        if (node.getNodeType() == NodeType.QUERY) {
-            try {
-                processSubqueryInCondition(node, parentCondition);
-            } catch (IRGenerationException e) {
-                // логирование ошибки
-            }
-        }
-
-        if (node.getChildren() != null) {
-            for (Node child : node.getChildren()) {
-                processSubqueriesInCondition(child, parentCondition);
-            }
-        }
-    }
-
     // ========== Вспомогательные методы ==========
 
     private String extractAlias(Node node) {
+        return getString(node);
+    }
+
+    public static String getString(Node node) {
         if (node.getChildren() != null) {
             for (int i = 0; i < node.getChildren().size(); i++) {
                 Node child = node.getChildren().get(i);
