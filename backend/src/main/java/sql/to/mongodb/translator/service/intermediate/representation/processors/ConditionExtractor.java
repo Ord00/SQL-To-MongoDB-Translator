@@ -142,7 +142,9 @@ public record ConditionExtractor(SqlToMongoIR ir,
     /**
      * Первичное выражение - это либо условие в скобках, либо атомарное условие
      */
-    private ConditionNode parsePrimaryExpression(List<Object> tokens, int[] pos, IRGenerator irGenerator) {
+    private ConditionNode parsePrimaryExpression(List<Object> tokens,
+                                                 int[] pos,
+                                                 IRGenerator irGenerator) {
         if (pos[0] >= tokens.size()) {
             return null;
         }

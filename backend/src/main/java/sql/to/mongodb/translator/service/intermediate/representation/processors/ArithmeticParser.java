@@ -33,7 +33,7 @@ public class ArithmeticParser {
         OPERATOR_MAPPING.put("%", BinaryOperation.Operator.MOD);
     }
 
-    Arithmetical parse() {
+    public Arithmetical parse() {
         return parseExpression();
     }
 
