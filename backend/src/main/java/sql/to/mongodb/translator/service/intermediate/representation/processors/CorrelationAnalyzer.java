@@ -125,16 +125,16 @@ public class CorrelationAnalyzer {
         return fields;
     }
 
-    private boolean checkIdentifierForCorrelation(Node identifierNode) {
+    private void checkIdentifierForCorrelation(Node identifierNode) {
         if (identifierNode.getChildren() == null || identifierNode.getChildren().size() < 2) {
-            return false;
+            return;
         }
 
         String tableOrAlias = extractTablePart(identifierNode);
         String column = extractColumnPart(identifierNode);
 
         if (tableOrAlias == null || column == null) {
-            return false;
+            return;
         }
 
         // Проверяем, является ли таблица/алиас внешним
@@ -165,9 +165,7 @@ public class CorrelationAnalyzer {
             if (containsCorrelation(correlation)) {
                 correlations.add(correlation);
             }
-            return true;
         }
-        return false;
     }
 
     /**
@@ -193,6 +191,16 @@ public class CorrelationAnalyzer {
 
         // Извлекаем таблицу и поле из внешнего идентификатора
         String[] outerParts = outerIdentifier.split("\\.");
+        CorrelationCondition correlation = getCorrelationCondition(operator, outerParts, innerIdentifier);
+
+        if (containsCorrelation(correlation)) {
+            correlations.add(correlation);
+        }
+    }
+
+    private static CorrelationCondition getCorrelationCondition(String operator,
+                                                                String[] outerParts,
+                                                                String innerIdentifier) {
         String outerTable = outerParts[0];
         String outerColumn = outerParts.length > 1 ? outerParts[1] : outerParts[0];
 
@@ -207,11 +215,7 @@ public class CorrelationAnalyzer {
         Field innerField = new Field();
         innerField.setField(innerColumn);
 
-        CorrelationCondition correlation = new CorrelationCondition(outerField, innerField, operator);
-
-        if (containsCorrelation(correlation)) {
-            correlations.add(correlation);
-        }
+        return new CorrelationCondition(outerField, innerField, operator);
     }
 
     private String extractTablePart(Node identifierNode) {

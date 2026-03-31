@@ -28,44 +28,153 @@ public record ConditionExtractor(SqlToMongoIR ir,
         this.outerAliases = outerAliases != null ? outerAliases : new HashMap<>();
     }
 
+    /**
+     * Извлечение условия с учетом приоритетов операторов и скобок
+     * Использует алгоритм рекурсивного спуска
+     */
     public ConditionNode extractCondition(Node logicalNode, IRGenerator irGenerator) {
         if (logicalNode == null || logicalNode.getChildren() == null) {
             return null;
         }
 
-        List<ConditionNode> subConditions = new ArrayList<>();
-        LinkNode.LinkType combineType = null;
+        // Преобразуем AST в линейную последовательность токенов
+        List<Object> tokens = linearizeCondition(logicalNode);
 
-        for (Node child : logicalNode.getChildren()) {
-            if (child.getNodeType() == NodeType.LOGICAL_CHECK) {
-                ConditionNode condition = extractLogicalCheck(child, irGenerator);
-                if (condition != null) {
-                    subConditions.add(condition);
-                }
-            } else if (child.getNodeType() == NodeType.TERMINAL) {
-                String lexeme = child.getToken().lexeme;
-                if ("AND".equals(lexeme)) {
-                    combineType = LinkNode.LinkType.AND;
-                } else if ("OR".equals(lexeme)) {
-                    combineType = LinkNode.LinkType.OR;
-                }
+        // Парсим с учетом приоритетов
+        return parseCondition(tokens, irGenerator);
+    }
+
+    /**
+     * Преобразование AST условия в линейную последовательность токенов
+     */
+    private List<Object> linearizeCondition(Node logicalNode) {
+        List<Object> tokens = new ArrayList<>();
+        linearizeRecursive(logicalNode, tokens);
+        return tokens;
+    }
+
+    private void linearizeRecursive(Node node, List<Object> tokens) {
+        if (node == null) return;
+
+        if (node.getNodeType() == NodeType.LOGICAL_CHECK) {
+            // LOGICAL_CHECK - это атомарное условие, сохраняем его как узел
+            tokens.add(node);
+        } else if (node.getNodeType() == NodeType.TERMINAL) {
+            String lexeme = node.getToken().lexeme;
+            if ("AND".equals(lexeme) || "OR".equals(lexeme)) {
+                tokens.add(lexeme);
+            } else if ("(".equals(lexeme) || ")".equals(lexeme)) {
+                tokens.add(lexeme);
+            }
+        } else if (node.getChildren() != null) {
+            for (Node child : node.getChildren()) {
+                linearizeRecursive(child, tokens);
             }
         }
+    }
 
-        if (subConditions.isEmpty()) {
+    /**
+     * Парсинг условий с учетом приоритетов операторов
+     * Грамматика:
+     * Expression -> OrExpression
+     * OrExpression -> AndExpression { 'OR' AndExpression }
+     * AndExpression -> PrimaryExpression { 'AND' PrimaryExpression }
+     * PrimaryExpression -> '(' Expression ')' | LOGICAL_CHECK
+     */
+    private ConditionNode parseCondition(List<Object> tokens, IRGenerator irGenerator) {
+        if (tokens.isEmpty()) {
             return null;
         }
 
-        if (subConditions.size() == 1) {
-            return subConditions.getFirst();
-        }
-
-        LinkNode combined = new LinkNode();
-        combined.setType(combineType != null ? combineType : LinkNode.LinkType.AND);
-        combined.getChildren().addAll(subConditions);
-        return combined;
+        return parseOrExpression(tokens, new int[]{0}, irGenerator);
     }
 
+    /**
+     * OR имеет наименьший приоритет
+     */
+    private ConditionNode parseOrExpression(List<Object> tokens, int[] pos, IRGenerator irGenerator) {
+        ConditionNode left = parseAndExpression(tokens, pos, irGenerator);
+
+        while (pos[0] < tokens.size()) {
+            Object token = tokens.get(pos[0]);
+            if (!"OR".equals(token)) {
+                break;
+            }
+            pos[0]++; // пропускаем OR
+
+            ConditionNode right = parseAndExpression(tokens, pos, irGenerator);
+
+            LinkNode orNode = new LinkNode();
+            orNode.setType(LinkNode.LinkType.OR);
+            orNode.getChildren().add(left);
+            orNode.getChildren().add(right);
+            left = orNode;
+        }
+
+        return left;
+    }
+
+    /**
+     * AND имеет средний приоритет
+     */
+    private ConditionNode parseAndExpression(List<Object> tokens, int[] pos, IRGenerator irGenerator) {
+        ConditionNode left = parsePrimaryExpression(tokens, pos, irGenerator);
+
+        while (pos[0] < tokens.size()) {
+            Object token = tokens.get(pos[0]);
+            if (!"AND".equals(token)) {
+                break;
+            }
+            pos[0]++; // пропускаем AND
+
+            ConditionNode right = parsePrimaryExpression(tokens, pos, irGenerator);
+
+            LinkNode andNode = new LinkNode();
+            andNode.setType(LinkNode.LinkType.AND);
+            andNode.getChildren().add(left);
+            andNode.getChildren().add(right);
+            left = andNode;
+        }
+
+        return left;
+    }
+
+    /**
+     * Первичное выражение - это либо условие в скобках, либо атомарное условие
+     */
+    private ConditionNode parsePrimaryExpression(List<Object> tokens, int[] pos, IRGenerator irGenerator) {
+        if (pos[0] >= tokens.size()) {
+            return null;
+        }
+
+        Object token = tokens.get(pos[0]);
+
+        // Обработка скобок
+        if ("(".equals(token)) {
+            pos[0]++; // пропускаем '('
+            ConditionNode expr = parseOrExpression(tokens, pos, irGenerator);
+
+            // Ожидаем закрывающую скобку
+            if (pos[0] < tokens.size()
+                    && tokens.get(pos[0]) instanceof String
+                    && ")".equals(tokens.get(pos[0]))) {
+                pos[0]++; // пропускаем ')'
+            }
+            return expr;
+        }
+
+        // Атомарное условие (LOGICAL_CHECK)
+        if (token instanceof Node node && node.getNodeType() == NodeType.LOGICAL_CHECK) {
+            pos[0]++;
+            return extractLogicalCheck(node, irGenerator);
+        }
+
+        return null;
+    }
+
+    /**
+     * Извлечение атомарного условия из LOGICAL_CHECK узла
+     */
     private ConditionNode extractLogicalCheck(Node logicalCheckNode, IRGenerator irGenerator) {
         if (logicalCheckNode.getChildren() == null) {
             return null;
@@ -208,7 +317,9 @@ public record ConditionExtractor(SqlToMongoIR ir,
         return exists;
     }
 
-    private InCondition createInConditionWithSubquery(Node subqueryNode, IRGenerator irGenerator, Expressionable leftOperand) {
+    private InCondition createInConditionWithSubquery(Node subqueryNode,
+                                                      IRGenerator irGenerator,
+                                                      Expressionable leftOperand) {
         InCondition inCondition = new InCondition();
 
         if (leftOperand != null) {
