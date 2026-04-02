@@ -12,40 +12,22 @@ public class FormatHelper {
             case String str -> {
                 if (str.startsWith("'") && str.endsWith("'")) {
                     return "\"" + str.substring(1, str.length() - 1) + "\"";
-                } else if (str.contains(".")) {
-                    if (context.isUseAggregationSyntax()) {
-                        return "\"$" + str + "\"";
-                    } else {
-                        return str;
-                    }
+                }
+                if (str.contains(".") && context.isUseAggregationSyntax()) {
+                    return "\"$" + str + "\"";
                 }
                 return "\"" + str + "\"";
             }
-            case Number _, Boolean _ -> {
+            case Number _ -> {
                 return value.toString();
+            }
+            case Boolean _ -> {
+                return value.toString().toLowerCase();
             }
             default -> {
             }
         }
 
         return String.valueOf(value);
-    }
-
-    public static String escapeIdentifier(String identifier) {
-        return identifier; // Можно добавить экранирование при необходимости
-    }
-
-    public static String escapeField(String field, GenerationContext context) {
-        if (field == null) return "";
-
-        if (field.startsWith("'") && field.endsWith("'")) {
-            field = field.substring(1, field.length() - 1);
-        }
-
-        if (context.isUseAggregationSyntax()) {
-            return field.replace(".", "__");
-        }
-
-        return field;
     }
 }

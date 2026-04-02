@@ -9,9 +9,9 @@ import java.util.Map;
 @Getter
 @Setter
 public class GenerationContext {
-
     private int indentLevel = 0;
     private int subqueryCounter = 0;
+    private int correlationCounter = 0;
     private final Map<String, String> subqueryResults = new HashMap<>();
     private boolean useAggregationSyntax = false;
 
@@ -19,19 +19,16 @@ public class GenerationContext {
         return "subquery_" + (++subqueryCounter);
     }
 
-    public String nextSubqueryResult() {
-        return "subquery_result_" + (++subqueryCounter);
+    public String nextCorrelationName() {
+        return "corr_" + (++correlationCounter);
     }
 
-    // Добавляем недостающие методы
     public void increaseIndent() {
         indentLevel++;
     }
 
     public void decreaseIndent() {
-        if (indentLevel > 0) {
-            indentLevel--;
-        }
+        if (indentLevel > 0) indentLevel--;
     }
 
     public String getIndent() {

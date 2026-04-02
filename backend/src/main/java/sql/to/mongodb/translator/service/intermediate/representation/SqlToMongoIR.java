@@ -30,8 +30,8 @@ public class SqlToMongoIR {
 
     private String mainCollection;
     private List<JoinInfo> joins = new ArrayList<>();
-    private List<ConditionNode> whereConditions = new ArrayList<>();
-    private List<ConditionNode> havingConditions = new ArrayList<>();
+    private ConditionNode whereCondition;
+    private ConditionNode havingCondition;
     private List<String> groupByFields = new ArrayList<>();
     private List<Projectionable> projectionFields = new ArrayList<>();
     private Map<String, String> aliases = new HashMap<>();

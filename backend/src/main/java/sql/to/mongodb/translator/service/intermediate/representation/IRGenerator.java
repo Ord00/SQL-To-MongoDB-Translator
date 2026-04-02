@@ -126,9 +126,9 @@ public class IRGenerator {
 
         if (extractedCondition != null) {
             switch (context) {
-                case WHERE -> ir.getWhereConditions().add(extractedCondition);
+                case WHERE -> ir.setWhereCondition(extractedCondition);
                 case HAVING -> {
-                    ir.getHavingConditions().add(extractedCondition);
+                    ir.setHavingCondition(extractedCondition);
                     ir.setHasHaving(true);
                 }
                 default -> {}
@@ -137,7 +137,7 @@ public class IRGenerator {
     }
 
     private ConditionContext determineConditionContext() {
-        if (ir.isHasGroupBy() && ir.getHavingConditions().isEmpty()) {
+        if (ir.isHasGroupBy() && ir.getHavingCondition() != null) {
             return ConditionContext.HAVING;
         }
         return ConditionContext.WHERE;
@@ -620,9 +620,13 @@ public class IRGenerator {
     private void processSubqueryInProjection(Node subqueryNode) throws IRGenerationException {
         SqlToMongoIR subqueryIR = generateIR(subqueryNode, outerTables, tableAliases);
 
-        SubqueryProjection projection = new SubqueryProjection();
+        SubqueryProjection projection = new SubqueryProjection();  // ← extends CorrelationSubquery
         projection.setSubqueryIR(subqueryIR);
         projection.setAlias(extractAlias(subqueryNode));
+
+        // Если есть корреляции, они будут добавлены через correlations поле
+        List<CorrelationCondition> correlations = conditionExtractor.extractCorrelations(subqueryNode);
+        projection.getCorrelations().addAll(correlations);
 
         ir.getProjectionFields().add(projection);
         ir.setHasSubqueries(true);

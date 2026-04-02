@@ -1,7 +1,8 @@
-package sql.to.mongodb.translator.service.intermediate.representation.model;
+package sql.to.mongodb.translator.service.intermediate.representation.model.condition;
 
 import lombok.Getter;
 import lombok.Setter;
+import sql.to.mongodb.translator.service.intermediate.representation.model.Field;
 
 @Getter
 @Setter
@@ -11,7 +12,7 @@ public class CorrelationCondition {
 
     private Field innerField;
 
-    private String operator = "=";
+    private String operator;
 
     private CorrelationType correlationType = CorrelationType.EQUALITY;
 
@@ -21,8 +22,6 @@ public class CorrelationCondition {
         COMPARISON,
         RANGE
     }
-
-    public CorrelationCondition() {}
 
     public CorrelationCondition(Field outerField, Field innerField, String operator) {
         this.outerField = outerField;

@@ -4,6 +4,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import sql.to.mongodb.translator.dto.AnalysisResult;
 import sql.to.mongodb.translator.dto.SqlRequest;
 import sql.to.mongodb.translator.service.code.generator.CodeGenerator;
 import sql.to.mongodb.translator.service.exceptions.CodeGenerationException;
@@ -48,7 +49,7 @@ public class AnalysisController {
             List<String> errors = new ArrayList<>();
 
             // Лексический анализ
-            scanner.tryAnalyse(request.getSqlQuery(), lexicalResult, errors);
+            scanner.tryAnalyse(request.sqlQuery(), lexicalResult, errors);
 
             // Синтаксический анализ
             Node syntaxResult = parser.tryAnalyse(lexicalResult, errors);
@@ -59,7 +60,7 @@ public class AnalysisController {
             // Генерация MongoDB кода
             String mongoCode = codeGenerator.generate(ir);
 
-            return ResponseEntity.ok(mongoCode);
+            return ResponseEntity.ok(new AnalysisResult(lexicalResult, syntaxResult, ir, mongoCode));
 
         } catch (SQLParseException | SQLScanException | CodeGenerationException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)

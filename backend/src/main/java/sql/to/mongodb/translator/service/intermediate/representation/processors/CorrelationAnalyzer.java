@@ -3,7 +3,7 @@ package sql.to.mongodb.translator.service.intermediate.representation.processors
 import lombok.Getter;
 import sql.to.mongodb.translator.service.enums.Category;
 import sql.to.mongodb.translator.service.enums.NodeType;
-import sql.to.mongodb.translator.service.intermediate.representation.model.CorrelationCondition;
+import sql.to.mongodb.translator.service.intermediate.representation.model.condition.CorrelationCondition;
 import sql.to.mongodb.translator.service.intermediate.representation.model.Field;
 import sql.to.mongodb.translator.service.parser.Node;
 import sql.to.mongodb.translator.service.scanner.Token;

@@ -2,10 +2,10 @@ package sql.to.mongodb.translator.service.intermediate.representation.model.proj
 
 import lombok.Getter;
 import lombok.Setter;
-import sql.to.mongodb.translator.service.intermediate.representation.model.Subquery;
+import sql.to.mongodb.translator.service.intermediate.representation.model.CorrelationSubquery;
 
 @Getter
 @Setter
-public class SubqueryProjection extends Subquery implements Projectionable {
+public class SubqueryProjection extends CorrelationSubquery implements Projectionable {
     private String alias;
 }

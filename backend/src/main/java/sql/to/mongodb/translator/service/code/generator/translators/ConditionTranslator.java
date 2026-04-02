@@ -1,0 +1,169 @@
+package sql.to.mongodb.translator.service.code.generator.translators;
+
+import org.springframework.stereotype.Component;
+import sql.to.mongodb.translator.service.code.generator.base.GenerationContext;
+import sql.to.mongodb.translator.service.code.generator.helpers.SubqueryHelper;
+import sql.to.mongodb.translator.service.exceptions.CodeGenerationException;
+import sql.to.mongodb.translator.service.intermediate.representation.model.CorrelationSubquery;
+import sql.to.mongodb.translator.service.intermediate.representation.model.Subquery;
+import sql.to.mongodb.translator.service.intermediate.representation.model.condition.*;
+import sql.to.mongodb.translator.service.intermediate.representation.model.expression.Expressionable;
+
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+@Component
+public class ConditionTranslator {
+
+    private final ExpressionTranslator expressionTranslator;
+    private final SubqueryHelper subqueryHelper;
+
+    private static final Map<String, String> OPERATOR_MAP = Map.of(
+            "=", "$eq", "!=", "$ne", "<>", "$ne",
+            "<", "$lt", "<=", "$lte", ">", "$gt", ">=", "$gte",
+            "LIKE", "$regex"
+    );
+
+    public ConditionTranslator(ExpressionTranslator expressionTranslator,
+                               SubqueryHelper subqueryHelper) {
+        this.expressionTranslator = expressionTranslator;
+        this.subqueryHelper = subqueryHelper;
+    }
+
+    public String translate(ConditionNode condition,
+                            GenerationContext context) throws CodeGenerationException {
+        return switch (condition) {
+            case LinkNode link -> translateLink(link, context);
+            case Comparison comp -> translateComparison(comp, context);
+            case BetweenCondition between -> translateBetween(between, context);
+            case InCondition in -> translateIn(in, context);
+            case NullCheck nullCheck -> translateNullCheck(nullCheck, context);
+            case ExistsCondition exists -> translateExists(exists, context);
+            case null, default -> "{}";
+        };
+
+    }
+
+    private String translateLink(LinkNode link, GenerationContext context) {
+        List<String> parts = link.getChildren().stream()
+                .map(c -> {
+                    try {
+                        return translate(c, context);
+                    } catch (Exception e) {
+                        return "{}";
+                    }
+                })
+                .filter(s -> !s.isEmpty() && !"{}".equals(s))
+                .collect(Collectors.toList());
+
+        if (parts.isEmpty()) return "{}";
+        if (parts.size() == 1) return parts.getFirst();
+
+        String op = link.getType() == LinkNode.LinkType.AND ? "$and" : "$or";
+        return "{ " + op + ": [ " + String.join(", ", parts) + " ] }";
+    }
+
+    private String translateComparison(Comparison comp,
+                                       GenerationContext context) throws CodeGenerationException {
+        String field = expressionTranslator.translate(comp.getOperand(), context);
+
+        if (comp.getValue() instanceof Subquery subquery) {
+            return translateComparisonWithSubquery(field, subquery, comp.getOperator(), context);
+        }
+
+        String value = expressionTranslator.translate(comp.getValue(), context);
+        String mongoOp = OPERATOR_MAP.getOrDefault(comp.getOperator(), "$eq");
+
+        if (context.isUseAggregationSyntax()) {
+            return "{ $expr: { " + mongoOp + ": [ " + field + ", " + value + " ] } }";
+        }
+        return "$eq".equals(mongoOp) ? "{ " + field + ": " + value + " }"
+                : "{ " + field + ": { " + mongoOp + ": " + value + " } }";
+    }
+
+    private String translateComparisonWithSubquery(String field,
+                                                   Subquery subquery,
+                                                   String operator,
+                                                   GenerationContext context) {
+        String mongoOp = OPERATOR_MAP.getOrDefault(operator, "$eq");
+        boolean correlated = subqueryHelper.isCorrelated(subquery);
+
+        if (correlated) {
+            String corrName = context.nextCorrelationName();
+            return "{ $expr: { " + mongoOp + ": [ " + field + ", \"$" + corrName + "\" ] } }";
+        }
+        return "{ " + field + ": { " + mongoOp + ": /* scalar subquery result */ } }";
+    }
+
+    private String translateBetween(BetweenCondition between,
+                                    GenerationContext context) throws CodeGenerationException {
+        String field = expressionTranslator.translate(between.getOperand(), context);
+        String start = between.getStart() != null ? between.getStart().toString() : "null";
+        String end = between.getEnd() != null ? between.getEnd().toString() : "null";
+
+        if (context.isUseAggregationSyntax()) {
+            return "{ $expr: { $and: [ { $gte: [ " + field + ", " + start + " ] }, { $lte: [ " + field + ", " + end + " ] } ] } }";
+        }
+        return "{ " + field + ": { $gte: " + start + ", $lte: " + end + " } }";
+    }
+
+    private String translateIn(InCondition in,
+                               GenerationContext context) throws CodeGenerationException {
+        String field = expressionTranslator.translate(in.getOperand(), context);
+        List<String> values = new java.util.ArrayList<>();
+
+        for (Expressionable expr : in.getInValues()) {
+            if (expr instanceof Subquery subquery) {
+                return translateInWithSubquery(field, subquery, context);
+            }
+            values.add(expressionTranslator.translate(expr, context));
+        }
+
+        if (context.isUseAggregationSyntax()) {
+            return "{ $expr: { $in: [ " + field + ", [ " + String.join(", ", values) + " ] ] } }";
+        }
+        return "{ " + field + ": { $in: [ " + String.join(", ", values) + " ] } }";
+    }
+
+    private String translateInWithSubquery(String field,
+                                           Subquery subquery,
+                                           GenerationContext context) {
+        boolean correlated = subqueryHelper.isCorrelated(subquery);
+
+        if (correlated) {
+            String corrName = context.nextCorrelationName();
+            return "{ $expr: { $in: [ " + field + ", \"$" + corrName + "\" ] } }";
+        }
+        return "{ " + field + ": { $in: /* subquery result */ } }";
+    }
+
+    private String translateNullCheck(NullCheck nullCheck,
+                                      GenerationContext context) throws CodeGenerationException {
+        String field = expressionTranslator.translate(nullCheck.getOperand(), context);
+        boolean isNull = nullCheck.isNull();
+
+        if (context.isUseAggregationSyntax()) {
+            return "{ $expr: { " + (isNull ? "$eq" : "$ne") + ": [ " + field + ", null ] } }";
+        }
+        return "{ " + field + ": " + (isNull ? "null" : "{ $ne: null }") + " }";
+    }
+
+    private String translateExists(ExistsCondition exists,
+                                   GenerationContext context) {
+        CorrelationSubquery subquery = exists.getSubquery();
+        if (subquery == null) return "{ $exists: " + exists.isExists() + " }";
+
+        boolean correlated = subqueryHelper.isCorrelated(subquery);
+
+        if (correlated) {
+            String corrName = context.nextCorrelationName();
+            if (context.isUseAggregationSyntax()) {
+                return "{ $expr: { " + (exists.isExists() ? "$gt" : "$eq") +
+                        ": [ { $size: \"$" + corrName + "\" }, 0 ] } }";
+            }
+            return "{ $where: \"this." + corrName + ".length " + (exists.isExists() ? ">" : "==") + " 0\" }";
+        }
+        return "{ $where: \"/* subquery result */.length " + (exists.isExists() ? ">" : "==") + " 0\" }";
+    }
+}

@@ -2,6 +2,7 @@ package sql.to.mongodb.translator.service.intermediate.representation.model.cond
 
 import lombok.Getter;
 import lombok.Setter;
+import sql.to.mongodb.translator.service.intermediate.representation.model.CorrelationSubquery;
 
 @Getter
 @Setter
