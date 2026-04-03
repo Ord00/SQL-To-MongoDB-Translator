@@ -73,7 +73,7 @@ public class ProjectStageBuilder {
             // Для find() запроса агрегатные функции и подзапросы не поддерживаются
             // поэтому игнорируем AggregateProjection и SubqueryProjection
         }
-        if (fields.isEmpty()) return "{}";
+        if (fields.isEmpty()) return null;
         return "{ " + String.join(", ", fields) + " }";
     }
 

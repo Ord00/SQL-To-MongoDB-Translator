@@ -14,4 +14,10 @@ public class JoinInfo {
     private Joinable left;
     private Joinable right;
     private ConditionNode joinCondition;
+
+    public JoinInfo() {}
+
+    public JoinInfo(Joinable left) {
+        this.left = left;
+    }
 }

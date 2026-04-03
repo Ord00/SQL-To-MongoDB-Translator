@@ -78,19 +78,8 @@ public class IRGenerator {
     private void processQueryNode(Node queryNode) throws IRGenerationException {
         if (queryNode.getChildren() == null) return;
 
-        processQueryStructure(queryNode);
-
         for (Node child : queryNode.getChildren()) {
             processQueryChild(child);
-        }
-    }
-
-    private void processQueryStructure(Node queryNode) throws IRGenerationException {
-        for (Node child : queryNode.getChildren()) {
-            if (child.getNodeType() == NodeType.TABLE_NAMES) {
-                processTableNames(child);
-                break;
-            }
         }
     }
 
@@ -98,6 +87,7 @@ public class IRGenerator {
         switch (child.getNodeType()) {
             case TERMINAL -> processTerminalInQuery(child);
             case COLUMN_NAMES -> processColumnNames(child);
+            case TABLE_NAMES -> processTableNames(child);
             case LOGICAL_CONDITION -> processConditionNode(child);
             case GROUP_BY -> processGroupBy(child);
             case ORDER_BY -> processOrderBy(child);
@@ -119,10 +109,14 @@ public class IRGenerator {
     }
 
     private void processConditionNode(Node conditionNode) {
-        ConditionContext context = determineConditionContext();
+        // Пропускаем, если это условие JOIN (уже обработано в processTableNames)
+        // Нужно определить, что это условие не принадлежит JOIN
+        // Например, по позиции в AST или по флагу
 
-        // Передаем this (IRGenerator) в extractCondition
-        ConditionNode extractedCondition = conditionExtractor.extractCondition(conditionNode, this);
+        ConditionContext context = determineConditionContext();
+        ConditionNode extractedCondition = conditionExtractor.extractCondition(
+                conditionNode,
+                this);
 
         if (extractedCondition != null) {
             switch (context) {
@@ -131,7 +125,8 @@ public class IRGenerator {
                     ir.setHavingCondition(extractedCondition);
                     ir.setHasHaving(true);
                 }
-                default -> {}
+                default -> {
+                }
             }
         }
     }
@@ -463,7 +458,7 @@ public class IRGenerator {
     private void processTableNames(Node tableNamesNode) throws IRGenerationException {
         if (tableNamesNode.getChildren() == null) return;
 
-        JoinInfo currentJoin = null;
+        JoinInfo currentJoin = new JoinInfo();
 
         for (Node child : tableNamesNode.getChildren()) {
             switch (child.getNodeType()) {
@@ -473,30 +468,40 @@ public class IRGenerator {
                     if (ir.getMainCollection() == null) {
                         if (operand instanceof JoinTable table) {
                             ir.setMainCollection(table.getValue());
+                            currentJoin.setLeft(operand);
                         } else if (operand instanceof JoinSubquery) {
                             ir.setMainCollection("subquery");
                         }
                         if (operand.getAlias() != null) {
                             currentContext.push(operand.getAlias());
-                            tableAliases.put(operand.getAlias(), operand instanceof JoinTable t ? t.getValue() : "subquery");
-                            ir.getAliases().put(operand.getAlias(), operand instanceof JoinTable t ? t.getValue() : "subquery");
+                            tableAliases.put(
+                                    operand.getAlias(),
+                                    operand instanceof JoinTable t ? t.getValue() : "subquery");
+                            ir.getAliases().put(
+                                    operand.getAlias(),
+                                    operand instanceof JoinTable t ? t.getValue() : "subquery");
                         } else {
                             currentContext.push(operand instanceof JoinTable t ? t.getValue() : "subquery");
                         }
                         outerTables.add(operand instanceof JoinTable t ? t.getValue() : "subquery");
-                    } else if (currentJoin != null) {
+                    } else if (currentJoin.getLeft() == null) {
+                        currentJoin.setLeft(operand);
+                    } else {
                         currentJoin.setRight(operand);
                     }
                 }
-                case JOIN -> {
-                    currentJoin = processJoin(child);
+                case TERMINAL -> {
+                    processJoin(child, currentJoin);
                     ir.setHasJoins(true);
                 }
                 case LOGICAL_CONDITION -> {
-                    if (currentJoin != null) {
-                        ConditionNode joinCondition = conditionExtractor.extractCondition(child, this);
-                        currentJoin.setJoinCondition(joinCondition);
-                    }
+                    // Это условие ON для текущего JOIN
+                    ConditionNode joinCondition = conditionExtractor.extractCondition(
+                            child,
+                            this);
+                    currentJoin.setJoinCondition(joinCondition);
+                    ir.getJoins().add(currentJoin);
+                    currentJoin = new JoinInfo(currentJoin.getRight());
                 }
                 case QUERY -> {
                     Joinable operand = processSubqueryAsJoinable(child);
@@ -507,15 +512,11 @@ public class IRGenerator {
                             tableAliases.put(operand.getAlias(), "subquery");
                             ir.getAliases().put(operand.getAlias(), "subquery");
                         }
-                    } else if (currentJoin != null) {
+                    } else {
                         currentJoin.setRight(operand);
                     }
                 }
             }
-        }
-
-        if (currentJoin != null) {
-            ir.getJoins().add(currentJoin);
         }
     }
 
@@ -562,13 +563,12 @@ public class IRGenerator {
         return joinSubquery;
     }
 
-    private JoinInfo processJoin(Node joinNode) {
-        JoinInfo joinInfo = new JoinInfo();
+    private void processJoin(Node joinNode, JoinInfo joinInfo) {
 
         if (joinNode.getChildren() == null || joinNode.getChildren().isEmpty()) {
             // По умолчанию INNER JOIN
             joinInfo.setType(JoinInfo.JoinType.INNER);
-            return joinInfo;
+            return;
         }
 
         // Проверяем детей узла JOIN
@@ -613,8 +613,6 @@ public class IRGenerator {
         if (joinInfo.getType() == null) {
             joinInfo.setType(JoinInfo.JoinType.INNER);
         }
-
-        return joinInfo;
     }
 
     private void processSubqueryInProjection(Node subqueryNode) throws IRGenerationException {

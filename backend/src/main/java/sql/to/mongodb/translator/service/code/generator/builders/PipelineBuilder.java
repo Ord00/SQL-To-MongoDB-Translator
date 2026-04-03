@@ -55,13 +55,6 @@ public class PipelineBuilder {
             if (lookup != null) stages.add(lookup);
         }
 
-        // $match для условий JOIN (после $lookup)
-        List<ConditionNode> joinConditions = extractJoinConditions(ir);
-        if (!joinConditions.isEmpty()) {
-            String joinMatch = matchStageBuilder.buildJoinMatch(joinConditions, context);
-            if (joinMatch != null) stages.add(joinMatch);
-        }
-
         // $group (GROUP BY + агрегации)
         String group = groupStageBuilder.build(ir, context);
         if (group != null) stages.add(group);
