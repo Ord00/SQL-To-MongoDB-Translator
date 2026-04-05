@@ -1,7 +1,7 @@
 package sql.to.mongodb.translator.builders;
 
 import org.springframework.stereotype.Component;
-import sql.to.mongodb.translator.CodeGenerationException;
+import sql.to.mongodb.translator.exceptions.CodeGenerationException;
 import sql.to.mongodb.translator.base.GenerationContext;
 import sql.to.mongodb.translator.ir.SqlToMongoIR;
 import sql.to.mongodb.translator.ir.condition.ConditionNode;

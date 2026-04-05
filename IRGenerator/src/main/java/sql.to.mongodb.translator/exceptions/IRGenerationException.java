@@ -1,4 +1,4 @@
-package sql.to.mongodb.translator;
+package sql.to.mongodb.translator.exceptions;
 
 public class IRGenerationException extends RuntimeException {
     public IRGenerationException(String message) {

@@ -1,5 +1,6 @@
 package sql.to.mongodb.translator;
 
+import exceptions.SQLParseException;
 import org.springframework.stereotype.Component;
 import sql.to.mongodb.translator.parser.Node;
 import sql.to.mongodb.translator.parser.NodeType;
@@ -19,13 +20,7 @@ public class Parser {
         this.pA = pA;
     }
 
-    public Node tryAnalyse(List<Token> tokens, List<String> errors) throws SQLParseException, SQLScanException {
-
-        for (String error : errors) {
-
-            throw new SQLScanException(error);
-
-        }
+    public Node tryAnalyse(List<Token> tokens) throws SQLParseException {
 
         pA.init(tokens);
         List<Node> children = new ArrayList<>();

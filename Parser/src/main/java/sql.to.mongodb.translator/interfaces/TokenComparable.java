@@ -1,4 +1,4 @@
-package sql.to.mongodb.translator;
+package sql.to.mongodb.translator.interfaces;
 
 import sql.to.mongodb.translator.scanner.Token;
 

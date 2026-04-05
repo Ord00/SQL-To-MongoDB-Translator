@@ -1,4 +1,6 @@
-package sql.to.mongodb.translator;
+package sql.to.mongodb.translator.interfaces;
+
+import sql.to.mongodb.translator.PushdownAutomaton;
 
 @FunctionalInterface
 public interface TokenReleasable {

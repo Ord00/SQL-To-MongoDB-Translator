@@ -1,4 +1,4 @@
-package sql.to.mongodb.translator;
+package exceptions;
 
 public class SQLParseException extends Exception {
     public SQLParseException(String message) {

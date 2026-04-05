@@ -1,5 +1,6 @@
 package sql.to.mongodb.translator;
 
+import exceptions.SQLParseException;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -20,30 +21,28 @@ public class ParserTest {
     private Parser parser;
 
     private static List<Token> tokens = new ArrayList<>();
-    private static List<String> errors = new ArrayList<>();
 
     @BeforeEach
     public void initialize() {
         tokens = new ArrayList<>();
-        errors = new ArrayList<>();
     }
 
     @Test
     public void testInOfOneSubquery() {
-
-        scanner.tryAnalyse("""
+        String codeToScan = """
                 SELECT id, name, file
                 FROM products
                 WHERE id IN (SELECT product_id
-                             FROM sales)""", tokens, errors);
+                             FROM sales)""";
 
-        Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(tokens, errors));
+        Assertions.assertDoesNotThrow(() -> scanner.tryAnalyse(codeToScan, tokens));
+
+        Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(tokens));
     }
 
     @Test
     public void testExistsAndJoin() {
-
-        scanner.tryAnalyse("""
+        String codeToScan = """
                 SELECT Tm.TeamName
                 FROM Team Tm
                 WHERE NOT EXISTS (SELECT 1
@@ -62,45 +61,53 @@ public class ParserTest {
                                                 AND Tm.Id_team = Tm3.Id_team
                                                 AND Comp2.Id_competition = R3.Competition
                                         ) >= 1
-                				)""", tokens, errors);
+                				)""";
 
-        Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(tokens, errors));
+        Assertions.assertDoesNotThrow(() -> scanner.tryAnalyse(codeToScan, tokens));
+
+        Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(tokens));
     }
 
     @Test
     public void testAllWithSpecificTable() {
-        scanner.tryAnalyse("""
+        String codeToScan = """
                 SELECT CompetitionName, Race.*
                 FROM Competition LEFT JOIN Race
-                	 ON Id_competition = Competition""", tokens, errors);
+                	 ON Id_competition = Competition""";
 
-        Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(tokens, errors));
+        Assertions.assertDoesNotThrow(() -> scanner.tryAnalyse(codeToScan, tokens));
+
+        Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(tokens));
     }
 
     @Test
     public void testAllFunction() {
-        scanner.tryAnalyse("""
+        String codeToScan = """
                 SELECT TP.Id_team, TP.TeamName
                 FROM TeamProfit TP
                 WHERE TP.Profit >= ALL(SELECT TP2.Profit
-                                       FROM TeamProfit TP2)""", tokens, errors);
+                                       FROM TeamProfit TP2)""";
 
-        Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(tokens, errors));
+        Assertions.assertDoesNotThrow(() -> scanner.tryAnalyse(codeToScan, tokens));
+
+        Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(tokens));
     }
 
     @Test
     public void testOrderBy() {
-        scanner.tryAnalyse("""
+        String codeToScan = """
                 SELECT R.*, R.TicketPrice * R.SoldTickets AS Profit
                 FROM Race R
-                ORDER BY R.TicketPrice * R.SoldTickets DESC""", tokens, errors);
+                ORDER BY R.TicketPrice * R.SoldTickets DESC""";
 
-        Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(tokens, errors));
+        Assertions.assertDoesNotThrow(() -> scanner.tryAnalyse(codeToScan, tokens));
+
+        Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(tokens));
     }
 
     @Test
-    public void testLimit() throws SQLScanException, SQLParseException {
-        scanner.tryAnalyse("""
+    public void testLimit() throws SQLParseException {
+        String codeToScan = """
                 SELECT DISTINCT Cn.Id_country, Cn.CountryName
                 FROM Race R RIGHT JOIN StaffRace SR
                 	ON R.Id_race = SR.Race
@@ -117,27 +124,40 @@ public class ParserTest {
                 	AND R.TicketPrice * R.SoldTickets IN (SELECT R.TicketPrice * R.SoldTickets AS Profit
                 										  FROM Race R
                 										  ORDER BY Profit DESC
-                										  LIMIT 3)""", tokens, errors);
+                										  LIMIT 3)""";
 
-        Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(tokens, errors));
+        Assertions.assertDoesNotThrow(() -> scanner.tryAnalyse(codeToScan, tokens));
 
-        System.out.println(parser.tryAnalyse(tokens, errors));
+        Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(tokens));
+
+        System.out.println(parser.tryAnalyse(tokens));
     }
 
     @Test
     public void testCaseAsAggregateAttribute() {
 
-        scanner.tryAnalyse("""
+        String codeToScan = """
                 SELECT (CalcRes.ChampionshipNum * 100) / CalcRes.Total AS Championship,
                        (CalcRes.CupNum * 100) / CalcRes.Total AS Cup,
                        (CalcRes.PrecedenceNum * 100) / CalcRes.Total AS Precedence
-                FROM (SELECT SUM(CASE WHEN CT.CompetitionTypeName = 'Чемпионат' THEN 1 ELSE 0 END) ChampionshipNum,
-                             SUM(CASE WHEN CT.CompetitionTypeName = 'Кубок' THEN 1 ELSE 0 END) CupNum,
-                             SUM(CASE WHEN CT.CompetitionTypeName = 'Первенство' THEN 1 ELSE 0 END) PrecedenceNum
+                FROM (SELECT SUM(CASE WHEN CT.CompetitionTypeName = 'Чемпионат'\s
+                                      THEN 1\s
+                                      ELSE 0\s
+                                      END) ChampionshipNum,
+                             SUM(CASE WHEN CT.CompetitionTypeName = 'Кубок'\s
+                                      THEN 1\s
+                                      ELSE 0\s
+                                      END) CupNum,
+                             SUM(CASE WHEN CT.CompetitionTypeName = 'Первенство'\s
+                                      THEN 1\s
+                                      ELSE 0\s
+                                      END) PrecedenceNum
                       FROM Competition Comp JOIN CompetitionType CT
                         ON Comp.CompetitionType = CT.Id_competition_type
-                     ) AS CalcRes""", tokens, errors);
+                     ) AS CalcRes""";
 
-        Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(tokens, errors));
+        Assertions.assertDoesNotThrow(() -> scanner.tryAnalyse(codeToScan, tokens));
+
+        Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(tokens));
     }
 }

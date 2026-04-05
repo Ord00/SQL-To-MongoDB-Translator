@@ -1,7 +1,7 @@
 package sql.to.mongodb.translator.dml;
 
 import sql.to.mongodb.translator.PushdownAutomaton;
-import sql.to.mongodb.translator.SQLParseException;
+import exceptions.SQLParseException;
 import sql.to.mongodb.translator.main.cases.ColumnNamesParser;
 import sql.to.mongodb.translator.main.cases.GroupByParser;
 import sql.to.mongodb.translator.main.cases.OrderByParser;

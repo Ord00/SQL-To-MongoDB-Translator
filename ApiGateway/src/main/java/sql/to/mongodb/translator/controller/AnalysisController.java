@@ -3,13 +3,17 @@ package sql.to.mongodb.translator.controller;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-import sql.to.mongodb.translator.CodeGenerationException;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import sql.to.mongodb.translator.exceptions.CodeGenerationException;
 import sql.to.mongodb.translator.CodeGenerator;
 import sql.to.mongodb.translator.IRGenerator;
 import sql.to.mongodb.translator.Parser;
-import sql.to.mongodb.translator.SQLParseException;
-import sql.to.mongodb.translator.SQLScanException;
+import exceptions.SQLParseException;
+import sql.to.mongodb.translator.exceptions.SQLScanException;
 import sql.to.mongodb.translator.Scanner;
 import sql.to.mongodb.translator.dto.AnalysisResult;
 import sql.to.mongodb.translator.dto.SqlRequest;
@@ -46,13 +50,12 @@ public class AnalysisController {
 
         try {
             List<Token> lexicalResult = new ArrayList<>();
-            List<String> errors = new ArrayList<>();
 
             // Лексический анализ
-            scanner.tryAnalyse(request.sqlQuery(), lexicalResult, errors);
+            scanner.tryAnalyse(request.sqlQuery(), lexicalResult);
 
             // Синтаксический анализ
-            Node syntaxResult = parser.tryAnalyse(lexicalResult, errors);
+            Node syntaxResult = parser.tryAnalyse(lexicalResult);
 
             // Генерация промежуточного представления
             SqlToMongoIR ir = irGenerator.generateIR(syntaxResult);
@@ -62,7 +65,7 @@ public class AnalysisController {
 
             return ResponseEntity.ok(new AnalysisResult(lexicalResult, syntaxResult, ir, mongoCode));
 
-        } catch (SQLParseException | SQLScanException | CodeGenerationException e) {
+        } catch (SQLScanException| SQLParseException | CodeGenerationException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(e.getMessage());
         }

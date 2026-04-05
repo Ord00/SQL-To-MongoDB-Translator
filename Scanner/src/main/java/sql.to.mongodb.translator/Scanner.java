@@ -1,5 +1,7 @@
 package sql.to.mongodb.translator;
 
+import sql.to.mongodb.translator.exceptions.SQLScanException;
+import sql.to.mongodb.translator.interfaces.LexicallyAnalysable;
 import org.springframework.stereotype.Component;
 import sql.to.mongodb.translator.builders.AllFSMBuilder;
 import sql.to.mongodb.translator.builders.ArithmeticOperatorFSMBuilder;
@@ -70,9 +72,8 @@ public class Scanner implements LexicallyAnalysable {
         }
     }
 
-    public Boolean tryAnalyse(String codeToScan,
-                              List<Token> tokens,
-                              List<String> errors) {
+    public void tryAnalyse(String codeToScan,
+                              List<Token> tokens) throws SQLScanException {
 
         List<String> partsSql = splitIntoParts(codeToScan.trim());
 
@@ -106,12 +107,10 @@ public class Scanner implements LexicallyAnalysable {
             }
 
             if (!isFound) {
-                errors.add(String.format("The lexeme %s is not recognised by the language!",
+                throw new SQLScanException(String.format("The lexeme %s is not recognised by the language!",
                         part));
             }
         }
-
-        return errors.isEmpty();
     }
 
     private List<String> splitIntoParts(String codeToSplit) {

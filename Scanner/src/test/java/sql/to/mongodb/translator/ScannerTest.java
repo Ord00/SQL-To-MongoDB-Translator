@@ -38,11 +38,10 @@ public class ScannerTest {
                 new Token(")", Category.PUNCTUATION)
         ));
         List<Token> tokens = new ArrayList<>();
-        List<String> errors = new ArrayList<>();
-        scanner.tryAnalyse(
+
+        Assertions.assertDoesNotThrow(() -> scanner.tryAnalyse(
                 "SELECT id, name, file FROM products WHERE id IN (SELECT product_id FROM sales)",
-                tokens,
-                errors);
+                tokens));
         Assertions.assertEquals(expectedTokens, tokens);
     }
 
@@ -66,11 +65,10 @@ public class ScannerTest {
                 new Token("'mou%_se'", Category.LITERAL)
         ));
         List<Token> tokens = new ArrayList<>();
-        List<String> errors = new ArrayList<>();
-        scanner.tryAnalyse(
-                "SELECT * FROM Students WHERE Id >= 2 / 7 AND K LIKE 'mou%_se'",
-                tokens,
-                errors);
+
+        Assertions.assertDoesNotThrow(() -> scanner.tryAnalyse(
+                        "SELECT * FROM Students WHERE Id >= 2 / 7 AND K LIKE 'mou%_se'",
+                        tokens));
         Assertions.assertEquals(expectedTokens, tokens);
     }
 
@@ -95,11 +93,10 @@ public class ScannerTest {
                 new Token(")", Category.PUNCTUATION)
         ));
         List<Token> tokens = new ArrayList<>();
-        List<String> errors = new ArrayList<>();
-        scanner.tryAnalyse(
+
+        Assertions.assertDoesNotThrow(() -> scanner.tryAnalyse(
                 "SELECT COUNT(DISTINCT Id_book) FROM Library WHERE Id_book IN(7, 19)",
-                tokens,
-                errors);
+                tokens));
         Assertions.assertEquals(expectedTokens, tokens);
     }
 
@@ -120,11 +117,10 @@ public class ScannerTest {
                 new Token("'mou %_se'", Category.LITERAL)
         ));
         List<Token> tokens = new ArrayList<>();
-        List<String> errors = new ArrayList<>();
-        scanner.tryAnalyse(
+
+        Assertions.assertDoesNotThrow(() -> scanner.tryAnalyse(
                 "SELECT * FROM Students WHERE Id > '.2#, ' AND K LIKE 'mou %_se'",
-                tokens,
-                errors);
+                tokens));
         Assertions.assertEquals(expectedTokens, tokens);
     }
 }

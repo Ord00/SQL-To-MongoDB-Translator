@@ -7,6 +7,7 @@ import sql.to.mongodb.translator.builders.MatchStageBuilder;
 import sql.to.mongodb.translator.builders.PipelineBuilder;
 import sql.to.mongodb.translator.builders.ProjectStageBuilder;
 import sql.to.mongodb.translator.builders.SortStageBuilder;
+import sql.to.mongodb.translator.exceptions.CodeGenerationException;
 import sql.to.mongodb.translator.ir.SqlToMongoIR;
 
 import java.util.List;

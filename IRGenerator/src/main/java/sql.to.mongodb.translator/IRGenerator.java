@@ -1,6 +1,7 @@
 package sql.to.mongodb.translator;
 
 import org.springframework.stereotype.Component;
+import sql.to.mongodb.translator.exceptions.IRGenerationException;
 import sql.to.mongodb.translator.ir.Constant;
 import sql.to.mongodb.translator.ir.Field;
 import sql.to.mongodb.translator.ir.SortField;

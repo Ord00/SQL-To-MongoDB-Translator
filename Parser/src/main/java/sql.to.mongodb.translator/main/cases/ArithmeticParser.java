@@ -1,9 +1,9 @@
 package sql.to.mongodb.translator.main.cases;
 
 import sql.to.mongodb.translator.PushdownAutomaton;
-import sql.to.mongodb.translator.SQLParseException;
-import sql.to.mongodb.translator.TokenProcessable;
-import sql.to.mongodb.translator.TokenReleasable;
+import exceptions.SQLParseException;
+import sql.to.mongodb.translator.interfaces.TokenProcessable;
+import sql.to.mongodb.translator.interfaces.TokenReleasable;
 import sql.to.mongodb.translator.parser.Node;
 import sql.to.mongodb.translator.parser.NodeType;
 import sql.to.mongodb.translator.scanner.Category;
