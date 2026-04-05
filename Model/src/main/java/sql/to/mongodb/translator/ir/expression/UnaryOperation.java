@@ -1,10 +1,12 @@
 package sql.to.mongodb.translator.ir.expression;
 
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Setter;
 
 @Getter
 @Setter
+@EqualsAndHashCode
 public class UnaryOperation implements Arithmetical {
     private Arithmetical operand;
     private UnaryOperator operator;

@@ -1,5 +1,6 @@
 package sql.to.mongodb.translator.ir;
 
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Setter;
 import sql.to.mongodb.translator.ir.condition.ConditionNode;
@@ -13,6 +14,7 @@ import java.util.Map;
 
 @Getter
 @Setter
+@EqualsAndHashCode
 public class SqlToMongoIR {
 
     private boolean requiresAggregation = false;
@@ -31,7 +33,7 @@ public class SqlToMongoIR {
     private List<JoinInfo> joins = new ArrayList<>();
     private ConditionNode whereCondition;
     private ConditionNode havingCondition;
-    private List<String> groupByFields = new ArrayList<>();
+    private List<GroupByField> groupByFields = new ArrayList<>();
     private List<Projectionable> projectionFields = new ArrayList<>();
     private Map<String, String> aliases = new HashMap<>();
 

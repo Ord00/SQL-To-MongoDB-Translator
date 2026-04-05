@@ -1,11 +1,13 @@
 package sql.to.mongodb.translator.ir.condition;
 
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Setter;
 import sql.to.mongodb.translator.ir.Field;
 
 @Getter
 @Setter
+@EqualsAndHashCode
 public class CorrelationCondition {
 
     private Field outerField;

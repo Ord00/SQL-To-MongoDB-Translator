@@ -1,11 +1,11 @@
 package sql.to.mongodb.translator;
 
-import exceptions.SQLParseException;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import exceptions.SQLParseException;
 import sql.to.mongodb.translator.scanner.Token;
 
 import java.util.ArrayList;

@@ -1,5 +1,6 @@
 package sql.to.mongodb.translator.ir.expression;
 
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -8,6 +9,7 @@ import java.util.List;
 
 @Getter
 @Setter
+@EqualsAndHashCode
 public class CaseExpression implements Expressionable {
 
     private List<WhenThen> whenThenList = new ArrayList<>();

@@ -34,18 +34,7 @@ public class ExpressionBuilder {
         return field;
     }
 
-    /**
-     * Построение ProjectionField из узла IDENTIFIER
-     */
-    public static ProjectionField buildFieldProjection(Node identifierNode) {
-        ProjectionField field = new ProjectionField();
-        if (extractFieldParts(identifierNode, field)) return field;
-
-        field.setAlias(extractAlias(identifierNode));
-        return field;
-    }
-
-    private static boolean extractFieldParts(Node identifierNode, Field field) {
+    public static boolean extractFieldParts(Node identifierNode, Field field) {
         if (identifierNode.getChildren() == null || identifierNode.getChildren().isEmpty()) {
             return true;
         }
@@ -112,6 +101,26 @@ public class ExpressionBuilder {
 
         aggregate.setAlias(extractAlias(aggregateNode));
         return aggregate;
+    }
+
+    public static String extractAlias(List<Node> columns, int i) {
+
+        Token curToken = columns.get(i).getToken();
+        if (i < columns.size() - 1 && curToken != null && "AS".equals(curToken.lexeme)) {
+            return columns.get(i + 1).getToken().lexeme;
+        }
+        return null;
+    }
+
+    public static String extractAlias(Node node) {
+
+        List<Node> children = node.getChildren();
+        int size = children.size();
+
+        if ("AS".equals(children.get(size - 2).getToken().lexeme)) {
+            return children.get(size - 1).getToken().lexeme;
+        }
+        return null;
     }
 
     /**
@@ -252,7 +261,7 @@ public class ExpressionBuilder {
 
         if (node.getNodeType() == NodeType.TERMINAL) {
             Token token = node.getToken();
-            if (token.category == Category.ARITHMETIC_OPERATOR) {
+            if (token.category == Category.ARITHMETIC_OPERATOR || token.category == Category.ALL) {
                 tokens.add(token.lexeme);
             } else if (token.category == Category.NUMBER) {
                 tokens.add(Constant.ofNumber(token.lexeme));
@@ -268,9 +277,5 @@ public class ExpressionBuilder {
                 extractTokensRecursive(child, tokens);
             }
         }
-    }
-
-    private static String extractAlias(Node node) {
-        return getString(node);
     }
 }

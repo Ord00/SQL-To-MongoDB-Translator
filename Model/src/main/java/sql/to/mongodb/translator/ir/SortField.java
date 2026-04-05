@@ -1,8 +1,15 @@
 package sql.to.mongodb.translator.ir;
 
+import lombok.AllArgsConstructor;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 @Getter
+@NoArgsConstructor
+@AllArgsConstructor
+@EqualsAndHashCode(callSuper = false)
+// можно улучшить, добавив возможность арифметических операций или подзапросов
 public class SortField extends Field {
 
     private SortDirection direction = SortDirection.ASC;
@@ -19,7 +26,15 @@ public class SortField extends Field {
         }
     }
 
-    public SortField() {}
+    public SortField(String source, String field, SortDirection direction) {
+        this.source = source;
+        this.field = field;
+        this.direction = direction;
+    }
+
+    public SortField(String source, String field) {
+        super(source, field);
+    }
 
     public void setDirection(boolean isAsc) {
         this.direction = isAsc ? SortDirection.ASC : SortDirection.DESC;

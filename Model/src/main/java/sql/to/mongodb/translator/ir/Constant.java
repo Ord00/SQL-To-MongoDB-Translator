@@ -1,11 +1,13 @@
 package sql.to.mongodb.translator.ir;
 
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Setter;
 import sql.to.mongodb.translator.ir.expression.Arithmetical;
 
 @Getter
 @Setter
+@EqualsAndHashCode
 public class Constant implements Arithmetical {
     private ConstantType type;
     private Object value;

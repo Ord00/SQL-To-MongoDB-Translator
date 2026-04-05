@@ -4,6 +4,7 @@ import org.springframework.stereotype.Component;
 import sql.to.mongodb.translator.exceptions.IRGenerationException;
 import sql.to.mongodb.translator.ir.Constant;
 import sql.to.mongodb.translator.ir.Field;
+import sql.to.mongodb.translator.ir.GroupByField;
 import sql.to.mongodb.translator.ir.SortField;
 import sql.to.mongodb.translator.ir.SqlToMongoIR;
 import sql.to.mongodb.translator.ir.condition.ConditionNode;
@@ -19,6 +20,7 @@ import sql.to.mongodb.translator.ir.projection.AggregateProjection;
 import sql.to.mongodb.translator.ir.projection.ArithmeticProjection;
 import sql.to.mongodb.translator.ir.projection.CaseProjection;
 import sql.to.mongodb.translator.ir.projection.ProjectionField;
+import sql.to.mongodb.translator.ir.projection.Projectionable;
 import sql.to.mongodb.translator.ir.projection.SubqueryProjection;
 import sql.to.mongodb.translator.parser.Node;
 import sql.to.mongodb.translator.parser.NodeType;
@@ -29,6 +31,9 @@ import sql.to.mongodb.translator.scanner.Category;
 import sql.to.mongodb.translator.scanner.Token;
 
 import java.util.*;
+
+import static sql.to.mongodb.translator.processors.ExpressionBuilder.extractAlias;
+import static sql.to.mongodb.translator.processors.ExpressionBuilder.extractFieldParts;
 
 @Component
 public class IRGenerator {
@@ -152,9 +157,77 @@ public class IRGenerator {
     private void processColumnNames(Node columnNamesNode) throws IRGenerationException {
         if (columnNamesNode.getChildren() == null) return;
 
-        for (Node child : columnNamesNode.getChildren()) {
-            processProjection(child);
+        int i = 0;
+        List<Node> columns = columnNamesNode.getChildren();
+
+        while (i < columns.size()) {
+            switch (columns.get(i).getNodeType()) {
+                case TERMINAL -> {
+                    if ("*".equals(columns.get(i).getToken().lexeme)) {
+                        processAllColumns();
+                        ++i;
+                    } else {
+                        ProjectionField field = new ProjectionField();
+                        field.setField(ExpressionBuilder.buildExpressionString(columns.get(i)));
+                        i = processAlias(columns, i, field);
+                        ir.getProjectionFields().add(field);
+                    }
+                }
+                case IDENTIFIER -> {
+                    ProjectionField field = new ProjectionField();
+
+                    if (!extractFieldParts(columns.get(i), field)) {
+                        i = processAlias(columns, i, field);
+                        ir.getProjectionFields().add(field);
+                    }
+                }
+                case AGGREGATE -> {
+                    AggregateProjection aggregate = ExpressionBuilder.buildAggregateFunction(columns.get(i));
+                    if (aggregate != null) {
+                        ir.getProjectionFields().add(aggregate);
+                        ir.setHasAggregateFunctions(true);
+                    }
+                    ++i;
+                }
+                case ARITHMETIC_EXP -> {
+                    Arithmetical arithmeticExpr = ExpressionBuilder.buildArithmeticExpression(columns.get(i));
+                    if (arithmeticExpr != null) {
+                        ArithmeticProjection arithmetic = new ArithmeticProjection();
+                        arithmetic.setExpression(arithmeticExpr);
+                        i = processAlias(columns, i, arithmetic);
+                        ir.getProjectionFields().add(arithmetic);
+                        ir.setHasComplexProjections(true);
+                    }
+                }
+                case CASE -> {
+                    CaseExpression caseExpr = parseCaseExpression(columns.get(i));
+                    if (caseExpr != null) {
+                        CaseProjection caseProjection = new CaseProjection();
+                        caseProjection.setExpression(caseExpr);
+                        i = processAlias(columns, i, caseProjection);
+                        ir.getProjectionFields().add(caseProjection);
+                        ir.setHasComplexProjections(true);
+                    }
+                }
+                case QUERY -> i = processSubqueryInProjection(columns, i);
+                default -> {
+                    ProjectionField defaultField = new ProjectionField();
+                    defaultField.setField(ExpressionBuilder.buildExpressionString(columns.get(i)));
+                    i = processAlias(columns, i, defaultField);
+                    ir.getProjectionFields().add(defaultField);
+                }
+            }
         }
+    }
+
+    private int processAlias(List<Node> columns, int i, Projectionable field) {
+        int result = i + 1;
+        String alias = extractAlias(columns, result);
+        if (alias != null) {
+            result += 2;
+            field.setAlias(alias);
+        }
+        return result;
     }
 
     private void processAllColumns() {
@@ -164,59 +237,6 @@ public class IRGenerator {
             field.setSource(currentContext.peek());
         }
         ir.getProjectionFields().add(field);
-    }
-
-    private void processProjection(Node projectionNode) throws IRGenerationException {
-        switch (projectionNode.getNodeType()) {
-            case TERMINAL -> {
-                if ("*".equals(projectionNode.getToken().lexeme)) {
-                    processAllColumns();
-                } else {
-                    ProjectionField field = new ProjectionField();
-                    field.setField(ExpressionBuilder.buildExpressionString(projectionNode));
-                    field.setAlias(extractAlias(projectionNode));
-                    ir.getProjectionFields().add(field);
-                }
-            }
-            case IDENTIFIER -> {
-                ProjectionField field = ExpressionBuilder.buildFieldProjection(projectionNode);
-                ir.getProjectionFields().add(field);
-            }
-            case AGGREGATE -> {
-                AggregateProjection aggregate = ExpressionBuilder.buildAggregateFunction(projectionNode);
-                if (aggregate != null) {
-                    ir.getProjectionFields().add(aggregate);
-                    ir.setHasAggregateFunctions(true);
-                }
-            }
-            case ARITHMETIC_EXP -> {
-                Arithmetical arithmeticExpr = ExpressionBuilder.buildArithmeticExpression(projectionNode);
-                if (arithmeticExpr != null) {
-                    ArithmeticProjection arithmetic = new ArithmeticProjection();
-                    arithmetic.setExpression(arithmeticExpr);
-                    arithmetic.setAlias(extractAlias(projectionNode));
-                    ir.getProjectionFields().add(arithmetic);
-                    ir.setHasComplexProjections(true);
-                }
-            }
-            case CASE -> {
-                CaseExpression caseExpr = parseCaseExpression(projectionNode);
-                if (caseExpr != null) {
-                    CaseProjection caseProjection = new CaseProjection();
-                    caseProjection.setExpression(caseExpr);
-                    caseProjection.setAlias(extractAlias(projectionNode));
-                    ir.getProjectionFields().add(caseProjection);
-                    ir.setHasComplexProjections(true);
-                }
-            }
-            case QUERY -> processSubqueryInProjection(projectionNode);
-            default -> {
-                ProjectionField defaultField = new ProjectionField();
-                defaultField.setField(ExpressionBuilder.buildExpressionString(projectionNode));
-                defaultField.setAlias(extractAlias(projectionNode));
-                ir.getProjectionFields().add(defaultField);
-            }
-        }
     }
 
     private CaseExpression parseCaseExpression(Node caseNode) throws IRGenerationException {
@@ -413,8 +433,8 @@ public class IRGenerator {
 
         if (groupByNode.getChildren() != null) {
             for (Node child : groupByNode.getChildren()) {
-                String field = extractFieldFromGroupBy(child);
-                if (field != null && !field.isEmpty()) {
+                GroupByField field = extractFieldFromGroupBy(child);
+                if (field != null) {
                     ir.getGroupByFields().add(field);
                 }
             }
@@ -424,7 +444,7 @@ public class IRGenerator {
     private void processOrderBy(Node orderByNode) {
         if (orderByNode.getChildren() == null) return;
 
-        String currentField = null;
+        SortField currentField = null;
         Boolean currentDirection = null;
 
         for (Node child : orderByNode.getChildren()) {
@@ -444,13 +464,7 @@ public class IRGenerator {
                     currentDirection = false;
                 }
             } else {
-                String field = extractFieldFromOrderBy(child);
-                if (field != null) {
-                    if (currentField != null) {
-                        addSortField(currentField, true);
-                    }
-                    currentField = field;
-                }
+                currentField = extractFieldFromOrderBy(child);
             }
         }
 
@@ -459,11 +473,9 @@ public class IRGenerator {
         }
     }
 
-    private void addSortField(String field, boolean ascending) {
-        SortField sortField = new SortField();
-        sortField.setField(field);
-        sortField.setDirection(ascending);
-        ir.getOrderBy().add(sortField);
+    private void addSortField(SortField field, boolean ascending) {
+        field.setDirection(ascending);
+        ir.getOrderBy().add(field);
     }
 
     private void processTableNames(Node tableNamesNode) throws IRGenerationException {
@@ -626,56 +638,49 @@ public class IRGenerator {
         }
     }
 
-    private void processSubqueryInProjection(Node subqueryNode) throws IRGenerationException {
-        SqlToMongoIR subqueryIR = generateIR(subqueryNode, outerTables, tableAliases);
+    private int processSubqueryInProjection(List<Node> columns, int i) throws IRGenerationException {
+        int result = i;
+
+        SqlToMongoIR subqueryIR = generateIR(columns.get(i), outerTables, tableAliases);
 
         SubqueryProjection projection = new SubqueryProjection();  // ← extends CorrelationSubquery
         projection.setSubqueryIR(subqueryIR);
-        projection.setAlias(extractAlias(subqueryNode));
+        ++result;
+
+        String alias = extractAlias(columns, result);
+        if (alias != null) {
+            result += 2;
+            projection.setAlias(alias);
+        }
 
         // Если есть корреляции, они будут добавлены через correlations поле
-        List<CorrelationCondition> correlations = conditionExtractor.extractCorrelations(subqueryNode);
+        List<CorrelationCondition> correlations = conditionExtractor.extractCorrelations(columns.get(i));
         projection.getCorrelations().addAll(correlations);
 
         ir.getProjectionFields().add(projection);
         ir.setHasSubqueries(true);
         ir.setHasComplexProjections(true);
+
+        return result;
     }
 
     // ========== Вспомогательные методы ==========
 
-    private String extractAlias(Node node) {
-        return getString(node);
-    }
-
-    public static String getString(Node node) {
-        if (node.getChildren() != null) {
-            for (int i = 0; i < node.getChildren().size(); i++) {
-                Node child = node.getChildren().get(i);
-                if (child.getNodeType() == NodeType.TERMINAL &&
-                        "AS".equals(child.getToken().lexeme) &&
-                        i + 1 < node.getChildren().size()) {
-                    Node aliasNode = node.getChildren().get(i + 1);
-                    if (aliasNode.getNodeType() == NodeType.TERMINAL) {
-                        return aliasNode.getToken().lexeme;
-                    }
-                }
-            }
-        }
-        return null;
-    }
-
-    private String extractFieldFromGroupBy(Node node) {
+    private GroupByField extractFieldFromGroupBy(Node node) {
         if (node.getNodeType() == NodeType.TERMINAL) {
-            return node.getToken().lexeme;
+            return new GroupByField(node.getToken().lexeme);
         } else if (node.getNodeType() == NodeType.IDENTIFIER) {
-            return ExpressionBuilder.buildIdentifierString(node);
+            List<Node> parts = node.getChildren();
+            return new GroupByField(parts.getFirst().getToken().lexeme,
+                    parts.getLast().getToken().lexeme);
         }
         return null;
     }
 
-    private String extractFieldFromOrderBy(Node node) {
-        return extractFieldFromGroupBy(node);
+    private SortField extractFieldFromOrderBy(Node node) {
+        List<Node> parts = node.getChildren();
+        return new SortField(parts.getFirst().getToken().lexeme,
+                parts.getLast().getToken().lexeme);
     }
 
     private record GenerationState(SqlToMongoIR ir,
