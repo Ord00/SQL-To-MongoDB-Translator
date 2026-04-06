@@ -24,6 +24,8 @@ import sql.to.mongodb.translator.scanner.Token;
 import java.math.BigDecimal;
 import java.util.*;
 
+import static sql.to.mongodb.translator.processors.ExpressionBuilder.buildAggregateExpression;
+
 public record ConditionExtractor(SqlToMongoIR ir,
                                  Set<String> outerTables,
                                  Map<String, String> outerAliases) {
@@ -40,7 +42,9 @@ public record ConditionExtractor(SqlToMongoIR ir,
      * Извлечение условия с учетом приоритетов операторов и скобок
      * Использует алгоритм рекурсивного спуска
      */
-    public ConditionNode extractCondition(Node logicalNode, IRGenerator irGenerator) {
+    public ConditionNode extractCondition(Node logicalNode,
+                                          IRGenerator irGenerator,
+                                          IRGenerator.GenerationContext ctx) {
         if (logicalNode == null || logicalNode.getChildren() == null) {
             return null;
         }
@@ -49,7 +53,7 @@ public record ConditionExtractor(SqlToMongoIR ir,
         List<Object> tokens = linearizeCondition(logicalNode);
 
         // Парсим с учетом приоритетов
-        return parseCondition(tokens, irGenerator);
+        return parseCondition(tokens, irGenerator, ctx);
     }
 
     /**
@@ -89,19 +93,24 @@ public record ConditionExtractor(SqlToMongoIR ir,
      * AndExpression -> PrimaryExpression { 'AND' PrimaryExpression }
      * PrimaryExpression -> '(' Expression ')' | LOGICAL_CHECK
      */
-    private ConditionNode parseCondition(List<Object> tokens, IRGenerator irGenerator) {
+    private ConditionNode parseCondition(List<Object> tokens,
+                                         IRGenerator irGenerator,
+                                         IRGenerator.GenerationContext ctx) {
         if (tokens.isEmpty()) {
             return null;
         }
 
-        return parseOrExpression(tokens, new int[]{0}, irGenerator);
+        return parseOrExpression(tokens, new int[]{0}, irGenerator, ctx);
     }
 
     /**
      * OR имеет наименьший приоритет
      */
-    private ConditionNode parseOrExpression(List<Object> tokens, int[] pos, IRGenerator irGenerator) {
-        ConditionNode left = parseAndExpression(tokens, pos, irGenerator);
+    private ConditionNode parseOrExpression(List<Object> tokens,
+                                            int[] pos,
+                                            IRGenerator irGenerator,
+                                            IRGenerator.GenerationContext ctx) {
+        ConditionNode left = parseAndExpression(tokens, pos, irGenerator, ctx);
 
         while (pos[0] < tokens.size()) {
             Object token = tokens.get(pos[0]);
@@ -110,7 +119,7 @@ public record ConditionExtractor(SqlToMongoIR ir,
             }
             pos[0]++; // пропускаем OR
 
-            ConditionNode right = parseAndExpression(tokens, pos, irGenerator);
+            ConditionNode right = parseAndExpression(tokens, pos, irGenerator, ctx);
 
             LinkNode orNode = new LinkNode();
             orNode.setType(LinkNode.LinkType.OR);
@@ -125,8 +134,11 @@ public record ConditionExtractor(SqlToMongoIR ir,
     /**
      * AND имеет средний приоритет
      */
-    private ConditionNode parseAndExpression(List<Object> tokens, int[] pos, IRGenerator irGenerator) {
-        ConditionNode left = parsePrimaryExpression(tokens, pos, irGenerator);
+    private ConditionNode parseAndExpression(List<Object> tokens,
+                                             int[] pos,
+                                             IRGenerator irGenerator,
+                                             IRGenerator.GenerationContext ctx) {
+        ConditionNode left = parsePrimaryExpression(tokens, pos, irGenerator, ctx);
 
         while (pos[0] < tokens.size()) {
             Object token = tokens.get(pos[0]);
@@ -135,7 +147,7 @@ public record ConditionExtractor(SqlToMongoIR ir,
             }
             pos[0]++; // пропускаем AND
 
-            ConditionNode right = parsePrimaryExpression(tokens, pos, irGenerator);
+            ConditionNode right = parsePrimaryExpression(tokens, pos, irGenerator, ctx);
 
             LinkNode andNode = new LinkNode();
             andNode.setType(LinkNode.LinkType.AND);
@@ -152,7 +164,8 @@ public record ConditionExtractor(SqlToMongoIR ir,
      */
     private ConditionNode parsePrimaryExpression(List<Object> tokens,
                                                  int[] pos,
-                                                 IRGenerator irGenerator) {
+                                                 IRGenerator irGenerator,
+                                                 IRGenerator.GenerationContext ctx) {
         if (pos[0] >= tokens.size()) {
             return null;
         }
@@ -162,7 +175,7 @@ public record ConditionExtractor(SqlToMongoIR ir,
         // Обработка скобок
         if ("(".equals(token)) {
             pos[0]++; // пропускаем '('
-            ConditionNode expr = parseOrExpression(tokens, pos, irGenerator);
+            ConditionNode expr = parseOrExpression(tokens, pos, irGenerator, ctx);
 
             // Ожидаем закрывающую скобку
             if (pos[0] < tokens.size()
@@ -176,7 +189,7 @@ public record ConditionExtractor(SqlToMongoIR ir,
         // Атомарное условие (LOGICAL_CHECK)
         if (token instanceof Node node && node.getNodeType() == NodeType.LOGICAL_CHECK) {
             pos[0]++;
-            return extractLogicalCheck(node, irGenerator);
+            return extractLogicalCheck(node, irGenerator, ctx);
         }
 
         return null;
@@ -185,7 +198,9 @@ public record ConditionExtractor(SqlToMongoIR ir,
     /**
      * Извлечение атомарного условия из LOGICAL_CHECK узла
      */
-    private ConditionNode extractLogicalCheck(Node logicalCheckNode, IRGenerator irGenerator) {
+    private ConditionNode extractLogicalCheck(Node logicalCheckNode,
+                                              IRGenerator irGenerator,
+                                              IRGenerator.GenerationContext ctx) {
         if (logicalCheckNode.getChildren() == null) {
             return null;
         }
@@ -236,7 +251,7 @@ public record ConditionExtractor(SqlToMongoIR ir,
             } else if (child.getNodeType() == NodeType.ATTRIBUTES) {
                 attributesNode = child;
             } else {
-                Expressionable expr = buildExpression(child);
+                Expressionable expr = buildExpression(child, ctx);
                 if (expr != null) {
                     operands.add(expr);
                     if (leftOperand == null && !hasIn && !hasExists) {
@@ -315,7 +330,8 @@ public record ConditionExtractor(SqlToMongoIR ir,
      * - ARITHMETIC_EXP (арифметические выражения)
      * - QUERY (подзапросы)
      */
-    private List<Expressionable> extractAttributes(Node attributesNode, IRGenerator irGenerator) {
+    private List<Expressionable> extractAttributes(Node attributesNode,
+                                                   IRGenerator irGenerator) {
         List<Expressionable> values = new ArrayList<>();
 
         if (attributesNode.getChildren() == null) {
@@ -413,7 +429,7 @@ public record ConditionExtractor(SqlToMongoIR ir,
         return exists;
     }
 
-    private Expressionable buildExpression(Node node) {
+    private Expressionable buildExpression(Node node, IRGenerator.GenerationContext ctx) {
         if (node == null) return null;
 
         switch (node.getNodeType()) {
@@ -433,6 +449,8 @@ public record ConditionExtractor(SqlToMongoIR ir,
                 return buildField(node);
             case ARITHMETIC_EXP:
                 return ExpressionBuilder.buildArithmeticExpression(node);
+            case AGGREGATE:
+                return buildAggregateExpression(node, ctx);
             case CASE:
                 return null;
             case QUERY:
@@ -476,6 +494,9 @@ public record ConditionExtractor(SqlToMongoIR ir,
     }
 
     public enum ConditionContext {
-        WHERE, HAVING, JOIN, SELECT
+        WHERE,
+        HAVING,
+        JOIN,
+        SELECT
     }
 }

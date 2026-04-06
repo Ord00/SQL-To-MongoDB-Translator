@@ -5,7 +5,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import sql.to.mongodb.translator.ir.Arithmetic;
 import sql.to.mongodb.translator.ir.Field;
 import sql.to.mongodb.translator.ir.SortField;
 import sql.to.mongodb.translator.ir.SqlToMongoIR;
@@ -207,32 +206,34 @@ class IRGeneratorTest {
                 BinaryOperation.Operator.MULTIPLY),
                 "Profit"));
         expectedSubIR.setHasComplexProjections(true);
-        expectedIR.getOrderBy().add(new SortField("Profit", null, SortField.SortDirection.DESC));
+        expectedSubIR.getOrderBy().add(new SortField(
+                "Profit",
+                null,
+                SortField.SortDirection.DESC));
         expectedSubIR.setLimit(3);
 
 
         expectedIR.setWhereCondition(new LinkNode(LinkNode.LinkType.AND, List.of(
-                new Comparison(
-                        new Field("R", "RaceDate"),
-                        ">=",
-                        new Field("TS", "EntryDate")),
                 new LinkNode(LinkNode.LinkType.AND, List.of(
+                        new Comparison(
+                                new Field("R", "RaceDate"),
+                                ">=",
+                                new Field("TS", "EntryDate")),
                         new LinkNode(LinkNode.LinkType.OR, List.of(
                                 new NullCheck(new Field("TS", "ExitDate"), true),
                                 new Comparison(
                                         new Field("R", "RaceDate"),
                                         "<=",
                                         new Field("TS", "ExitDate"))
-                        )),
-                        new InCondition(
-                                new Arithmetic(new BinaryOperation(
-                                        new Field("R", "TicketPrice"),
-                                        new Field("R", "SoldTickets"),
-                                        BinaryOperation.Operator.MULTIPLY)),
-                                List.of(new Subquery(expectedSubIR))
-                        )
-                )))
-        ));
+                        ))
+                )),
+                new InCondition(
+                        new BinaryOperation(new Field("R", "TicketPrice"),
+                                new Field("R", "SoldTickets"),
+                                BinaryOperation.Operator.MULTIPLY),
+                        List.of(new Subquery(expectedSubIR))
+                )
+        )));
 
         String codeToScan = """
                 SELECT DISTINCT Cn.Id_country, Cn.CountryName
@@ -259,16 +260,8 @@ class IRGeneratorTest {
 
         SqlToMongoIR actualIR = irGenerator.generateIR(root);
 
-        Assertions.assertAll(
-                () -> Assertions.assertEquals("Race", actualIR.getMainCollection()),
-                () -> Assertions.assertEquals(expectedIR.getJoins(), actualIR.getJoins()),
-                () -> Assertions.assertTrue(actualIR.isDistinct()),
-                () -> Assertions.assertNotNull(actualIR.getWhereCondition()),
-                () -> Assertions.assertTrue(actualIR.isHasSubqueries())
-        );
-
-//        assertThat(actualIR)
-//                .usingRecursiveComparison()
-//                .isEqualTo(expectedIR);
+        assertThat(actualIR)
+                .usingRecursiveComparison()
+                .isEqualTo(expectedIR);
     }
 }

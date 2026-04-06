@@ -1,8 +1,11 @@
 package sql.to.mongodb.translator.processors;
 
+import sql.to.mongodb.translator.IRGenerator;
+import sql.to.mongodb.translator.ir.Aggregate;
 import sql.to.mongodb.translator.ir.Constant;
 import sql.to.mongodb.translator.ir.Field;
 import sql.to.mongodb.translator.ir.expression.Arithmetical;
+import sql.to.mongodb.translator.ir.expression.Expressionable;
 import sql.to.mongodb.translator.ir.projection.AggregateProjection;
 import sql.to.mongodb.translator.ir.projection.ProjectionField;
 import sql.to.mongodb.translator.ir.projection.Projectionable;
@@ -290,5 +293,61 @@ public class ExpressionBuilder {
                 extractTokensRecursive(child, tokens);
             }
         }
+    }
+
+    public static Expressionable buildAggregateExpression(Node aggregateNode,
+                                                          IRGenerator.GenerationContext ctx) {
+        Aggregate aggregate = new Aggregate();
+        String functionName = null;
+        String fieldName = null;
+        boolean distinct = false;
+
+        for (Node child : aggregateNode.getChildren()) {
+            if (child.getNodeType() == NodeType.TERMINAL) {
+                Token token = child.getToken();
+                String lexeme = token.lexeme.toUpperCase();
+                if (lexeme.equals("COUNT") || lexeme.equals("SUM") ||
+                        lexeme.equals("AVG") || lexeme.equals("MIN") ||
+                        lexeme.equals("MAX")) {
+                    functionName = lexeme;
+                } else if ("DISTINCT".equals(token.lexeme)) {
+                    distinct = true;
+                } else if ("*".equals(token.lexeme)) {
+                    fieldName = "*";
+                }
+            } else if (child.getNodeType() == NodeType.IDENTIFIER) {
+                fieldName = ExpressionBuilder.buildIdentifierString(child);
+            }
+        }
+
+        if (functionName != null) {
+            try {
+                Aggregate.AggregateType type = Aggregate.AggregateType.valueOf(functionName);
+                aggregate.setType(type);
+
+                ProjectionField field = new ProjectionField();
+                if (fieldName != null && fieldName.contains(".")) {
+                    String[] parts = fieldName.split("\\.");
+                    field.setSource(parts[0]);
+                    field.setField(parts[1]);
+                } else {
+                    field.setField(fieldName);
+                }
+                aggregate.setField(field);
+                aggregate.setDistinct(distinct);
+
+                // Отмечаем, что в запросе есть агрегатные функции
+                if (ctx.ir != null) {
+                    ctx.ir.setHasAggregateFunctions(true);
+                    ctx.ir.setRequiresAggregation(true);
+                }
+
+                return aggregate;
+            } catch (IllegalArgumentException e) {
+                // Неизвестный тип агрегации
+            }
+        }
+
+        return null;
     }
 }
