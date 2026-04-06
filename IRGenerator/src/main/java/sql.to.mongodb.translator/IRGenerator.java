@@ -20,20 +20,20 @@ import sql.to.mongodb.translator.ir.projection.AggregateProjection;
 import sql.to.mongodb.translator.ir.projection.ArithmeticProjection;
 import sql.to.mongodb.translator.ir.projection.CaseProjection;
 import sql.to.mongodb.translator.ir.projection.ProjectionField;
-import sql.to.mongodb.translator.ir.projection.Projectionable;
 import sql.to.mongodb.translator.ir.projection.SubqueryProjection;
 import sql.to.mongodb.translator.parser.Node;
 import sql.to.mongodb.translator.parser.NodeType;
 import sql.to.mongodb.translator.processors.CaseBuilder;
 import sql.to.mongodb.translator.processors.ConditionExtractor;
 import sql.to.mongodb.translator.processors.ExpressionBuilder;
-import sql.to.mongodb.translator.scanner.Category;
 import sql.to.mongodb.translator.scanner.Token;
 
 import java.util.*;
 
 import static sql.to.mongodb.translator.processors.ExpressionBuilder.extractAlias;
 import static sql.to.mongodb.translator.processors.ExpressionBuilder.extractFieldParts;
+import static sql.to.mongodb.translator.processors.ExpressionBuilder.processAlias;
+import static sql.to.mongodb.translator.scanner.Category.IDENTIFIER;
 
 @Component
 public class IRGenerator {
@@ -107,6 +107,8 @@ public class IRGenerator {
             case LOGICAL_CONDITION -> processConditionNode(child);
             case GROUP_BY -> processGroupBy(child);
             case ORDER_BY -> processOrderBy(child);
+            case LIMIT -> processLimit(child);
+            case OFFSET -> processOffset(child);
             default -> {
                 if (child.getChildren() != null) {
                     for (Node grandChild : child.getChildren()) {
@@ -194,6 +196,7 @@ public class IRGenerator {
                     if (arithmeticExpr != null) {
                         ArithmeticProjection arithmetic = new ArithmeticProjection();
                         arithmetic.setExpression(arithmeticExpr);
+                        ++i;
                         i = processAlias(columns, i, arithmetic);
                         ir.getProjectionFields().add(arithmetic);
                         ir.setHasComplexProjections(true);
@@ -218,16 +221,6 @@ public class IRGenerator {
                 }
             }
         }
-    }
-
-    private int processAlias(List<Node> columns, int i, Projectionable field) {
-        int result = i + 1;
-        String alias = extractAlias(columns, result);
-        if (alias != null) {
-            result += 2;
-            field.setAlias(alias);
-        }
-        return result;
     }
 
     private void processAllColumns() {
@@ -448,7 +441,7 @@ public class IRGenerator {
         Boolean currentDirection = null;
 
         for (Node child : orderByNode.getChildren()) {
-            if (child.getNodeType() == NodeType.TERMINAL) {
+            if (child.getNodeType() == NodeType.TERMINAL && child.getToken().category != IDENTIFIER) {
                 String lexeme = child.getToken().lexeme;
                 if ("ASC".equals(lexeme)) {
                     if (currentField != null) {
@@ -473,6 +466,16 @@ public class IRGenerator {
         }
     }
 
+    private void processLimit(Node limitNode) {
+        if (limitNode.getChildren() == null) return;
+        ir.setLimit(Integer.parseInt(limitNode.getChildren().getFirst().getToken().lexeme));
+    }
+
+    private void processOffset(Node offsetNode) {
+        if (offsetNode.getChildren() == null) return;
+        ir.setOffset(Integer.parseInt(offsetNode.getChildren().getFirst().getToken().lexeme));
+    }
+
     private void addSortField(SortField field, boolean ascending) {
         field.setDirection(ascending);
         ir.getOrderBy().add(field);
@@ -489,31 +492,33 @@ public class IRGenerator {
                     Joinable operand = extractJoinableFromTable(child);
 
                     if (ir.getMainCollection() == null) {
+                        currentJoin.setLeft(operand);
                         if (operand instanceof JoinTable table) {
                             ir.setMainCollection(table.getValue());
                             currentJoin.setLeft(operand);
                         } else if (operand instanceof JoinSubquery) {
                             ir.setMainCollection("subquery");
                         }
-                        if (operand.getAlias() != null) {
-                            currentContext.push(operand.getAlias());
-                            tableAliases.put(
-                                    operand.getAlias(),
-                                    operand instanceof JoinTable t ? t.getValue() : "subquery");
-                            ir.getAliases().put(
-                                    operand.getAlias(),
-                                    operand instanceof JoinTable t ? t.getValue() : "subquery");
-                        } else {
-                            currentContext.push(operand instanceof JoinTable t ? t.getValue() : "subquery");
-                        }
-                        outerTables.add(operand instanceof JoinTable t ? t.getValue() : "subquery");
                     } else if (currentJoin.getLeft() == null) {
                         currentJoin.setLeft(operand);
                     } else {
                         currentJoin.setRight(operand);
                     }
+
+                    if (operand.getAlias() != null) {
+                        currentContext.push(operand.getAlias());
+                        tableAliases.put(
+                                operand.getAlias(),
+                                operand instanceof JoinTable t ? t.getValue() : "subquery");
+                        ir.getAliases().put(
+                                operand.getAlias(),
+                                operand instanceof JoinTable t ? t.getValue() : "subquery");
+                    } else {
+                        currentContext.push(operand instanceof JoinTable t ? t.getValue() : "subquery");
+                    }
+                    outerTables.add(operand instanceof JoinTable t ? t.getValue() : "subquery");
                 }
-                case TERMINAL -> {
+                case TERMINAL, JOIN -> {
                     processJoin(child, currentJoin);
                     ir.setHasJoins(true);
                 }
@@ -550,7 +555,7 @@ public class IRGenerator {
         for (Node child : tableNode.getChildren()) {
             if (child.getNodeType() == NodeType.TERMINAL) {
                 Token token = child.getToken();
-                if (token.category == Category.IDENTIFIER) {
+                if (token.category == IDENTIFIER) {
                     if (tableName == null) {
                         tableName = token.lexeme;
                     } else {
@@ -679,6 +684,9 @@ public class IRGenerator {
 
     private SortField extractFieldFromOrderBy(Node node) {
         List<Node> parts = node.getChildren();
+        if (parts.isEmpty()) {
+            return new SortField(node.getToken().lexeme);
+        }
         return new SortField(parts.getFirst().getToken().lexeme,
                 parts.getLast().getToken().lexeme);
     }

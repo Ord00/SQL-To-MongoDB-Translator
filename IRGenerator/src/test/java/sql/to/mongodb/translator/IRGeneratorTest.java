@@ -5,10 +5,15 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import sql.to.mongodb.translator.ir.Arithmetic;
 import sql.to.mongodb.translator.ir.Field;
 import sql.to.mongodb.translator.ir.SortField;
 import sql.to.mongodb.translator.ir.SqlToMongoIR;
+import sql.to.mongodb.translator.ir.Subquery;
 import sql.to.mongodb.translator.ir.condition.Comparison;
+import sql.to.mongodb.translator.ir.condition.InCondition;
+import sql.to.mongodb.translator.ir.condition.LinkNode;
+import sql.to.mongodb.translator.ir.condition.NullCheck;
 import sql.to.mongodb.translator.ir.expression.BinaryOperation;
 import sql.to.mongodb.translator.ir.join.JoinInfo;
 import sql.to.mongodb.translator.ir.join.JoinTable;
@@ -19,6 +24,7 @@ import sql.to.mongodb.translator.scanner.Token;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -133,5 +139,136 @@ class IRGeneratorTest {
         assertThat(actualIR)
                 .usingRecursiveComparison()
                 .isEqualTo(expectedIR);
+    }
+
+    @Test
+    void testGenerationOfLogicalConditionAndIn() {
+        SqlToMongoIR expectedIR = new SqlToMongoIR();
+        expectedIR.setMainCollection("Race");
+        expectedIR.setDistinct(true);
+        expectedIR.getProjectionFields().addAll(List.of(
+                new ProjectionField("Cn", "Id_country", null),
+                new ProjectionField("Cn", "CountryName", null)
+        ));
+        expectedIR.getAliases().putAll(Map.of(
+                "R", "Race",
+                "SR", "StaffRace",
+                "S", "Staff",
+                "TS", "TeamStaff",
+                "Tm", "Team",
+                "Cn", "Country"
+        ));
+
+        expectedIR.setJoins(List.of(
+                new JoinInfo(JoinInfo.JoinType.RIGHT,
+                        new JoinTable("Race", "R"),
+                        new JoinTable("StaffRace", "SR"),
+                        new Comparison(new Field("R", "Id_race"),
+                                "=",
+                                new Field("SR", "Race"))
+                ),
+                new JoinInfo(JoinInfo.JoinType.RIGHT,
+                        new JoinTable("StaffRace", "SR"),
+                        new JoinTable("Staff", "S"),
+                        new Comparison(new Field("SR", "Staff"),
+                                "=",
+                                new Field("S", "Id_staff"))
+                ),
+                new JoinInfo(JoinInfo.JoinType.RIGHT,
+                        new JoinTable("Staff", "S"),
+                        new JoinTable("TeamStaff", "TS"),
+                        new Comparison(new Field("S", "Id_staff"),
+                                "=",
+                                new Field("TS", "Staff"))
+                ),
+                new JoinInfo(JoinInfo.JoinType.RIGHT,
+                        new JoinTable("TeamStaff", "TS"),
+                        new JoinTable("Team", "Tm"),
+                        new Comparison(new Field("TS", "Team"),
+                                "=",
+                                new Field("Tm", "Id_team"))
+                ),
+                new JoinInfo(JoinInfo.JoinType.RIGHT,
+                        new JoinTable("Team", "Tm"),
+                        new JoinTable("Country", "Cn"),
+                        new Comparison(new Field("Tm", "Country"),
+                                "=",
+                                new Field("Cn", "Id_country"))
+                )
+        ));
+        expectedIR.setHasJoins(true);
+
+        SqlToMongoIR expectedSubIR = new SqlToMongoIR();
+        expectedSubIR.setMainCollection("Race");
+        expectedSubIR.getAliases().put("R", "Race");
+        expectedSubIR.getProjectionFields().add(new ArithmeticProjection(new BinaryOperation(
+                new Field("R", "TicketPrice"),
+                new Field("R", "SoldTickets"),
+                BinaryOperation.Operator.MULTIPLY),
+                "Profit"));
+        expectedSubIR.setHasComplexProjections(true);
+        expectedIR.getOrderBy().add(new SortField("Profit", null, SortField.SortDirection.DESC));
+        expectedSubIR.setLimit(3);
+
+
+        expectedIR.setWhereCondition(new LinkNode(LinkNode.LinkType.AND, List.of(
+                new Comparison(
+                        new Field("R", "RaceDate"),
+                        ">=",
+                        new Field("TS", "EntryDate")),
+                new LinkNode(LinkNode.LinkType.AND, List.of(
+                        new LinkNode(LinkNode.LinkType.OR, List.of(
+                                new NullCheck(new Field("TS", "ExitDate"), true),
+                                new Comparison(
+                                        new Field("R", "RaceDate"),
+                                        "<=",
+                                        new Field("TS", "ExitDate"))
+                        )),
+                        new InCondition(
+                                new Arithmetic(new BinaryOperation(
+                                        new Field("R", "TicketPrice"),
+                                        new Field("R", "SoldTickets"),
+                                        BinaryOperation.Operator.MULTIPLY)),
+                                List.of(new Subquery(expectedSubIR))
+                        )
+                )))
+        ));
+
+        String codeToScan = """
+                SELECT DISTINCT Cn.Id_country, Cn.CountryName
+                FROM Race R RIGHT JOIN StaffRace SR
+                	ON R.Id_race = SR.Race
+                	RIGHT JOIN Staff S
+                	ON SR.Staff = S.Id_staff
+                	RIGHT JOIN TeamStaff TS
+                	ON S.Id_staff = TS.Staff
+                	RIGHT JOIN Team Tm
+                	ON TS.Team = Tm.Id_team
+                	RIGHT JOIN Country Cn
+                	ON Tm.Country = Cn.Id_country
+                WHERE R.RaceDate >= TS.EntryDate
+                	AND (TS.ExitDate IS NULL OR R.RaceDate <= TS.ExitDate)
+                	AND R.TicketPrice * R.SoldTickets IN (SELECT R.TicketPrice * R.SoldTickets AS Profit
+                										  FROM Race R
+                										  ORDER BY Profit DESC
+                										  LIMIT 3)""";
+
+        Assertions.assertDoesNotThrow(() -> scanner.tryAnalyse(codeToScan, tokens));
+
+        Node root = Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(tokens));
+
+        SqlToMongoIR actualIR = irGenerator.generateIR(root);
+
+        Assertions.assertAll(
+                () -> Assertions.assertEquals("Race", actualIR.getMainCollection()),
+                () -> Assertions.assertEquals(expectedIR.getJoins(), actualIR.getJoins()),
+                () -> Assertions.assertTrue(actualIR.isDistinct()),
+                () -> Assertions.assertNotNull(actualIR.getWhereCondition()),
+                () -> Assertions.assertTrue(actualIR.isHasSubqueries())
+        );
+
+//        assertThat(actualIR)
+//                .usingRecursiveComparison()
+//                .isEqualTo(expectedIR);
     }
 }

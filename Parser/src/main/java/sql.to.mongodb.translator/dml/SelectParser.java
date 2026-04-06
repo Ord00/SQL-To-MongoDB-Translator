@@ -99,8 +99,10 @@ public class SelectParser {
 
                 }
 
-                children.add(new Node(NodeType.TERMINAL, pA.curToken()));
+                List<Node> limitChildren = new ArrayList<>();
+                limitChildren.add(new Node(NodeType.TERMINAL, pA.curToken()));
                 pA.getNextToken();
+                children.add(new Node(NodeType.LIMIT, limitChildren));
 
             } else {
 
@@ -126,8 +128,10 @@ public class SelectParser {
 
                 }
 
-                children.add(new Node(NodeType.TERMINAL, pA.curToken()));
+                List<Node> offsetChildren = new ArrayList<>();
+                offsetChildren.add(new Node(NodeType.TERMINAL, pA.curToken()));
                 pA.getNextToken();
+                children.add(new Node(NodeType.OFFSET, offsetChildren));
 
             } else {
 

@@ -1,6 +1,7 @@
 package sql.to.mongodb.translator.processors;
 
 import sql.to.mongodb.translator.IRGenerator;
+import sql.to.mongodb.translator.exceptions.IRGenerationException;
 import sql.to.mongodb.translator.ir.Constant;
 import sql.to.mongodb.translator.ir.CorrelationSubquery;
 import sql.to.mongodb.translator.ir.Field;
@@ -197,6 +198,7 @@ public record ConditionExtractor(SqlToMongoIR ir,
         String operator = null;
         List<Expressionable> operands = new ArrayList<>();
         Node subqueryNode = null;
+        Node attributesNode = null;
         Expressionable leftOperand = null;
 
         for (Node child : logicalCheckNode.getChildren()) {
@@ -206,7 +208,7 @@ public record ConditionExtractor(SqlToMongoIR ir,
 
                 if (token.category == Category.LOGICAL_OPERATOR) {
                     operator = lexeme;
-                } else if (token.category == Category.KEYWORD) {
+                } else if (token.category == Category.LOGICAL_EXPRESSION) {
                     switch (lexeme) {
                         case "NOT":
                             hasNot = true;
@@ -231,6 +233,8 @@ public record ConditionExtractor(SqlToMongoIR ir,
                 }
             } else if (child.getNodeType() == NodeType.QUERY) {
                 subqueryNode = child;
+            } else if (child.getNodeType() == NodeType.ATTRIBUTES) {
+                attributesNode = child;
             } else {
                 Expressionable expr = buildExpression(child);
                 if (expr != null) {
@@ -248,18 +252,20 @@ public record ConditionExtractor(SqlToMongoIR ir,
         }
 
         // IN (SELECT ...)
-        if (hasIn && subqueryNode != null && irGenerator != null) {
-            return createInConditionWithSubquery(subqueryNode, irGenerator, leftOperand);
-        }
-
-        // IN (value1, value2, ...)
-        if (hasIn && !operands.isEmpty()) {
+        if (hasIn) {
             InCondition inCondition = new InCondition();
-            for (Expressionable expr : operands) {
-                if (isSupportedForIn(expr)) {
-                    inCondition.getInValues().add(expr);
-                }
+
+            // Устанавливаем левый операнд (поле или выражение до IN)
+            if (leftOperand != null) {
+                inCondition.setOperand(leftOperand);
             }
+
+            // Обрабатываем ATTRIBUTES (значения после IN)
+            if (attributesNode != null) {
+                List<Expressionable> attributes = extractAttributes(attributesNode, irGenerator);
+                inCondition.setInValues(attributes);
+            }
+
             return inCondition;
         }
 
@@ -301,6 +307,87 @@ public record ConditionExtractor(SqlToMongoIR ir,
         return null;
     }
 
+    /**
+     * Извлечение значений из узла ATTRIBUTES
+     * ATTRIBUTES может содержать:
+     * - TERMINAL (числа, строки)
+     * - IDENTIFIER (поля)
+     * - ARITHMETIC_EXP (арифметические выражения)
+     * - QUERY (подзапросы)
+     */
+    private List<Expressionable> extractAttributes(Node attributesNode, IRGenerator irGenerator) {
+        List<Expressionable> values = new ArrayList<>();
+
+        if (attributesNode.getChildren() == null) {
+            return values;
+        }
+
+        for (Node child : attributesNode.getChildren()) {
+            Expressionable expr = buildAttributeExpression(child, irGenerator);
+            if (expr != null) {
+                values.add(expr);
+            }
+        }
+
+        return values;
+    }
+
+    /**
+     * Построение выражения из элемента ATTRIBUTES
+     */
+    private Expressionable buildAttributeExpression(Node node, IRGenerator irGenerator) {
+        if (node == null) return null;
+
+        switch (node.getNodeType()) {
+            case TERMINAL:
+                Token token = node.getToken();
+                if (token.category == Category.NUMBER) {
+                    return Constant.ofNumber(token.lexeme);
+                } else if (token.category == Category.LITERAL) {
+                    return Constant.ofString(token.lexeme);
+                } else if (token.category == Category.IDENTIFIER) {
+                    return new Field(token.lexeme);
+                }
+                break;
+
+            case IDENTIFIER:
+                return buildField(node);
+
+            case ARITHMETIC_EXP:
+                return ExpressionBuilder.buildArithmeticExpression(node);
+
+            case QUERY:
+                try {
+                    // Для подзапроса в IN нужно создать CorrelationSubquery, если есть корреляции
+                    SqlToMongoIR subqueryIR = irGenerator.generateIR(node, outerTables, outerAliases);
+
+                    // Извлекаем корреляции для этого подзапроса
+                    List<CorrelationCondition> correlations = extractCorrelations(node);
+
+                    if (!correlations.isEmpty()) {
+                        CorrelationSubquery correlationSubquery = new CorrelationSubquery();
+                        correlationSubquery.setSubqueryIR(subqueryIR);
+                        correlationSubquery.getCorrelations().addAll(correlations);
+                        return correlationSubquery;
+                    } else {
+                        return new Subquery(subqueryIR);
+                    }
+                } catch (IRGenerationException e) {
+                    // Логирование ошибки
+                }
+                break;
+
+            default:
+                // Если узел имеет детей, рекурсивно обрабатываем
+                if (node.getChildren() != null && node.getChildren().size() == 1) {
+                    return buildAttributeExpression(node.getChildren().getFirst(), irGenerator);
+                }
+                break;
+        }
+
+        return null;
+    }
+
     private ExistsCondition createExistsCondition(Node subqueryNode, IRGenerator irGenerator) {
         ExistsCondition exists = new ExistsCondition();
         exists.setExists(true);
@@ -326,48 +413,6 @@ public record ConditionExtractor(SqlToMongoIR ir,
         return exists;
     }
 
-    private InCondition createInConditionWithSubquery(Node subqueryNode,
-                                                      IRGenerator irGenerator,
-                                                      Expressionable leftOperand) {
-        InCondition inCondition = new InCondition();
-
-        if (leftOperand != null) {
-            inCondition.setOperand(leftOperand);
-        }
-
-        try {
-            SqlToMongoIR subqueryIR = irGenerator.generateIR(subqueryNode, outerTables, outerAliases);
-            List<CorrelationCondition> correlations = extractCorrelations(subqueryNode);
-
-            if (!correlations.isEmpty()) {
-                CorrelationSubquery correlationSubquery = new CorrelationSubquery();
-                correlationSubquery.setSubqueryIR(subqueryIR);
-                correlationSubquery.getCorrelations().addAll(correlations);
-                inCondition.getInValues().add(correlationSubquery);
-
-                if (ir != null) {
-                    ir.setHasCorrelatedSubqueries(true);
-                }
-            } else {
-                Subquery subquery = new Subquery();
-                subquery.setSubqueryIR(subqueryIR);
-                inCondition.getInValues().add(subquery);
-            }
-
-            if (ir != null) {
-                ir.setHasSubqueries(true);
-            }
-        } catch (Exception e) {
-            // Логирование ошибки
-        }
-
-        return inCondition;
-    }
-
-    private boolean isSupportedForIn(Expressionable expr) {
-        return expr instanceof Constant || expr instanceof Field || expr instanceof Subquery;
-    }
-
     private Expressionable buildExpression(Node node) {
         if (node == null) return null;
 
@@ -387,6 +432,7 @@ public record ConditionExtractor(SqlToMongoIR ir,
             case IDENTIFIER:
                 return buildField(node);
             case ARITHMETIC_EXP:
+                return ExpressionBuilder.buildArithmeticExpression(node);
             case CASE:
                 return null;
             case QUERY:

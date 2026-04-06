@@ -5,6 +5,7 @@ import sql.to.mongodb.translator.ir.Field;
 import sql.to.mongodb.translator.ir.expression.Arithmetical;
 import sql.to.mongodb.translator.ir.projection.AggregateProjection;
 import sql.to.mongodb.translator.ir.projection.ProjectionField;
+import sql.to.mongodb.translator.ir.projection.Projectionable;
 import sql.to.mongodb.translator.parser.Node;
 import sql.to.mongodb.translator.parser.NodeType;
 import sql.to.mongodb.translator.scanner.Category;
@@ -101,6 +102,18 @@ public class ExpressionBuilder {
 
         aggregate.setAlias(extractAlias(aggregateNode));
         return aggregate;
+    }
+
+    public static int processAlias(List<Node> columns, int i, Projectionable field) {
+        int result = i;
+        String alias = extractAlias(columns, result);
+        if (alias != null) {
+            result += 2;
+            field.setAlias(alias);
+        } else {
+            result += 1;
+        }
+        return result;
     }
 
     public static String extractAlias(List<Node> columns, int i) {

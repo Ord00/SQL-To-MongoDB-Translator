@@ -5,6 +5,7 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import sql.to.mongodb.translator.ir.expression.Arithmetical;
 import sql.to.mongodb.translator.ir.expression.Expressionable;
 
 @Getter
@@ -12,6 +13,6 @@ import sql.to.mongodb.translator.ir.expression.Expressionable;
 @NoArgsConstructor
 @AllArgsConstructor
 @EqualsAndHashCode
-public class Subquery implements Expressionable {
-    protected SqlToMongoIR subqueryIR;
+public class Arithmetic implements Expressionable {
+    protected Arithmetical expression;
 }

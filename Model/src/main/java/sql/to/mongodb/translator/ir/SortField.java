@@ -36,6 +36,10 @@ public class SortField extends Field {
         super(source, field);
     }
 
+    public SortField(String source) {
+        this.source = source;
+    }
+
     public void setDirection(boolean isAsc) {
         this.direction = isAsc ? SortDirection.ASC : SortDirection.DESC;
     }

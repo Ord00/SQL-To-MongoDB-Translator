@@ -2,18 +2,24 @@ package sql.to.mongodb.translator.ir.projection;
 
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
+import sql.to.mongodb.translator.ir.Aggregate;
 
 @Getter
 @Setter
-@EqualsAndHashCode
-public class AggregateProjection implements Projectionable {
-    private AggregateType type;
-    private ProjectionField field;
-    private boolean distinct;
+@NoArgsConstructor
+@EqualsAndHashCode(callSuper = false)
+public class AggregateProjection extends Aggregate implements Projectionable {
     private String alias;
 
-    public enum AggregateType {
-        COUNT, SUM, AVG, MIN, MAX
+    public AggregateProjection(AggregateType aggregateType,
+                               ProjectionField field,
+                               boolean distinct,
+                               String alias) {
+        this.type = aggregateType;
+        this.field = field;
+        this.distinct = distinct;
+        this.alias = alias;
     }
 }
