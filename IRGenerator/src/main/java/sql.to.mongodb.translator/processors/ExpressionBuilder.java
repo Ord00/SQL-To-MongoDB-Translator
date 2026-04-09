@@ -339,7 +339,6 @@ public class ExpressionBuilder {
                 // Отмечаем, что в запросе есть агрегатные функции
                 if (ctx.ir != null) {
                     ctx.ir.setHasAggregateFunctions(true);
-                    ctx.ir.setRequiresAggregation(true);
                 }
 
                 return aggregate;

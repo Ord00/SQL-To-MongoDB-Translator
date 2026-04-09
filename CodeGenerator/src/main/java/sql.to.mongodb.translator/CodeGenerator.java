@@ -35,15 +35,10 @@ public class CodeGenerator {
             throw new CodeGenerationException("Invalid IR");
         }
 
-        if (requiresAggregation(ir)) {
+        if (ir.isRequiresAggregation()) {
             return generateAggregationPipeline(ir, context);
         }
         return generateFindQuery(ir, context);
-    }
-
-    private boolean requiresAggregation(SqlToMongoIR ir) {
-        return ir.isRequiresAggregation() || ir.isHasJoins() || ir.isHasSubqueries() ||
-                ir.isHasGroupBy() || ir.isHasComplexProjections() || ir.isHasCorrelatedSubqueries();
     }
 
     private String generateFindQuery(SqlToMongoIR ir,

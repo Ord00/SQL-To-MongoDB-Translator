@@ -398,7 +398,6 @@ public class IRGenerator {
 
     private void processGroupBy(Node groupByNode, GenerationContext ctx) {
         ctx.ir.setHasGroupBy(true);
-        ctx.ir.setRequiresAggregation(true);
         if (groupByNode.getChildren() != null) {
             for (Node child : groupByNode.getChildren()) {
                 GroupByField field = extractFieldFromGroupBy(child);

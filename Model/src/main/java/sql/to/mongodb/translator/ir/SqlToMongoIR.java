@@ -17,7 +17,6 @@ import java.util.Map;
 @EqualsAndHashCode
 public class SqlToMongoIR {
 
-    private boolean requiresAggregation = false;
     private boolean distinct = false;
     private boolean hasJoins = false;
     private boolean hasGroupBy = false;
@@ -41,4 +40,9 @@ public class SqlToMongoIR {
     private Integer offset;
 
     private List<SortField> orderBy = new ArrayList<>();
+
+    public boolean isRequiresAggregation() {
+        return hasGroupBy || hasHaving || hasAggregateFunctions ||
+                hasJoins || hasSubqueries || hasComplexProjections || distinct;
+    }
 }
