@@ -3,6 +3,7 @@ import { Tree } from 'react-d3-tree';
 
 interface SyntaxTreeProps {
     data: any;
+    isFullscreen: boolean;
 }
 
 interface TreeNodeDatum {
@@ -13,25 +14,22 @@ interface TreeNodeDatum {
     children?: TreeNodeDatum[];
 }
 
-const SyntaxTree: React.FC<SyntaxTreeProps> = ({ data }) => {
-    // Преобразуем данные в формат, понятный react-d3-tree
+const SyntaxTree: React.FC<SyntaxTreeProps> = ({ data, isFullscreen }) => {
     const convertToTreeData = (node: any): TreeNodeDatum | null => {
         if (!node) return null;
 
-        // Если узел — лист, используем только лексему
         if (node.children.length === 0) {
             return {
-                name: `${node.token.lexeme}`, // Отображаем только лексему
-                attributes: {}, // Листья не имеют атрибутов
-                children: [], // Лист не имеет детей
+                name: `${node.token.lexeme}`,
+                attributes: {},
+                children: [],
             };
         }
 
-        // Если узел имеет детей, добавляем тип узла как атрибут
         return {
-            name: '', // Имя узла не отображается
+            name: '',
             attributes: {
-                type: node.nodeType, // Тип узла
+                type: node.nodeType,
             },
             children: node.children.map((child: any) => convertToTreeData(child)),
         };
@@ -40,49 +38,49 @@ const SyntaxTree: React.FC<SyntaxTreeProps> = ({ data }) => {
     const treeData: TreeNodeDatum | null = convertToTreeData(data);
 
     return (
-        <div className="w-full h-[600px] overflow-auto">
+        <div className={`w-full ${isFullscreen ? 'h-[calc(100vh-120px)]' : 'h-[600px]'} overflow-auto`}>
             {treeData ? (
                 <Tree
                     data={treeData}
-                    orientation="vertical" // Вертикальное отображение
-                    translate={{ x: 400, y: 50 }} // Центрирование дерева
-                    pathFunc="step" // Тип линий (прямые или ступенчатые)
-                    nodeSize={{ x: 200, y: 100 }} // Размер узлов
-                    separation={{ siblings: 1, nonSiblings: 2 }} // Расстояние между узлами
+                    orientation="vertical"
+                    translate={{ x: isFullscreen ? window.innerWidth / 2 : 400, y: 50 }}
+                    pathFunc="step"
+                    nodeSize={{ x: 200, y: 100 }}
+                    separation={{ siblings: 1, nonSiblings: 2 }}
                     renderCustomNodeElement={({ nodeDatum, toggleNode }) => (
                         <g>
                             <circle
                                 r={15}
-                                fill={nodeDatum.children ? '#4F46E5' : '#FEF3C7'} // Цвет узлов: синий для промежуточных, жёлтый для листьев
-                                stroke="#3730A3" // Цвет границ узлов
+                                fill={nodeDatum.children ? '#4F46E5' : '#FEF3C7'}
+                                stroke="#3730A3"
                                 strokeWidth={2}
                                 onClick={toggleNode}
                             />
                             <text
                                 x={20}
                                 y={5}
-                                fill="#1E293B" // Цвет текста
+                                fill="#1E293B"
                                 fontSize="14px"
                                 textAnchor="start"
                             >
-                                {nodeDatum.name} {/* Отображаем имя узла (лексему для листьев) */}
+                                {nodeDatum.name}
                             </text>
                             {nodeDatum.attributes?.type && (
                                 <text
                                     x={20}
                                     y={25}
-                                    fill="#6B7280" // Цвет дополнительного текста
+                                    fill="#6B7280"
                                     fontSize="12px"
                                     textAnchor="start"
                                 >
-                                    {nodeDatum.attributes.type} {/* Отображаем тип узла для промежуточных узлов */}
+                                    {nodeDatum.attributes.type}
                                 </text>
                             )}
                         </g>
                     )}
                 />
             ) : (
-                <p className="text-gray-500">No syntax tree data available.</p>
+                <p className="text-gray-500">Нет данных для отображения синтаксического дерева</p>
             )}
         </div>
     );
