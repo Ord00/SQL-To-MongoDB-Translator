@@ -25,12 +25,6 @@ allprojects {
     repositories {
         mavenCentral()
     }
-
-    configurations {
-        compileOnly {
-            extendsFrom(configurations.annotationProcessor.get())
-        }
-    }
 }
 
 subprojects {

@@ -3,6 +3,7 @@ package sql.to.mongodb.translator.builders;
 import org.springframework.stereotype.Component;
 import sql.to.mongodb.translator.exceptions.CodeGenerationException;
 import sql.to.mongodb.translator.base.GenerationContext;
+import sql.to.mongodb.translator.ir.GroupByField;
 import sql.to.mongodb.translator.ir.SqlToMongoIR;
 import sql.to.mongodb.translator.ir.projection.AggregateProjection;
 import sql.to.mongodb.translator.ir.projection.Projectionable;
@@ -62,8 +63,12 @@ public class GroupStageBuilder {
             group.append("{\n");
             context.increaseIndent();
             for (int i = 0; i < ir.getGroupByFields().size(); i++) {
-                String field = ir.getGroupByFields().get(i);
-                group.append(context.getIndent()).append(field).append(": \"$").append(field).append("\"");
+                GroupByField field = ir.getGroupByFields().get(i);
+                group.append(context.getIndent())
+                        .append(field.getSource())
+                        .append(": \"$")
+                        .append(field.getField())
+                        .append("\"");
                 if (i < ir.getGroupByFields().size() - 1) group.append(",\n");
             }
             context.decreaseIndent();
@@ -102,8 +107,12 @@ public class GroupStageBuilder {
             context.setIndentLevel(savedIndent + 1);
 
             for (int i = 0; i < subIR.getGroupByFields().size(); i++) {
-                String field = subIR.getGroupByFields().get(i);
-                group.append(indent(context)).append(field).append(": \"$").append(field).append("\"");
+                GroupByField field = subIR.getGroupByFields().get(i);
+                group.append(indent(context))
+                        .append(field.getSource())
+                        .append(": \"$")
+                        .append(field.getField())
+                        .append("\"");
                 if (i < subIR.getGroupByFields().size() - 1) group.append(",\n");
             }
 

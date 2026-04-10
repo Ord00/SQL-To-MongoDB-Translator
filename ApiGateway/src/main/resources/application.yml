@@ -1,0 +1,30 @@
+spring:
+  application:
+    name: ApiGateway
+  rabbitmq:
+    username: guest
+    password: guest
+    host: localhost
+    port: 5672
+
+server:
+  port: 8081
+
+rabbitmq:
+  scanner:
+    queue:
+      name: scanner_queue
+  parser:
+    queue:
+      name: parser_queue
+  ir:
+    generator:
+      queue:
+        name: ir_generator_queue
+  code:
+    generator:
+      queue:
+        name: code_generator_queue
+  response:
+    queue:
+      name: result_queue
