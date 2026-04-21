@@ -57,7 +57,7 @@ public class FunctionsParser {
             if (analyseOperand(pA,
                     aggregateChildren,
                     PushdownAutomaton::push,
-                    _ -> false,
+                    t -> false,
                     isColumn)) {
 
                 if (pA.pop().category == Category.LITERAL

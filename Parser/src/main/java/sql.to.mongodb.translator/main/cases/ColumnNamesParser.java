@@ -55,7 +55,7 @@ public class ColumnNamesParser {
 
         } else if (analyseOperand(pA,
                 children,
-                (_, t) -> identifierToken[0] = t,
+                (p, t) -> identifierToken[0] = t,
                 t -> t.category != Category.PROC_NUMBER,
                 true)) {
 
