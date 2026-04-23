@@ -11,7 +11,6 @@ WORKDIR /export
 COPY --from=build /app/Parser/build/libs/Parser-0.0.1-SNAPSHOT.jar app.jar
 
 FROM eclipse-temurin:21-jre-jammy AS final
-VOLUME /tmp
 
 RUN groupadd -r spring && useradd -r -g spring spring
 USER spring
