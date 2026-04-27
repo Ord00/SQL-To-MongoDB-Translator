@@ -1,10 +1,14 @@
 package sql.to.mongodb.translator.parser;
 
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 import sql.to.mongodb.translator.scanner.Token;
 
 import java.util.ArrayList;
 import java.util.List;
 
+@Getter
+@NoArgsConstructor
 public class Node {
     private NodeType nodeType;
     private List<Node> children;
@@ -21,18 +25,6 @@ public class Node {
         this.token = token;
     }
 
-    public NodeType getNodeType() {
-        return nodeType;
-    }
-
-    public List<Node> getChildren() {
-        return children;
-    }
-
-    public Token getToken() {
-        return token;
-    }
-
     @Override
     public String toString() {
 
@@ -44,7 +36,7 @@ public class Node {
 
         } else {
 
-            res = String.format("{%s|%s}", nodeType.toString(), children.toString());
+            res = String.format("{%s|%s}", nodeType.toString(), children);
 
         }
         return res;

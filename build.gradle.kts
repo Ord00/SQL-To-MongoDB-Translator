@@ -34,6 +34,9 @@ subprojects {
         annotationProcessor("org.projectlombok:lombok:1.18.30")
         compileOnly("org.projectlombok:lombok:1.18.30")
 
+        implementation("com.fasterxml.jackson.core:jackson-databind:2.21.2")
+        implementation("com.fasterxml.jackson.core:jackson-annotations:2.21")
+
         testImplementation("org.springframework.boot:spring-boot-starter-test")
         testImplementation("org.springframework.boot:spring-boot-test-autoconfigure")
 

@@ -18,10 +18,10 @@ public class FormatHelper {
                 }
                 return "\"" + str + "\"";
             }
-            case Number _ -> {
+            case Number ignored -> {
                 return value.toString();
             }
-            case Boolean _ -> {
+            case Boolean ignored -> {
                 return value.toString().toLowerCase();
             }
             default -> {

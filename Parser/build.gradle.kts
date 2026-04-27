@@ -19,6 +19,4 @@ dependencies {
     testImplementation("com.github.docker-java:docker-java-api:3.7.1")
     testImplementation("com.github.docker-java:docker-java-transport-httpclient5:3.7.1")
     testImplementation("com.github.docker-java:docker-java-core:3.7.1")
-
-    testImplementation("com.fasterxml.jackson.core:jackson-databind:2.15.3")
 }

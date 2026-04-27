@@ -1,9 +1,9 @@
 package sql.to.mongodb.translator.service;
 
-import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Service;
 
 import sql.to.mongodb.translator.requests.ScannerRequest;
@@ -13,8 +13,6 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-
-import static org.springframework.amqp.utils.SerializationUtils.deserialize;
 
 @Service
 public class TranslateService {
@@ -47,9 +45,8 @@ public class TranslateService {
     }
 
     @RabbitListener(queues = "${rabbitmq.response.queue.name}")
-    public void onResponse(Message message) {
-        AnalysisResult result = (AnalysisResult) deserialize(message.getBody());
-        String correlationId = message.getMessageProperties().getCorrelationId();
+    public void onResponse(AnalysisResult result,
+                           @Header("amqp_correlationId") String correlationId) {
         CompletableFuture<AnalysisResult> future = pendingRequests.remove(correlationId);
         if (future != null) {
             future.complete(result);

@@ -1,5 +1,6 @@
 package sql.to.mongodb.translator.responses;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import sql.to.mongodb.translator.ir.SqlToMongoIR;
 import sql.to.mongodb.translator.parser.Node;
 import sql.to.mongodb.translator.scanner.Token;
@@ -32,6 +33,7 @@ public record AnalysisResult(List<Token> lexicalResult,
                 new ErrorResponse(message, code));
     }
 
+    @JsonIgnore
     public boolean isSuccess() {
         return errorResponse == null;
     }

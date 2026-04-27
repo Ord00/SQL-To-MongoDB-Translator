@@ -1,5 +1,6 @@
 package sql.to.mongodb.translator.ir.join;
 
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import lombok.AllArgsConstructor;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -17,7 +18,9 @@ public class JoinInfo {
     public enum JoinType { INNER, LEFT, RIGHT, FULL, CROSS }
 
     private JoinType type = JoinType.INNER;
+    @JsonTypeInfo(use = JsonTypeInfo.Id.CLASS, include = JsonTypeInfo.As.PROPERTY, property = "@class")
     private Joinable left;
+    @JsonTypeInfo(use = JsonTypeInfo.Id.CLASS, include = JsonTypeInfo.As.PROPERTY, property = "@class")
     private Joinable right;
     private ConditionNode joinCondition;
 

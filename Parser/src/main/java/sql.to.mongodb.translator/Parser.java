@@ -1,7 +1,7 @@
 package sql.to.mongodb.translator;
 
 import org.springframework.stereotype.Component;
-import exceptions.SQLParseException;
+import sql.to.mongodb.translator.exceptions.SQLParseException;
 import sql.to.mongodb.translator.parser.Node;
 import sql.to.mongodb.translator.parser.NodeType;
 import sql.to.mongodb.translator.scanner.Token;

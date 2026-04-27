@@ -379,16 +379,17 @@ public class IRGenerator {
         expr = expr.trim();
         if (expr.startsWith("'") && expr.endsWith("'")) {
             return Constant.ofString(expr.substring(1, expr.length() - 1));
-        }
-        try {
-            Double.parseDouble(expr);
-            return Constant.ofNumber(expr);
-        } catch (NumberFormatException _) {
-        }
-        if (expr.contains(".")) {
+        } else if (expr.contains(".")) {
             String[] parts = expr.split("\\.");
             if (parts.length == 2) {
                 return new Field(parts[0], parts[1]);
+            }
+        } else {
+            try {
+                Double.parseDouble(expr);
+                return Constant.ofNumber(expr);
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException(expr);
             }
         }
         return new Field(expr);
