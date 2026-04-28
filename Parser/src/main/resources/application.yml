@@ -2,9 +2,9 @@ spring:
   application:
     name: ApiGateway
   rabbitmq:
-    username: guest
-    password: guest
-    host: localhost
+    username: ${RABBIT_USER}
+    password: ${RABBIT_PASSWORD}
+    host: ${RABBIT_SERVICE:localhost}
     port: 5672
 
 server:

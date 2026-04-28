@@ -1,59 +1,123 @@
 services:
-  api-gateway:
-    build:
-      context: ./ApiGateway
-      dockerfile: Dockerfile
-
-    ports:
-      - "8080:8080"
-    environment:
-      - SPRING_PROFILES_ACTIVE=prod
-
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+    container_name: frontend
     ports:
       - "5173:80"
     depends_on:
       - api-gateway
+    networks:
+      - app-network
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBIT_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBIT_PASSWORD}
+    healthcheck:
+      test: [ "CMD", "rabbitmq-diagnostics", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: ApiGateway/Dockerfile
+    container_name: api-gateway
+    ports:
+      - "8080:8080"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      RABBIT_USER: guest
+      RABBIT_PASSWORD: guest
+      RABBIT_SERVICE: rabbitmq
+    networks:
+      - app-network
 
   scanner:
     build:
-      context: ./Scanner
-      dockerfile: Dockerfile
-
+      context: .
+      dockerfile: Scanner/Dockerfile
+    container_name: scanner
     ports:
       - "8081:8080"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
     environment:
-      - SPRING_PROFILES_ACTIVE=prod
+      SPRING_PROFILES_ACTIVE: prod
+      RABBIT_USER: ${RABBIT_USER}
+      RABBIT_PASSWORD: ${RABBIT_PASSWORD}
+      RABBIT_SERVICE: rabbitmq
+    networks:
+      - app-network
 
   parser:
     build:
-      context: ./Parser
-      dockerfile: Dockerfile
-
+      context: .
+      dockerfile: Parser/Dockerfile
+    container_name: parser
     ports:
       - "8082:8080"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
     environment:
-      - SPRING_PROFILES_ACTIVE=prod
+      SPRING_PROFILES_ACTIVE: prod
+      RABBIT_USER: ${RABBIT_USER}
+      RABBIT_PASSWORD: ${RABBIT_PASSWORD}
+      RABBIT_SERVICE: rabbitmq
+    networks:
+      - app-network
 
   ir-generator:
     build:
-      context: ./IRGenerator
-      dockerfile: Dockerfile
-
+      context: .
+      dockerfile: IRGenerator/Dockerfile
+    container_name: ir-generator
     ports:
       - "8083:8080"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
     environment:
-      - SPRING_PROFILES_ACTIVE=prod
+      SPRING_PROFILES_ACTIVE: prod
+      RABBIT_USER: ${RABBIT_USER}
+      RABBIT_PASSWORD: ${RABBIT_PASSWORD}
+      RABBIT_SERVICE: rabbitmq
+    networks:
+      - app-network
 
   code-generator:
     build:
-      context: ./CodeGenerator
-      dockerfile: Dockerfile
-
+      context: .
+      dockerfile: CodeGenerator/Dockerfile
+    container_name: code-generator
     ports:
       - "8084:8080"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
     environment:
-      - SPRING_PROFILES_ACTIVE=prod
+      SPRING_PROFILES_ACTIVE: prod
+      RABBIT_USER: ${RABBIT_USER}
+      RABBIT_PASSWORD: ${RABBIT_PASSWORD}
+      RABBIT_SERVICE: rabbitmq
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge

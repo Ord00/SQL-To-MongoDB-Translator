@@ -7,7 +7,7 @@ val testcontainersVersion = "1.21.4"
 dependencies {
     implementation(project(":Model"))
     implementation("org.springframework.boot:spring-boot-starter-actuator")
-    implementation("org.springframework.amqp:spring-rabbit:3.0.13")
+    implementation("org.springframework.boot:spring-boot-starter-amqp")
 
     // TestContainers
     testImplementation("org.testcontainers:testcontainers:2.0.3")

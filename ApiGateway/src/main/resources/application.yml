@@ -2,9 +2,9 @@ spring:
   application:
     name: ApiGateway
   rabbitmq:
-    username: guest
-    password: guest
-    host: localhost
+    username: ${RABBIT_USER}
+    password: ${RABBIT_PASSWORD}
+    host: ${RABBIT_SERVICE:localhost}
     port: 5672
 
 server:
@@ -14,17 +14,6 @@ rabbitmq:
   scanner:
     queue:
       name: scanner_queue
-  parser:
-    queue:
-      name: parser_queue
-  ir:
-    generator:
-      queue:
-        name: ir_generator_queue
-  code:
-    generator:
-      queue:
-        name: code_generator_queue
   response:
     queue:
       name: result_queue
