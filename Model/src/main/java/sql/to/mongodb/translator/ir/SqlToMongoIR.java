@@ -1,5 +1,6 @@
 package sql.to.mongodb.translator.ir;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Setter;
@@ -41,6 +42,7 @@ public class SqlToMongoIR {
 
     private List<SortField> orderBy = new ArrayList<>();
 
+    @JsonIgnore
     public boolean isRequiresAggregation() {
         return hasGroupBy || hasHaving || hasAggregateFunctions ||
                 hasJoins || hasSubqueries || hasComplexProjections || distinct;

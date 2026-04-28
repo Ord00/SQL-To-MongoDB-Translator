@@ -1,5 +1,8 @@
 package sql.to.mongodb.translator.scanner;
 
+import lombok.NoArgsConstructor;
+
+@NoArgsConstructor
 public class Token {
 
     public String lexeme;

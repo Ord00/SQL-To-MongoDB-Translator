@@ -1,5 +1,6 @@
 package sql.to.mongodb.translator.ir;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.AllArgsConstructor;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -21,6 +22,7 @@ public class Field implements Arithmetical {
         this.field = field;
     }
 
+    @JsonIgnore
     public boolean isAllFields() {
         return "*".equals(field);
     }

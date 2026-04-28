@@ -1,19 +1,45 @@
 package sql.to.mongodb.translator;
 
+import exceptions.SQLParseException;
+import org.junit.Test;
+import org.junit.jupiter.api.Assertions;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import sql.to.mongodb.translator.exceptions.CodeGenerationException;
+import sql.to.mongodb.translator.exceptions.SQLScanException;
+import sql.to.mongodb.translator.ir.SqlToMongoIR;
+import sql.to.mongodb.translator.parser.Node;
+import sql.to.mongodb.translator.scanner.Token;
+
+import java.util.ArrayList;
+import java.util.List;
+
+@SpringBootTest
 public class CodeGeneratorTest {
 
-/*    private SQLToMongoDBTranslator translator = new SQLToMongoDBTranslator();
+    @Autowired
+    private Scanner scanner;
+
+    @Autowired
+    private Parser parser;
+
+    @Autowired
+    private IRGenerator irGenerator;
+
+    @Autowired
+    private CodeGenerator codeGenerator;
 
     private String getTranslationResult(String sqlQuery) {
 
         try {
+            List<Token> tokens = new ArrayList<>();
+            scanner.tryAnalyse(sqlQuery, tokens);
+            Node root = parser.tryAnalyse(tokens);
+            SqlToMongoIR ir = irGenerator.generateIR(root);
+            return codeGenerator.generate(ir);
 
-            return translator.translate(sqlQuery);
-
-        } catch (TranslateToMQLException e) {
-
+        } catch (SQLScanException | SQLParseException | CodeGenerationException e) {
             return null;
-
         }
     }
 
@@ -128,11 +154,11 @@ public class CodeGeneratorTest {
                 "db.collection.find({name: {$gt: 'a\\'b\\\\\\cd\\''}}, {a: 1, b: 1, c: 1, d: 1})",
                 getTranslationResult("SELECt a, b, c, d FROM collection WHERE name > 'a\\'b\\\\\\cd\\''")
         );
-        Assertions.assertNull(getTranslationResult("SELECT * FROMcollection"));
+        Assertions.assertNull(getTranslationResult("SELECT * FROM collection"));
         Assertions.assertNull(getTranslationResult("SELECT * FROM 0_nameStartFromDigit"));
         Assertions.assertNull(getTranslationResult("SELECT * FROM collection WHERE22 < age"));
         Assertions.assertNull(getTranslationResult("SELECT * FROM collection WHERE age > 22LIMIT 10"));
         Assertions.assertNull(getTranslationResult("SELECT * FROM collection WHERE name = 'ab'cd'"));
         Assertions.assertNull(getTranslationResult("SELECT * FROM collection WHERE 'abcd\\' = name"));
-    }*/
+    }
 }

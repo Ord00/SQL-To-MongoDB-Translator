@@ -1,7 +1,7 @@
 package sql.to.mongodb.translator.main.cases;
 
 import sql.to.mongodb.translator.PushdownAutomaton;
-import exceptions.SQLParseException;
+import sql.to.mongodb.translator.exceptions.SQLParseException;
 import sql.to.mongodb.translator.parser.Node;
 import sql.to.mongodb.translator.parser.NodeType;
 import sql.to.mongodb.translator.scanner.Category;
@@ -55,7 +55,7 @@ public class ColumnNamesParser {
 
         } else if (analyseOperand(pA,
                 children,
-                (_, t) -> identifierToken[0] = t,
+                (p, t) -> identifierToken[0] = t,
                 t -> t.category != Category.PROC_NUMBER,
                 true)) {
 

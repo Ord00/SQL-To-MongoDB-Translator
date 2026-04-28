@@ -5,4 +5,5 @@ plugins {
 dependencies {
     implementation(project(":Model"))
     implementation("org.springframework.boot:spring-boot-starter-actuator")
+    implementation("org.springframework.boot:spring-boot-starter-amqp")
 }

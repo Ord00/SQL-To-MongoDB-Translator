@@ -1,0 +1,19 @@
+spring:
+  application:
+    name: ApiGateway
+  rabbitmq:
+    username: ${RABBIT_USER}
+    password: ${RABBIT_PASSWORD}
+    host: ${RABBIT_SERVICE:localhost}
+    port: 5672
+
+server:
+  port: 8084
+
+rabbitmq:
+  request:
+    queue:
+      name: code_generator_queue
+  response:
+    queue:
+      name: result_queue

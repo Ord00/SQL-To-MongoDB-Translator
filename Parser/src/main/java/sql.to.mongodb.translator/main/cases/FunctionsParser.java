@@ -1,7 +1,7 @@
 package sql.to.mongodb.translator.main.cases;
 
 import sql.to.mongodb.translator.PushdownAutomaton;
-import exceptions.SQLParseException;
+import sql.to.mongodb.translator.exceptions.SQLParseException;
 import sql.to.mongodb.translator.parser.Node;
 import sql.to.mongodb.translator.parser.NodeType;
 import sql.to.mongodb.translator.scanner.Category;
@@ -57,7 +57,7 @@ public class FunctionsParser {
             if (analyseOperand(pA,
                     aggregateChildren,
                     PushdownAutomaton::push,
-                    _ -> false,
+                    t -> false,
                     isColumn)) {
 
                 if (pA.pop().category == Category.LITERAL
