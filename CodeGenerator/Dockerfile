@@ -17,3 +17,5 @@ USER spring
 
 WORKDIR /app
 COPY --from=publish /export/app.jar app.jar
+
+ENTRYPOINT ["java", "-jar", "/app/app.jar"]
