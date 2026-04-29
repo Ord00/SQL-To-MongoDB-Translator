@@ -18,14 +18,17 @@ public class CodeGenerator {
     private final PipelineBuilder pipelineBuilder;
     private final ProjectStageBuilder projectStageBuilder;
     private final SortStageBuilder sortStageBuilder;
+    private final MatchStageBuilder matchStageBuilder;
 
     @Autowired
     public CodeGenerator(PipelineBuilder pipelineBuilder,
                          ProjectStageBuilder projectStageBuilder,
-                         SortStageBuilder sortStageBuilder) {
+                         SortStageBuilder sortStageBuilder,
+                         MatchStageBuilder matchStageBuilder) {
         this.pipelineBuilder = pipelineBuilder;
         this.projectStageBuilder = projectStageBuilder;
         this.sortStageBuilder = sortStageBuilder;
+        this.matchStageBuilder = matchStageBuilder;
     }
 
     public String generate(SqlToMongoIR ir) throws CodeGenerationException {
@@ -47,8 +50,7 @@ public class CodeGenerator {
 
         // WHERE - используем $match builder но с find синтаксисом
         context.setUseAggregationSyntax(false);
-        var whereBuilder = new MatchStageBuilder(null);
-        String where = whereBuilder.buildWhere(ir, context);
+        String where = matchStageBuilder.buildWhere(ir, context);
         query.append(where != null ? where.replace("{ $match: ", "")
                 .replace("}", "")
                 .trim() : "{}");

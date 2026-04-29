@@ -17,7 +17,7 @@ public class IRGeneratorListener {
 
     private final RabbitTemplate rabbitTemplate;
 
-    private CodeGenerator codeGenerator;
+    private final CodeGenerator codeGenerator;
 
     @RabbitListener(queues = "${rabbitmq.request.queue.name}")
     public void listenIRGeneration(CodeGeneratorRequest request,

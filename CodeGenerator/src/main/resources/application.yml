@@ -1,11 +1,11 @@
 spring:
   application:
-    name: ApiGateway
+    name: CodeGenerator
   rabbitmq:
-    username: ${RABBIT_USER}
-    password: ${RABBIT_PASSWORD}
+    username: ${RABBIT_USER:guest}
+    password: ${RABBIT_PASSWORD:guest}
     host: ${RABBIT_SERVICE:localhost}
-    port: 5672
+    port: ${RABBIT_PORT:5672}
 
 server:
   port: 8084

@@ -1,11 +1,11 @@
 package sql.to.mongodb.translator;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.amqp.rabbit.core.RabbitAdmin;
+import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
@@ -13,40 +13,98 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
-import org.springframework.amqp.core.Queue;
-import org.testcontainers.containers.DockerComposeContainer;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.Network;
+import org.testcontainers.containers.RabbitMQContainer;
+import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
-import sql.to.mongodb.translator.configs.TestRabbitConfig;
+import sql.to.mongodb.translator.config.RabbitMQConfig;
 import sql.to.mongodb.translator.parser.Node;
+import sql.to.mongodb.translator.requests.ParserRequest;
+import sql.to.mongodb.translator.requests.ScannerRequest;
 import sql.to.mongodb.translator.scanner.Token;
 
-import java.io.File;
+import java.time.Duration;
 import java.util.List;
+import java.util.UUID;
 
 @SpringBootTest
 @Testcontainers
 @ActiveProfiles("test")
-@Import(TestRabbitConfig.class)
+@Import(RabbitMQConfig.class)
 public class ParserTest {
 
+    private static final Network NETWORK = Network.newNetwork();
+
     @Container
-    static DockerComposeContainer<?> environment = new DockerComposeContainer<>(
-            new File("src/test/resources/docker-compose.yml"))
-            .withExposedService("rabbitmq", 5672)
-            .withExposedService("scanner", 8080);
+    static RabbitMQContainer rabbitmq =
+            new RabbitMQContainer("rabbitmq:3.13-management-alpine")
+                    .withNetwork(NETWORK)
+                    .withNetworkAliases("rabbitmq-test")
+                    .withExposedPorts(5672);
 
     @DynamicPropertySource
-    static void rabbitMQProperties(DynamicPropertyRegistry registry) {
-        String rabbitmqHost = environment.getServiceHost("rabbitmq", 5672);
-        Integer rabbitmqPort = environment.getServicePort("rabbitmq", 5672);
-
-        registry.add("spring.rabbitmq.host", () -> rabbitmqHost);
-        registry.add("spring.rabbitmq.port", () -> rabbitmqPort);
+    static void properties(DynamicPropertyRegistry registry) {
+        registry.add("spring.rabbitmq.host", rabbitmq::getHost);
+        registry.add("spring.rabbitmq.port", rabbitmq::getFirstMappedPort);
         registry.add("spring.rabbitmq.username", () -> "guest");
         registry.add("spring.rabbitmq.password", () -> "guest");
+    }
 
-        System.out.println("RabbitMQ at: " + rabbitmqHost + ":" + rabbitmqPort);
+    @BeforeEach
+    void setupRabbitTemplate() {
+        rabbitTemplate.setMessageConverter(new Jackson2JsonMessageConverter());
+
+        System.out.println("=== RabbitTemplate конфигурация ===");
+        System.out.println("MessageConverter: " + rabbitTemplate.getMessageConverter().getClass().getSimpleName());
+
+        rabbitTemplate.execute(channel -> {
+            com.rabbitmq.client.AMQP.Queue.DeclareOk response = channel.queueDeclarePassive(PARSER_QUEUE);
+            System.out.println("Messages in queue '" + PARSER_QUEUE + "': " + response.getMessageCount());
+            System.out.println("Consumers on queue: " + response.getConsumerCount());
+            return null;
+        });
+    }
+
+    static GenericContainer<?> scanner;
+
+    @BeforeAll
+    static void startScanner() {
+        String rabbitmqHost = "host.docker.internal";
+        int rabbitmqPort = rabbitmq.getMappedPort(5672);
+
+        System.out.println("RabbitMQ host: " + rabbitmqHost);
+        System.out.println("RabbitMQ port: " + rabbitmqPort);
+
+        scanner = new GenericContainer<>("sql-to-mongodb-translator-scanner:latest")
+                .withNetwork(NETWORK)
+                .withEnv("RABBIT_USER", "guest")
+                .withEnv("RABBIT_PASSWORD", "guest")
+                .withEnv("RABBIT_SERVICE", rabbitmqHost)
+                .withEnv("RABBIT_PORT", String.valueOf(rabbitmqPort))
+                // Включаем DEBUG логирование для Spring AMQP
+                .withEnv("LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_AMQP", "DEBUG")
+                .withEnv("LOGGING_LEVEL_COM_RABBITMQ", "DEBUG")
+                .withLogConsumer(outputFrame -> {
+                    String line = outputFrame.getUtf8String();
+                    System.out.print("[SCANNER] " + line);
+                    if (line.contains("received") || line.contains("Received")) {
+                        System.out.println(">>> Scanner получил сообщение!");
+                    }
+                })
+                .waitingFor(Wait.forLogMessage(".*Started ScannerApplication.*", 1))
+                .withStartupTimeout(Duration.ofMinutes(2));
+
+        scanner.start();
+        System.out.println("Scanner started successfully!");
+    }
+
+    @AfterAll
+    static void stopScanner() {
+        if (scanner != null) {
+            scanner.stop();
+        }
     }
 
     @Autowired
@@ -55,45 +113,26 @@ public class ParserTest {
     @Autowired
     private Parser parser;
 
-    @Autowired
-    private ObjectMapper objectMapper;
-
-    @Autowired
-    private RabbitAdmin rabbitAdmin;
-
     private static final String SCANNER_QUEUE = "scanner_queue";
     private static final String PARSER_QUEUE = "parser_queue";
 
-    @BeforeEach
-    public void setUp() {
-        // Создаем все необходимые очереди
-        rabbitAdmin.declareQueue(new Queue(SCANNER_QUEUE, false));
-        rabbitAdmin.declareQueue(new Queue(PARSER_QUEUE, false));
+    private List<Token> sendSqlToScannerAndGetTokens(String sql) {
+        ScannerRequest request = new ScannerRequest(sql);
+        String correlationId = UUID.randomUUID().toString();
 
-        System.out.println("Queues created successfully");
-    }
+        rabbitTemplate.convertAndSend(SCANNER_QUEUE, request, message -> {
+            message.getMessageProperties().setCorrelationId(correlationId);
+            message.getMessageProperties().setReplyTo(PARSER_QUEUE);
+            message.getMessageProperties().setContentType("application/json");
+            return message;
+        });
 
-    /**
-     * Отправляет SQL в Scanner через RabbitMQ и получает реальные токены
-     */
-    private List<Token> sendSqlToScannerAndGetTokens(String sql) throws JsonProcessingException {
-        rabbitTemplate.convertAndSend(SCANNER_QUEUE, sql);
-        System.out.println("Sent SQL to Scanner");
-
-        // Получаем ответ от Scanner
-        Object response = rabbitTemplate.receiveAndConvert(PARSER_QUEUE);
-
-        if (response == null) {
-            throw new RuntimeException("No response from Scanner service");
-        }
-
-        String tokensJson = (String) response;
-        return objectMapper.readValue(tokensJson,
-                objectMapper.getTypeFactory().constructCollectionType(List.class, Token.class));
+        Object response = rabbitTemplate.receiveAndConvert(PARSER_QUEUE, 30000);
+        return ((ParserRequest) response).lexicalResult();
     }
 
     @Test
-    public void testInOfOneSubquery() throws JsonProcessingException {
+    public void testInOfOneSubquery() {
         String codeToScan = """
                 SELECT id, name, file
                 FROM products
@@ -108,7 +147,7 @@ public class ParserTest {
     }
 
     @Test
-    public void testExistsAndJoin() throws JsonProcessingException {
+    public void testExistsAndJoin() {
         String codeToScan = """
                 SELECT Tm.TeamName
                 FROM Team Tm
@@ -135,7 +174,7 @@ public class ParserTest {
     }
 
     @Test
-    public void testAllWithSpecificTable() throws JsonProcessingException {
+    public void testAllWithSpecificTable() {
         String codeToScan = """
                 SELECT CompetitionName, Race.*
                 FROM Competition LEFT JOIN Race
@@ -146,7 +185,7 @@ public class ParserTest {
     }
 
     @Test
-    public void testAllFunction() throws Exception {
+    public void testAllFunction() {
         String codeToScan = """
                 SELECT TP.Id_team, TP.TeamName
                 FROM TeamProfit TP
@@ -158,7 +197,7 @@ public class ParserTest {
     }
 
     @Test
-    public void testOrderBy() throws JsonProcessingException {
+    public void testOrderBy() {
         String codeToScan = """
                 SELECT R.*, R.TicketPrice * R.SoldTickets AS Profit
                 FROM Race R
@@ -169,7 +208,7 @@ public class ParserTest {
     }
 
     @Test
-    public void testLimit() throws JsonProcessingException {
+    public void testLimit() {
         String codeToScan = """
                 SELECT DISTINCT Cn.Id_country, Cn.CountryName
                 FROM Race R RIGHT JOIN StaffRace SR
@@ -197,7 +236,7 @@ public class ParserTest {
     }
 
     @Test
-    public void testCaseAsAggregateAttribute() throws JsonProcessingException {
+    public void testCaseAsAggregateAttribute() {
         String codeToScan = """
                 SELECT (CalcRes.ChampionshipNum * 100) / CalcRes.Total AS Championship,
                        (CalcRes.CupNum * 100) / CalcRes.Total AS Cup,
