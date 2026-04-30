@@ -1,8 +1,6 @@
 package sql.to.mongodb.translator;
 
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
@@ -10,101 +8,28 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.Network;
-import org.testcontainers.containers.RabbitMQContainer;
-import org.testcontainers.containers.wait.strategy.Wait;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 import sql.to.mongodb.translator.config.RabbitMQConfig;
+import sql.to.mongodb.translator.listener.TestScannerListener;
 import sql.to.mongodb.translator.parser.Node;
-import sql.to.mongodb.translator.requests.ParserRequest;
 import sql.to.mongodb.translator.requests.ScannerRequest;
 import sql.to.mongodb.translator.scanner.Token;
 
-import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 @SpringBootTest
-@Testcontainers
 @ActiveProfiles("test")
 @Import(RabbitMQConfig.class)
 public class ParserTest {
 
-    private static final Network NETWORK = Network.newNetwork();
-
-    @Container
-    static RabbitMQContainer rabbitmq =
-            new RabbitMQContainer("rabbitmq:3.13-management-alpine")
-                    .withNetwork(NETWORK)
-                    .withNetworkAliases("rabbitmq-test")
-                    .withExposedPorts(5672);
-
-    @DynamicPropertySource
-    static void properties(DynamicPropertyRegistry registry) {
-        registry.add("spring.rabbitmq.host", rabbitmq::getHost);
-        registry.add("spring.rabbitmq.port", rabbitmq::getFirstMappedPort);
-        registry.add("spring.rabbitmq.username", () -> "guest");
-        registry.add("spring.rabbitmq.password", () -> "guest");
-    }
-
-    @BeforeEach
-    void setupRabbitTemplate() {
-        rabbitTemplate.setMessageConverter(new Jackson2JsonMessageConverter());
-
-        System.out.println("=== RabbitTemplate конфигурация ===");
-        System.out.println("MessageConverter: " + rabbitTemplate.getMessageConverter().getClass().getSimpleName());
-
-        rabbitTemplate.execute(channel -> {
-            com.rabbitmq.client.AMQP.Queue.DeclareOk response = channel.queueDeclarePassive(PARSER_QUEUE);
-            System.out.println("Messages in queue '" + PARSER_QUEUE + "': " + response.getMessageCount());
-            System.out.println("Consumers on queue: " + response.getConsumerCount());
-            return null;
-        });
-    }
-
-    static GenericContainer<?> scanner;
-
-    @BeforeAll
-    static void startScanner() {
-        String rabbitmqHost = "host.docker.internal";
-        int rabbitmqPort = rabbitmq.getMappedPort(5672);
-
-        System.out.println("RabbitMQ host: " + rabbitmqHost);
-        System.out.println("RabbitMQ port: " + rabbitmqPort);
-
-        scanner = new GenericContainer<>("sql-to-mongodb-translator-scanner:latest")
-                .withNetwork(NETWORK)
-                .withEnv("RABBIT_USER", "guest")
-                .withEnv("RABBIT_PASSWORD", "guest")
-                .withEnv("RABBIT_SERVICE", rabbitmqHost)
-                .withEnv("RABBIT_PORT", String.valueOf(rabbitmqPort))
-                // Включаем DEBUG логирование для Spring AMQP
-                .withEnv("LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_AMQP", "DEBUG")
-                .withEnv("LOGGING_LEVEL_COM_RABBITMQ", "DEBUG")
-                .withLogConsumer(outputFrame -> {
-                    String line = outputFrame.getUtf8String();
-                    System.out.print("[SCANNER] " + line);
-                    if (line.contains("received") || line.contains("Received")) {
-                        System.out.println(">>> Scanner получил сообщение!");
-                    }
-                })
-                .waitingFor(Wait.forLogMessage(".*Started ScannerApplication.*", 1))
-                .withStartupTimeout(Duration.ofMinutes(2));
-
-        scanner.start();
-        System.out.println("Scanner started successfully!");
-    }
-
-    @AfterAll
-    static void stopScanner() {
-        if (scanner != null) {
-            scanner.stop();
-        }
+    static {
+        System.setProperty("spring.rabbitmq.host", "localhost");
+        System.setProperty("spring.rabbitmq.port", "5672");
+        System.setProperty("spring.rabbitmq.username", "guest");
+        System.setProperty("spring.rabbitmq.password", "guest");
     }
 
     @Autowired
@@ -116,9 +41,17 @@ public class ParserTest {
     private static final String SCANNER_QUEUE = "scanner_queue";
     private static final String PARSER_QUEUE = "parser_queue";
 
+    @BeforeEach
+    void setup() {
+        rabbitTemplate.setMessageConverter(new Jackson2JsonMessageConverter());
+    }
+
     private List<Token> sendSqlToScannerAndGetTokens(String sql) {
         ScannerRequest request = new ScannerRequest(sql);
         String correlationId = UUID.randomUUID().toString();
+
+        CountDownLatch latch = new CountDownLatch(1);
+        TestScannerListener.latches.put(correlationId, latch);
 
         rabbitTemplate.convertAndSend(SCANNER_QUEUE, request, message -> {
             message.getMessageProperties().setCorrelationId(correlationId);
@@ -127,9 +60,17 @@ public class ParserTest {
             return message;
         });
 
-        Object response = rabbitTemplate.receiveAndConvert(PARSER_QUEUE, 30000);
-        return ((ParserRequest) response).lexicalResult();
+        try {
+            if (latch.await(10, TimeUnit.SECONDS)) {
+                return TestScannerListener.responses.remove(correlationId);
+            }
+            throw new RuntimeException("Timeout");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Interrupted", e);
+        }
     }
+
 
     @Test
     public void testInOfOneSubquery() {
