@@ -3,20 +3,16 @@ package sql.to.mongodb.translator;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.Network;
-import org.testcontainers.containers.RabbitMQContainer;
-import org.testcontainers.containers.wait.strategy.Wait;
-import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import sql.to.mongodb.translator.config.RabbitMQConfig;
+import sql.to.mongodb.translator.helper.RabbitMQTestHelper;
+import sql.to.mongodb.translator.helper.TestContainersHelper;
 import sql.to.mongodb.translator.ir.Field;
 import sql.to.mongodb.translator.ir.SortField;
 import sql.to.mongodb.translator.ir.SqlToMongoIR;
@@ -30,16 +26,10 @@ import sql.to.mongodb.translator.ir.join.JoinInfo;
 import sql.to.mongodb.translator.ir.join.JoinTable;
 import sql.to.mongodb.translator.ir.projection.ArithmeticProjection;
 import sql.to.mongodb.translator.ir.projection.ProjectionField;
-import sql.to.mongodb.translator.listener.TestParserListener;
 import sql.to.mongodb.translator.parser.Node;
-import sql.to.mongodb.translator.requests.ScannerRequest;
 
-import java.time.Duration;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -48,100 +38,27 @@ import static org.assertj.core.api.Assertions.assertThat;
 @ActiveProfiles("test")
 @Import(RabbitMQConfig.class)
 class IRGeneratorTest {
-    private static final Network NETWORK = Network.newNetwork();
-
-    @Container
-    static RabbitMQContainer rabbitmq =
-            new RabbitMQContainer("rabbitmq:3.13-management-alpine")
-                    .withNetwork(NETWORK)
-                    .withNetworkAliases("rabbitmq-test")
-                    .withExposedPorts(5672);
+    @Autowired
+    private RabbitMQTestHelper rabbitMQTestHelper;
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
-        registry.add("spring.rabbitmq.host", rabbitmq::getHost);
-        registry.add("spring.rabbitmq.port", rabbitmq::getFirstMappedPort);
-        registry.add("spring.rabbitmq.username", () -> "guest");
-        registry.add("spring.rabbitmq.password", () -> "guest");
+        TestContainersHelper.properties(registry);
     }
-
-    static GenericContainer<?> scanner;
-    static GenericContainer<?> parser;
 
     @BeforeAll
     static void startContainers() {
-        String rabbitmqHost = "host.docker.internal";
-        int rabbitmqPort = rabbitmq.getMappedPort(5672);
-
-        scanner = new GenericContainer<>("sql-to-mongodb-translator-scanner:latest")
-                .withNetwork(NETWORK)
-                .withEnv("RABBIT_USER", "guest")
-                .withEnv("RABBIT_PASSWORD", "guest")
-                .withEnv("RABBIT_SERVICE", rabbitmqHost)
-                .withEnv("RABBIT_PORT", String.valueOf(rabbitmqPort))
-                .waitingFor(Wait.forLogMessage(".*Started ScannerApplication.*", 1))
-                .withStartupTimeout(Duration.ofMinutes(2));
-
-        scanner.start();
-
-        parser = new GenericContainer<>("sql-to-mongodb-translator-parser:latest")
-                .withNetwork(NETWORK)
-                .withEnv("RABBIT_USER", "guest")
-                .withEnv("RABBIT_PASSWORD", "guest")
-                .withEnv("RABBIT_SERVICE", rabbitmqHost)
-                .withEnv("RABBIT_PORT", String.valueOf(rabbitmqPort))
-                .waitingFor(Wait.forLogMessage(".*Started ParserApplication.*", 1))
-                .withStartupTimeout(Duration.ofMinutes(2));
-
-        parser.start();
+        TestContainersHelper.startContainers();
     }
 
     @AfterAll
     static void stopContainers() {
-        if (scanner != null) {
-            scanner.stop();
-        }
-        if (parser != null) {
-            parser.stop();
-        }
-        if (rabbitmq != null) {
-            rabbitmq.stop();
-        }
+        TestContainersHelper.stopContainers();
     }
-
-    @Autowired
-    private RabbitTemplate rabbitTemplate;
 
     @Autowired
     IRGenerator irGenerator;
 
-    private static final String SCANNER_QUEUE = "scanner_queue";
-    private static final String IR_GENERATOR_QUEUE = "ir_generator_queue";
-
-    private Node getParserResult(String sql) {
-        ScannerRequest request = new ScannerRequest(sql);
-        String correlationId = UUID.randomUUID().toString();
-
-        CountDownLatch latch = new CountDownLatch(1);
-        TestParserListener.latches.put(correlationId, latch);
-
-        rabbitTemplate.convertAndSend(SCANNER_QUEUE, request, message -> {
-            message.getMessageProperties().setCorrelationId(correlationId);
-            message.getMessageProperties().setReplyTo(IR_GENERATOR_QUEUE);
-            message.getMessageProperties().setContentType("application/json");
-            return message;
-        });
-
-        try {
-            if (latch.await(10, TimeUnit.SECONDS)) {
-                return TestParserListener.responses.remove(correlationId);
-            }
-            throw new RuntimeException("Timeout");
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new RuntimeException("Interrupted", e);
-        }
-    }
 
     @Test
     void testGenerationOfSimpleQuery() {
@@ -151,7 +68,7 @@ class IRGeneratorTest {
 
         String codeToScan = "SELECT * FROM t";
 
-        Node root = getParserResult(codeToScan);
+        Node root = rabbitMQTestHelper.getParserResult(codeToScan);
         SqlToMongoIR actualIR = irGenerator.generateIR(root);
 
         assertThat(actualIR)
@@ -188,7 +105,7 @@ class IRGeneratorTest {
                       JOIN t3 ON t2.id = t3.id
                 """;
 
-        Node root = getParserResult(codeToScan);
+        Node root = rabbitMQTestHelper.getParserResult(codeToScan);
         SqlToMongoIR actualIR = irGenerator.generateIR(root);
 
         assertThat(actualIR)
@@ -220,7 +137,7 @@ class IRGeneratorTest {
                 ORDER BY R.TicketPrice DESC
                 """;
 
-        Node root = getParserResult(codeToScan);
+        Node root = rabbitMQTestHelper.getParserResult(codeToScan);
         SqlToMongoIR actualIR = irGenerator.generateIR(root);
 
         assertThat(actualIR)
@@ -342,7 +259,7 @@ class IRGeneratorTest {
                 										  ORDER BY Profit DESC
                 										  LIMIT 3)""";
 
-        Node root = getParserResult(codeToScan);
+        Node root = rabbitMQTestHelper.getParserResult(codeToScan);
         SqlToMongoIR actualIR = irGenerator.generateIR(root);
 
         assertThat(actualIR)
