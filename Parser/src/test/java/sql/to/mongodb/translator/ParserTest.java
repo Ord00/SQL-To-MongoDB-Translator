@@ -3,9 +3,7 @@ package sql.to.mongodb.translator;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
@@ -73,7 +71,7 @@ public class ParserTest {
     }
 
     @AfterAll
-    static void stopScanner() {
+    static void stopContainers() {
         if (scanner != null) {
             scanner.stop();
         }
@@ -91,12 +89,7 @@ public class ParserTest {
     private static final String SCANNER_QUEUE = "scanner_queue";
     private static final String PARSER_QUEUE = "parser_queue";
 
-    @BeforeEach
-    void setup() {
-        rabbitTemplate.setMessageConverter(new Jackson2JsonMessageConverter());
-    }
-
-    private List<Token> sendSqlToScannerAndGetTokens(String sql) {
+    private List<Token> getScannerResult(String sql) {
         ScannerRequest request = new ScannerRequest(sql);
         String correlationId = UUID.randomUUID().toString();
 
@@ -121,7 +114,6 @@ public class ParserTest {
         }
     }
 
-
     @Test
     public void testInOfOneSubquery() {
         String codeToScan = """
@@ -131,7 +123,7 @@ public class ParserTest {
                              FROM sales)""";
 
         // Получаем реальные токены от Scanner через RabbitMQ
-        List<Token> tokens = sendSqlToScannerAndGetTokens(codeToScan);
+        List<Token> tokens = getScannerResult(codeToScan);
 
         // Передаем токены в Parser
         Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(tokens));
@@ -160,7 +152,7 @@ public class ParserTest {
                                         ) >= 1
                                 )""";
 
-        List<Token> tokens = sendSqlToScannerAndGetTokens(codeToScan);
+        List<Token> tokens = getScannerResult(codeToScan);
         Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(tokens));
     }
 
@@ -171,7 +163,7 @@ public class ParserTest {
                 FROM Competition LEFT JOIN Race
                      ON Id_competition = Competition""";
 
-        List<Token> tokens = sendSqlToScannerAndGetTokens(codeToScan);
+        List<Token> tokens = getScannerResult(codeToScan);
         Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(tokens));
     }
 
@@ -183,7 +175,7 @@ public class ParserTest {
                 WHERE TP.Profit >= ALL(SELECT TP2.Profit
                                        FROM TeamProfit TP2)""";
 
-        List<Token> tokens = sendSqlToScannerAndGetTokens(codeToScan);
+        List<Token> tokens = getScannerResult(codeToScan);
         Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(tokens));
     }
 
@@ -194,7 +186,7 @@ public class ParserTest {
                 FROM Race R
                 ORDER BY R.TicketPrice * R.SoldTickets DESC""";
 
-        List<Token> tokens = sendSqlToScannerAndGetTokens(codeToScan);
+        List<Token> tokens = getScannerResult(codeToScan);
         Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(tokens));
     }
 
@@ -219,7 +211,7 @@ public class ParserTest {
                                                           ORDER BY Profit DESC
                                                           LIMIT 3)""";
 
-        List<Token> tokens = sendSqlToScannerAndGetTokens(codeToScan);
+        List<Token> tokens = getScannerResult(codeToScan);
 
         Node result = Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(tokens));
 
@@ -248,7 +240,7 @@ public class ParserTest {
                         ON Comp.CompetitionType = CT.Id_competition_type
                      ) AS CalcRes""";
 
-        List<Token> tokens = sendSqlToScannerAndGetTokens(codeToScan);
+        List<Token> tokens = getScannerResult(codeToScan);
         Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(tokens));
     }
 }
