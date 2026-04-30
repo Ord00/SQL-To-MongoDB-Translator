@@ -1,6 +1,8 @@
 package sql.to.mongodb.translator;
 
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
@@ -9,27 +11,75 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.Network;
+import org.testcontainers.containers.RabbitMQContainer;
+import org.testcontainers.containers.wait.strategy.Wait;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 import sql.to.mongodb.translator.config.RabbitMQConfig;
 import sql.to.mongodb.translator.listener.TestScannerListener;
 import sql.to.mongodb.translator.parser.Node;
 import sql.to.mongodb.translator.requests.ScannerRequest;
 import sql.to.mongodb.translator.scanner.Token;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 @SpringBootTest
+@Testcontainers
 @ActiveProfiles("test")
 @Import(RabbitMQConfig.class)
 public class ParserTest {
+    private static final Network NETWORK = Network.newNetwork();
 
-    static {
-        System.setProperty("spring.rabbitmq.host", "localhost");
-        System.setProperty("spring.rabbitmq.port", "5672");
-        System.setProperty("spring.rabbitmq.username", "guest");
-        System.setProperty("spring.rabbitmq.password", "guest");
+    @Container
+    static RabbitMQContainer rabbitmq =
+            new RabbitMQContainer("rabbitmq:3.13-management-alpine")
+                    .withNetwork(NETWORK)
+                    .withNetworkAliases("rabbitmq-test")
+                    .withExposedPorts(5672);
+
+    @DynamicPropertySource
+    static void properties(DynamicPropertyRegistry registry) {
+        registry.add("spring.rabbitmq.host", rabbitmq::getHost);
+        registry.add("spring.rabbitmq.port", rabbitmq::getFirstMappedPort);
+        registry.add("spring.rabbitmq.username", () -> "guest");
+        registry.add("spring.rabbitmq.password", () -> "guest");
+    }
+
+    static GenericContainer<?> scanner;
+
+    @BeforeAll
+    static void startScanner() {
+        String rabbitmqHost = "host.docker.internal";
+        int rabbitmqPort = rabbitmq.getMappedPort(5672);
+
+        scanner = new GenericContainer<>("sql-to-mongodb-translator-scanner:latest")
+                .withNetwork(NETWORK)
+                .withEnv("RABBIT_USER", "guest")
+                .withEnv("RABBIT_PASSWORD", "guest")
+                .withEnv("RABBIT_SERVICE", rabbitmqHost)
+                .withEnv("RABBIT_PORT", String.valueOf(rabbitmqPort))
+                .waitingFor(Wait.forLogMessage(".*Started ScannerApplication.*", 1))
+                .withStartupTimeout(Duration.ofMinutes(2));
+
+        scanner.start();
+    }
+
+    @AfterAll
+    static void stopScanner() {
+        if (scanner != null) {
+            scanner.stop();
+        }
+        if (rabbitmq != null) {
+            rabbitmq.stop();
+        }
     }
 
     @Autowired
