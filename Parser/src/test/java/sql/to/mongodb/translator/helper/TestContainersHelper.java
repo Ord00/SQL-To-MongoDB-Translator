@@ -28,7 +28,6 @@ public class TestContainersHelper {
 
     private static RabbitMQContainer rabbitmq;
     private static GenericContainer<?> scanner;
-    private static GenericContainer<?> parser;
 
     public static void startContainers() {
         rabbitmq = new RabbitMQContainer("rabbitmq:3.13-management-alpine")
@@ -51,25 +50,11 @@ public class TestContainersHelper {
                 .withStartupTimeout(Duration.ofMinutes(2));
 
         scanner.start();
-
-        parser = new GenericContainer<>("sql-to-mongodb-translator-parser:latest")
-                .withNetwork(NETWORK)
-                .withEnv("RABBIT_USER", "guest")
-                .withEnv("RABBIT_PASSWORD", "guest")
-                .withEnv("RABBIT_SERVICE", rabbitmqHost)
-                .withEnv("RABBIT_PORT", String.valueOf(rabbitmqPort))
-                .waitingFor(Wait.forLogMessage(".*Started ParserApplication.*", 1))
-                .withStartupTimeout(Duration.ofMinutes(2));
-
-        parser.start();
     }
 
     public static void stopContainers() {
         if (scanner != null) {
             scanner.stop();
-        }
-        if (parser != null) {
-            parser.stop();
         }
         if (rabbitmq != null) {
             rabbitmq.stop();

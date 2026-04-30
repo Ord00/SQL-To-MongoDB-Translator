@@ -38,9 +38,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 @ActiveProfiles("test")
 @Import(RabbitMQConfig.class)
 class IRGeneratorTest {
-    @Autowired
-    private RabbitMQTestHelper rabbitMQTestHelper;
-
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
         TestContainersHelper.properties(registry);
@@ -59,6 +56,8 @@ class IRGeneratorTest {
     @Autowired
     IRGenerator irGenerator;
 
+    @Autowired
+    private RabbitMQTestHelper rabbitMQTestHelper;
 
     @Test
     void testGenerationOfSimpleQuery() {

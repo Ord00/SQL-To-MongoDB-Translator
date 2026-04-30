@@ -8,111 +8,42 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.Network;
-import org.testcontainers.containers.RabbitMQContainer;
-import org.testcontainers.containers.wait.strategy.Wait;
-import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import sql.to.mongodb.translator.config.RabbitMQConfig;
-import sql.to.mongodb.translator.listener.TestScannerListener;
+import sql.to.mongodb.translator.helper.RabbitMQTestHelper;
+import sql.to.mongodb.translator.helper.TestContainersHelper;
 import sql.to.mongodb.translator.parser.Node;
-import sql.to.mongodb.translator.requests.ScannerRequest;
 import sql.to.mongodb.translator.scanner.Token;
 
-import java.time.Duration;
 import java.util.List;
-import java.util.UUID;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 
 @SpringBootTest
 @Testcontainers
 @ActiveProfiles("test")
 @Import(RabbitMQConfig.class)
 public class ParserTest {
-    private static final Network NETWORK = Network.newNetwork();
-
-    @Container
-    static RabbitMQContainer rabbitmq =
-            new RabbitMQContainer("rabbitmq:3.13-management-alpine")
-                    .withNetwork(NETWORK)
-                    .withNetworkAliases("rabbitmq-test")
-                    .withExposedPorts(5672);
-
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
-        registry.add("spring.rabbitmq.host", rabbitmq::getHost);
-        registry.add("spring.rabbitmq.port", rabbitmq::getFirstMappedPort);
-        registry.add("spring.rabbitmq.username", () -> "guest");
-        registry.add("spring.rabbitmq.password", () -> "guest");
+        TestContainersHelper.properties(registry);
     }
 
-    static GenericContainer<?> scanner;
-
     @BeforeAll
-    static void startScanner() {
-        String rabbitmqHost = "host.docker.internal";
-        int rabbitmqPort = rabbitmq.getMappedPort(5672);
-
-        scanner = new GenericContainer<>("sql-to-mongodb-translator-scanner:latest")
-                .withNetwork(NETWORK)
-                .withEnv("RABBIT_USER", "guest")
-                .withEnv("RABBIT_PASSWORD", "guest")
-                .withEnv("RABBIT_SERVICE", rabbitmqHost)
-                .withEnv("RABBIT_PORT", String.valueOf(rabbitmqPort))
-                .waitingFor(Wait.forLogMessage(".*Started ScannerApplication.*", 1))
-                .withStartupTimeout(Duration.ofMinutes(2));
-
-        scanner.start();
+    static void startContainers() {
+        TestContainersHelper.startContainers();
     }
 
     @AfterAll
     static void stopContainers() {
-        if (scanner != null) {
-            scanner.stop();
-        }
-        if (rabbitmq != null) {
-            rabbitmq.stop();
-        }
+        TestContainersHelper.stopContainers();
     }
-
-    @Autowired
-    private RabbitTemplate rabbitTemplate;
 
     @Autowired
     private Parser parser;
 
-    private static final String SCANNER_QUEUE = "scanner_queue";
-    private static final String PARSER_QUEUE = "parser_queue";
-
-    private List<Token> getScannerResult(String sql) {
-        ScannerRequest request = new ScannerRequest(sql);
-        String correlationId = UUID.randomUUID().toString();
-
-        CountDownLatch latch = new CountDownLatch(1);
-        TestScannerListener.latches.put(correlationId, latch);
-
-        rabbitTemplate.convertAndSend(SCANNER_QUEUE, request, message -> {
-            message.getMessageProperties().setCorrelationId(correlationId);
-            message.getMessageProperties().setReplyTo(PARSER_QUEUE);
-            message.getMessageProperties().setContentType("application/json");
-            return message;
-        });
-
-        try {
-            if (latch.await(10, TimeUnit.SECONDS)) {
-                return TestScannerListener.responses.remove(correlationId);
-            }
-            throw new RuntimeException("Timeout");
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new RuntimeException("Interrupted", e);
-        }
-    }
+    @Autowired
+    private RabbitMQTestHelper rabbitMQTestHelper;
 
     @Test
     public void testInOfOneSubquery() {
@@ -123,7 +54,7 @@ public class ParserTest {
                              FROM sales)""";
 
         // Получаем реальные токены от Scanner через RabbitMQ
-        List<Token> tokens = getScannerResult(codeToScan);
+        List<Token> tokens = rabbitMQTestHelper.getScannerResult(codeToScan);
 
         // Передаем токены в Parser
         Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(tokens));
@@ -152,7 +83,7 @@ public class ParserTest {
                                         ) >= 1
                                 )""";
 
-        List<Token> tokens = getScannerResult(codeToScan);
+        List<Token> tokens = rabbitMQTestHelper.getScannerResult(codeToScan);
         Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(tokens));
     }
 
@@ -163,7 +94,7 @@ public class ParserTest {
                 FROM Competition LEFT JOIN Race
                      ON Id_competition = Competition""";
 
-        List<Token> tokens = getScannerResult(codeToScan);
+        List<Token> tokens = rabbitMQTestHelper.getScannerResult(codeToScan);
         Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(tokens));
     }
 
@@ -175,7 +106,7 @@ public class ParserTest {
                 WHERE TP.Profit >= ALL(SELECT TP2.Profit
                                        FROM TeamProfit TP2)""";
 
-        List<Token> tokens = getScannerResult(codeToScan);
+        List<Token> tokens = rabbitMQTestHelper.getScannerResult(codeToScan);
         Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(tokens));
     }
 
@@ -186,7 +117,7 @@ public class ParserTest {
                 FROM Race R
                 ORDER BY R.TicketPrice * R.SoldTickets DESC""";
 
-        List<Token> tokens = getScannerResult(codeToScan);
+        List<Token> tokens = rabbitMQTestHelper.getScannerResult(codeToScan);
         Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(tokens));
     }
 
@@ -211,7 +142,7 @@ public class ParserTest {
                                                           ORDER BY Profit DESC
                                                           LIMIT 3)""";
 
-        List<Token> tokens = getScannerResult(codeToScan);
+        List<Token> tokens = rabbitMQTestHelper.getScannerResult(codeToScan);
 
         Node result = Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(tokens));
 
@@ -240,7 +171,7 @@ public class ParserTest {
                         ON Comp.CompetitionType = CT.Id_competition_type
                      ) AS CalcRes""";
 
-        List<Token> tokens = getScannerResult(codeToScan);
+        List<Token> tokens = rabbitMQTestHelper.getScannerResult(codeToScan);
         Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(tokens));
     }
 }
