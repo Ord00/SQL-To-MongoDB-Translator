@@ -69,7 +69,7 @@ class IRGeneratorTest {
     static GenericContainer<?> parser;
 
     @BeforeAll
-    static void startScanner() {
+    static void startContainers() {
         String rabbitmqHost = "host.docker.internal";
         int rabbitmqPort = rabbitmq.getMappedPort(5672);
 
@@ -152,7 +152,6 @@ class IRGeneratorTest {
         String codeToScan = "SELECT * FROM t";
 
         Node root = getParserResult(codeToScan);
-
         SqlToMongoIR actualIR = irGenerator.generateIR(root);
 
         assertThat(actualIR)
@@ -190,7 +189,6 @@ class IRGeneratorTest {
                 """;
 
         Node root = getParserResult(codeToScan);
-
         SqlToMongoIR actualIR = irGenerator.generateIR(root);
 
         assertThat(actualIR)
@@ -223,7 +221,6 @@ class IRGeneratorTest {
                 """;
 
         Node root = getParserResult(codeToScan);
-
         SqlToMongoIR actualIR = irGenerator.generateIR(root);
 
         assertThat(actualIR)
@@ -346,7 +343,6 @@ class IRGeneratorTest {
                 										  LIMIT 3)""";
 
         Node root = getParserResult(codeToScan);
-
         SqlToMongoIR actualIR = irGenerator.generateIR(root);
 
         assertThat(actualIR)
