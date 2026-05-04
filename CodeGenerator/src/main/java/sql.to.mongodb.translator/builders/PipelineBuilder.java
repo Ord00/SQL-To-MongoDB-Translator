@@ -108,8 +108,9 @@ public class PipelineBuilder {
         // Поиск коррелированных подзапросов в SELECT
         for (var proj : ir.getProjectionFields()) {
             if (proj instanceof SubqueryProjection subq && subqueryHelper.isCorrelated(subq)) {
+                String subqueryName = context.getOrCreateSubqueryName(subq);
                 String stage = lookupStageBuilder.buildCorrelatedSubqueryLookup(
-                        subq, context.nextSubqueryName(), context);
+                        subq, subqueryName, context);
                 if (stage != null) stages.add(stage);
             }
         }

@@ -221,30 +221,27 @@ public record ConditionExtractor(SqlToMongoIR ir,
                 Token token = child.getToken();
                 String lexeme = token.lexeme;
 
-                if (token.category == Category.LOGICAL_OPERATOR) {
-                    operator = lexeme;
-                } else if (token.category == Category.LOGICAL_EXPRESSION) {
-                    switch (lexeme) {
-                        case "NOT":
-                            hasNot = true;
-                            break;
-                        case "EXISTS":
-                            hasExists = true;
-                            break;
-                        case "IN":
-                            hasIn = true;
-                            break;
-                        case "BETWEEN":
-                            hasBetween = true;
-                            break;
-                        case "IS":
-                            break;
-                        case "LIKE":
-                            operator = "LIKE";
-                            break;
+                switch (token.category) {
+                    case LOGICAL_OPERATOR -> operator = lexeme;
+                    case LOGICAL_EXPRESSION -> {
+                        switch (lexeme) {
+                            case "NOT" -> hasNot = true;
+                            case "EXISTS" -> hasExists = true;
+                            case "IN" -> hasIn = true;
+                            case "BETWEEN" -> hasBetween = true;
+                            case "LIKE" -> operator = "LIKE";
+                        }
                     }
-                } else if (token.category == Category.NULL) {
-                    hasIsNull = true;
+                    case NULL -> hasIsNull = true;
+                    default -> {
+                        Expressionable expr = buildExpression(child, ctx);
+                        if (expr != null) {
+                            operands.add(expr);
+                            if (leftOperand == null && !hasIn && !hasExists) {
+                                leftOperand = expr;
+                            }
+                        }
+                    }
                 }
             } else if (child.getNodeType() == NodeType.QUERY) {
                 subqueryNode = child;

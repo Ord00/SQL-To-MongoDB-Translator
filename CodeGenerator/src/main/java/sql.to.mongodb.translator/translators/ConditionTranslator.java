@@ -4,6 +4,7 @@ import org.springframework.stereotype.Component;
 import sql.to.mongodb.translator.exceptions.CodeGenerationException;
 import sql.to.mongodb.translator.base.GenerationContext;
 import sql.to.mongodb.translator.helpers.SubqueryHelper;
+import sql.to.mongodb.translator.ir.Constant;
 import sql.to.mongodb.translator.ir.CorrelationSubquery;
 import sql.to.mongodb.translator.ir.Subquery;
 import sql.to.mongodb.translator.ir.condition.BetweenCondition;
@@ -28,6 +29,12 @@ public class ConditionTranslator {
     private static final Map<String, String> OPERATOR_MAP = Map.of(
             "=", "$eq", "!=", "$ne", "<>", "$ne",
             "<", "$lt", "<=", "$lte", ">", "$gt", ">=", "$gte",
+            "LIKE", "$regex"
+    );
+
+    private static final Map<String, String> OPERATOR_REVERSE_MAP = Map.of(
+            "=", "$eq", "!=", "$ne", "<>", "$ne",
+            "<", "$gt", "<=", "$gte", ">", "$lt", ">=", "$lte",
             "LIKE", "$regex"
     );
 
@@ -70,36 +77,32 @@ public class ConditionTranslator {
         return "{ " + op + ": [ " + String.join(", ", parts) + " ] }";
     }
 
+    //TODO агрегация при сравнении переменной с переменной (возможно в IRGenerator'е)
     private String translateComparison(Comparison comp,
                                        GenerationContext context) throws CodeGenerationException {
-        String field = expressionTranslator.translate(comp.getOperand(), context);
 
-        if (comp.getValue() instanceof Subquery subquery) {
-            return translateComparisonWithSubquery(field, subquery, comp.getOperator(), context);
+        String field;
+        String value;
+        String mongoOp;
+
+        if (comp.getOperand() instanceof Constant) {
+            if (comp.getValue() instanceof Constant) {
+                throw new CodeGenerationException("Comparison of 2 constants!");
+            }
+            value = expressionTranslator.translate(comp.getOperand(), context);
+            field = expressionTranslator.translate(comp.getValue(), context);
+            mongoOp = OPERATOR_REVERSE_MAP.getOrDefault(comp.getOperator(), "$eq");
+        } else {
+            field = expressionTranslator.translate(comp.getOperand(), context);
+            value = expressionTranslator.translate(comp.getValue(), context);
+            mongoOp = OPERATOR_MAP.getOrDefault(comp.getOperator(), "$eq");
         }
-
-        String value = expressionTranslator.translate(comp.getValue(), context);
-        String mongoOp = OPERATOR_MAP.getOrDefault(comp.getOperator(), "$eq");
 
         if (context.isUseAggregationSyntax()) {
             return "{ $expr: { " + mongoOp + ": [ " + field + ", " + value + " ] } }";
         }
         return "$eq".equals(mongoOp) ? "{ " + field + ": " + value + " }"
                 : "{ " + field + ": { " + mongoOp + ": " + value + " } }";
-    }
-
-    private String translateComparisonWithSubquery(String field,
-                                                   Subquery subquery,
-                                                   String operator,
-                                                   GenerationContext context) {
-        String mongoOp = OPERATOR_MAP.getOrDefault(operator, "$eq");
-        boolean correlated = subqueryHelper.isCorrelated(subquery);
-
-        if (correlated) {
-            String corrName = context.nextCorrelationName();
-            return "{ $expr: { " + mongoOp + ": [ " + field + ", \"$" + corrName + "\" ] } }";
-        }
-        return "{ " + field + ": { " + mongoOp + ": /* scalar subquery result */ } }";
     }
 
     private String translateBetween(BetweenCondition between,

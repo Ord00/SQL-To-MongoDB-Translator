@@ -13,6 +13,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import sql.to.mongodb.translator.config.RabbitMQConfig;
 import sql.to.mongodb.translator.helper.RabbitMQTestHelper;
 import sql.to.mongodb.translator.helper.TestContainersHelper;
+import sql.to.mongodb.translator.ir.Constant;
 import sql.to.mongodb.translator.ir.Field;
 import sql.to.mongodb.translator.ir.SortField;
 import sql.to.mongodb.translator.ir.SqlToMongoIR;
@@ -102,6 +103,28 @@ class IRGeneratorTest {
                   SELECT *\s
                   FROM t1 JOIN t2 ON t1.id = t2.id
                       JOIN t3 ON t2.id = t3.id
+                """;
+
+        Node root = rabbitMQTestHelper.getParserResult(codeToScan);
+        SqlToMongoIR actualIR = irGenerator.generateIR(root);
+
+        assertThat(actualIR)
+                .usingRecursiveComparison()
+                .isEqualTo(expectedIR);
+    }
+
+    @Test
+    void testGenerationOfWhere() {
+        SqlToMongoIR expectedIR = new SqlToMongoIR();
+        expectedIR.setMainCollection("collection");
+        expectedIR.getProjectionFields().add(new ProjectionField(null, "*", null));
+        expectedIR.setWhereCondition(new Comparison(
+                new Field("age"),
+                ">",
+                Constant.ofNumber("22")));
+
+        String codeToScan = """
+                SELECT * FROM collection WHERE age > 22
                 """;
 
         Node root = rabbitMQTestHelper.getParserResult(codeToScan);

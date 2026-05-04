@@ -6,6 +6,7 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 import sql.to.mongodb.translator.CodeGenerator;
 import sql.to.mongodb.translator.exceptions.CodeGenerationException;
+import sql.to.mongodb.translator.ir.SqlToMongoIR;
 import sql.to.mongodb.translator.listener.TestIRGeneratorListener;
 import sql.to.mongodb.translator.requests.ScannerRequest;
 
@@ -42,7 +43,8 @@ public class RabbitMQTestHelper {
 
         try {
             if (latch.await(10, TimeUnit.SECONDS)) {
-                return codeGenerator.generate(TestIRGeneratorListener.responses.remove(correlationId));
+                SqlToMongoIR sqlToMongoIR = TestIRGeneratorListener.responses.remove(correlationId);
+                return codeGenerator.generate(sqlToMongoIR);
             }
             throw new RuntimeException("Timeout");
         } catch (InterruptedException e) {

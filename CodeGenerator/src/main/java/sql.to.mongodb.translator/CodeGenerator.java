@@ -48,12 +48,8 @@ public class CodeGenerator {
                                      GenerationContext context) throws CodeGenerationException {
         StringBuilder query = new StringBuilder("db." + ir.getMainCollection() + ".find(");
 
-        // WHERE - используем $match builder но с find синтаксисом
-        context.setUseAggregationSyntax(false);
-        String where = matchStageBuilder.buildWhere(ir, context);
-        query.append(where != null ? where.replace("{ $match: ", "")
-                .replace("}", "")
-                .trim() : "{}");
+        String where = matchStageBuilder.buildFindCondition(ir, context);
+        query.append(where != null ? where : "{}");
 
         // Projection
         String projection = projectStageBuilder.build(ir, context);
@@ -70,7 +66,7 @@ public class CodeGenerator {
         if (ir.getLimit() != null) query.append(".limit(").append(ir.getLimit()).append(")");
         if (ir.getOffset() != null) query.append(".skip(").append(ir.getOffset()).append(")");
 
-        return query.append(";").toString();
+        return query.toString();
     }
 
     private String generateAggregationPipeline(SqlToMongoIR ir,

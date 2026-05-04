@@ -24,9 +24,7 @@ public class MatchStageBuilder {
         if (ir.getWhereCondition() == null) {
             return null;
         }
-        context.setUseAggregationSyntax(true);
-        String condition = conditionTranslator.translate(ir.getWhereCondition(), context);
-        context.setUseAggregationSyntax(false);
+        String condition = translateCondition(ir.getWhereCondition(), context, true);
         return indent(context) + "{ $match: " + condition + " }";
     }
 
@@ -35,9 +33,7 @@ public class MatchStageBuilder {
         if (ir.getHavingCondition() == null) {
             return null;
         }
-        context.setUseAggregationSyntax(true);
-        String condition = conditionTranslator.translate(ir.getHavingCondition(), context);
-        context.setUseAggregationSyntax(false);
+        String condition = translateCondition(ir.getHavingCondition(), context, true);
         return indent(context) + "{ $match: " + condition + " }";
     }
 
@@ -46,11 +42,17 @@ public class MatchStageBuilder {
         if (conditions == null || conditions.isEmpty()) {
             return null;
         }
-        context.setUseAggregationSyntax(true);
         ConditionNode root = combineConditions(conditions);
-        String condition = conditionTranslator.translate(root, context);
-        context.setUseAggregationSyntax(false);
+        String condition = translateCondition(root, context, true);
         return indent(context) + "{ $match: " + condition + " }";
+    }
+
+    public String buildFindCondition(SqlToMongoIR ir,
+                                     GenerationContext context) throws CodeGenerationException {
+        if (ir.getWhereCondition() == null) {
+            return null;
+        }
+        return translateCondition(ir.getWhereCondition(), context, false);
     }
 
     private ConditionNode combineConditions(List<ConditionNode> conditions) {
@@ -59,6 +61,18 @@ public class MatchStageBuilder {
         root.setType(LinkNode.LinkType.AND);
         root.getChildren().addAll(conditions);
         return root;
+    }
+
+    private String translateCondition(ConditionNode conditionNode,
+                                      GenerationContext context,
+                                      boolean useAggregationSyntax) throws CodeGenerationException {
+        boolean originalSyntax = context.isUseAggregationSyntax();
+        context.setUseAggregationSyntax(useAggregationSyntax);
+        try {
+            return conditionTranslator.translate(conditionNode, context);
+        } finally {
+            context.setUseAggregationSyntax(originalSyntax);
+        }
     }
 
     private String indent(GenerationContext context) {

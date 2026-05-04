@@ -23,6 +23,15 @@ public class GenerationContext {
         return "corr_" + (++correlationCounter);
     }
 
+    public String getOrCreateSubqueryName(Object subqueryRef) {
+        String key = subqueryKey(subqueryRef);
+        return subqueryResults.computeIfAbsent(key, ignored -> nextSubqueryName());
+    }
+
+    public String getSubqueryName(Object subqueryRef) {
+        return subqueryResults.get(subqueryKey(subqueryRef));
+    }
+
     public void increaseIndent() {
         indentLevel++;
     }
@@ -33,5 +42,9 @@ public class GenerationContext {
 
     public String getIndent() {
         return "  ".repeat(Math.max(0, indentLevel));
+    }
+
+    private String subqueryKey(Object subqueryRef) {
+        return "subq@" + System.identityHashCode(subqueryRef);
     }
 }

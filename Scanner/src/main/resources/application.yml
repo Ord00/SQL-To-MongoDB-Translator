@@ -1,6 +1,8 @@
 spring:
   application:
     name: Scanner
+  profiles:
+    active: ${ACTIVE_PROFILE:prod}
   rabbitmq:
     username: ${RABBIT_USER:guest}
     password: ${RABBIT_PASSWORD:guest}

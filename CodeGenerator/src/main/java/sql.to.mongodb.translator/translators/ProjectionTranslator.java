@@ -93,9 +93,16 @@ public class ProjectionTranslator {
         boolean correlated = subqueryHelper.isCorrelated(subq);
 
         if (correlated) {
-            String corrName = context.nextCorrelationName();
-            return context.getIndent() + name + ": \"$" + corrName + ".result\"";
+            String subqueryName = context.getSubqueryName(subq);
+            if (subqueryName == null || subqueryName.isBlank()) {
+                subqueryName = context.getOrCreateSubqueryName(subq);
+            }
+            return context.getIndent()
+                    + name
+                    + ": { $ifNull: [ { $arrayElemAt: [ \"$"
+                    + subqueryName
+                    + ".result\", 0 ] }, null ] }";
         }
-        return context.getIndent() + name + ": /* scalar subquery result */";
+        return context.getIndent() + name + ": null";
     }
 }

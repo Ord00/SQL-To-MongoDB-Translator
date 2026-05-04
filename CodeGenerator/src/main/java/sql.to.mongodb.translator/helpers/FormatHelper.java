@@ -11,7 +11,7 @@ public class FormatHelper {
             }
             case String str -> {
                 if (str.startsWith("'") && str.endsWith("'")) {
-                    return "\"" + str.substring(1, str.length() - 1) + "\"";
+                    return str;
                 }
                 if (str.contains(".") && context.isUseAggregationSyntax()) {
                     return "\"$" + str + "\"";

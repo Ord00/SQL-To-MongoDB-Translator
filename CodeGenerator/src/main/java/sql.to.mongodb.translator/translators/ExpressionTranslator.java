@@ -48,7 +48,7 @@ public class ExpressionTranslator {
     }
 
     private String translateConstant(Constant constant, GenerationContext context) {
-        return FormatHelper.formatValue(constant.toString(), context);
+        return FormatHelper.formatValue(constant.getValue(), context);
     }
 
     private String translateBinary(BinaryOperation binary,
