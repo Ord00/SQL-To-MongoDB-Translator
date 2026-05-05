@@ -35,6 +35,6 @@ public class SortStageBuilder {
     }
 
     private String indent(GenerationContext context) {
-        return "  ".repeat(Math.max(0, context.getIndentLevel()));
+        return "    ".repeat(Math.max(0, context.getIndentLevel()));
     }
 }

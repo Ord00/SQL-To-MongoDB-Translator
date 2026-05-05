@@ -25,7 +25,10 @@ public class MatchStageBuilder {
             return null;
         }
         String condition = translateCondition(ir.getWhereCondition(), context, true);
-        return indent(context) + "{ $match: " + condition + " }";
+        condition = wrapAggregationCondition(condition, true);
+        return indent(context) + "{\n"
+                + indent(context) + "    $match: " + condition + "\n"
+                + indent(context) + "}";
     }
 
     public String buildHaving(SqlToMongoIR ir,
@@ -34,7 +37,10 @@ public class MatchStageBuilder {
             return null;
         }
         String condition = translateCondition(ir.getHavingCondition(), context, true);
-        return indent(context) + "{ $match: " + condition + " }";
+        condition = wrapAggregationCondition(condition, true);
+        return indent(context) + "{\n"
+                + indent(context) + "    $match: " + condition + "\n"
+                + indent(context) + "}";
     }
 
     public String buildJoinMatch(List<ConditionNode> conditions,
@@ -44,7 +50,10 @@ public class MatchStageBuilder {
         }
         ConditionNode root = combineConditions(conditions);
         String condition = translateCondition(root, context, true);
-        return indent(context) + "{ $match: " + condition + " }";
+        condition = wrapAggregationCondition(condition, true);
+        return indent(context) + "{\n"
+                + indent(context) + "    $match: " + condition + "\n"
+                + indent(context) + "}";
     }
 
     public String buildFindCondition(SqlToMongoIR ir,
@@ -52,7 +61,11 @@ public class MatchStageBuilder {
         if (ir.getWhereCondition() == null) {
             return null;
         }
-        return translateCondition(ir.getWhereCondition(), context, false);
+        String condition = translateCondition(ir.getWhereCondition(), context, false);
+        if (condition != null && condition.startsWith("{ $")) {
+            return "{ $expr: " + condition + " }";
+        }
+        return condition;
     }
 
     private ConditionNode combineConditions(List<ConditionNode> conditions) {
@@ -76,6 +89,39 @@ public class MatchStageBuilder {
     }
 
     private String indent(GenerationContext context) {
-        return "  ".repeat(Math.max(0, context.getIndentLevel()));
+        return "    ".repeat(Math.max(0, context.getIndentLevel()));
+    }
+
+    private String wrapAggregationCondition(String condition, boolean useAggregationSyntax) {
+        if (!useAggregationSyntax || condition == null || condition.isBlank()) {
+            return condition;
+        }
+        if (condition.contains("\n")) {
+            String exprBody = condition;
+            if (condition.startsWith("{\n") && condition.endsWith("\n}")) {
+                exprBody = condition.substring(2, condition.length() - 2);
+            }
+            return "{\n"
+                    + "            $expr: {\n"
+                    + indentMultiline(exprBody, "            ") + "\n"
+                    + "            }\n"
+                    + "        }";
+        }
+        return "{ $expr: " + condition + " }";
+    }
+
+    private String indentMultiline(String input, String indent) {
+        String[] lines = input.split("\\R", -1);
+        if (lines.length <= 1) {
+            return input;
+        }
+        StringBuilder out = new StringBuilder();
+        for (int i = 0; i < lines.length; i++) {
+            out.append(indent).append(lines[i]);
+            if (i < lines.length - 1) {
+                out.append("\n");
+            }
+        }
+        return out.toString();
     }
 }

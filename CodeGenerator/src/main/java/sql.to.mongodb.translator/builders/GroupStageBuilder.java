@@ -26,7 +26,9 @@ public class GroupStageBuilder {
             return null;
         }
 
-        StringBuilder group = new StringBuilder(indent(context) + "{ $group: {\n");
+        StringBuilder group = new StringBuilder(indent(context)).append("{\n");
+        context.increaseIndent();
+        group.append(context.getIndent()).append("$group: {\n");
         context.increaseIndent();
 
         // _id
@@ -49,7 +51,9 @@ public class GroupStageBuilder {
         }
 
         context.decreaseIndent();
-        group.append("\n").append(indent(context)).append("} }");
+        group.append("\n").append(context.getIndent()).append("}\n");
+        context.decreaseIndent();
+        group.append(indent(context)).append("}");
 
         return group.toString();
     }
@@ -141,6 +145,6 @@ public class GroupStageBuilder {
     }
 
     private String indent(GenerationContext context) {
-        return "  ".repeat(Math.max(0, context.getIndentLevel()));
+        return "    ".repeat(Math.max(0, context.getIndentLevel()));
     }
 }

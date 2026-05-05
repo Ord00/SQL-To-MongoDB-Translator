@@ -41,9 +41,7 @@ public class ExpressionTranslator {
     }
 
     private String translateField(Field field, GenerationContext context) {
-        String result = field.getSource() != null && !field.getSource().isEmpty()
-                ? field.getSource() + "." + field.getField()
-                : field.getField();
+        String result = context.resolveFieldPath(field.getSource(), field.getField());
         return context.isUseAggregationSyntax() ? "\"$" + result + "\"" : result;
     }
 
@@ -56,6 +54,9 @@ public class ExpressionTranslator {
         String left = translate(binary.getLeft(), context);
         String right = translate(binary.getRight(), context);
         String op = BINARY_OP_MAP.get(binary.getOperator());
+        if (context.isUseAggregationSyntax()) {
+            return "{ " + op + ": [" + left + ", " + right + "] }";
+        }
         return "{ " + op + ": [ " + left + ", " + right + " ] }";
     }
 

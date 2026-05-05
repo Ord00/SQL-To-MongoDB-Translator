@@ -6,6 +6,7 @@ import sql.to.mongodb.translator.base.GenerationContext;
 import sql.to.mongodb.translator.helpers.SubqueryHelper;
 import sql.to.mongodb.translator.ir.Constant;
 import sql.to.mongodb.translator.ir.CorrelationSubquery;
+import sql.to.mongodb.translator.ir.Field;
 import sql.to.mongodb.translator.ir.Subquery;
 import sql.to.mongodb.translator.ir.condition.BetweenCondition;
 import sql.to.mongodb.translator.ir.condition.Comparison;
@@ -74,16 +75,31 @@ public class ConditionTranslator {
         if (parts.size() == 1) return parts.getFirst();
 
         String op = link.getType() == LinkNode.LinkType.AND ? "$and" : "$or";
+        if (context.isUseAggregationSyntax()) {
+            StringBuilder result = new StringBuilder("{\n");
+            result.append("    ").append(op).append(": [\n");
+            for (int i = 0; i < parts.size(); i++) {
+                result.append(indentBlock(parts.get(i), "        "));
+                if (i < parts.size() - 1) {
+                    result.append(",");
+                }
+                result.append("\n");
+            }
+            result.append("    ]\n");
+            result.append("}");
+            return result.toString();
+        }
         return "{ " + op + ": [ " + String.join(", ", parts) + " ] }";
     }
 
-    //TODO агрегация при сравнении переменной с переменной (возможно в IRGenerator'е)
     private String translateComparison(Comparison comp,
                                        GenerationContext context) throws CodeGenerationException {
 
         String field;
         String value;
         String mongoOp;
+
+        boolean isExpr = false;
 
         if (comp.getOperand() instanceof Constant) {
             if (comp.getValue() instanceof Constant) {
@@ -93,13 +109,21 @@ public class ConditionTranslator {
             field = expressionTranslator.translate(comp.getValue(), context);
             mongoOp = OPERATOR_REVERSE_MAP.getOrDefault(comp.getOperator(), "$eq");
         } else {
+            if (comp.getValue() instanceof Field && !context.isUseAggregationSyntax()) {
+                context.setUseAggregationSyntax(true);
+                isExpr = true;
+            }
             field = expressionTranslator.translate(comp.getOperand(), context);
             value = expressionTranslator.translate(comp.getValue(), context);
             mongoOp = OPERATOR_MAP.getOrDefault(comp.getOperator(), "$eq");
         }
 
         if (context.isUseAggregationSyntax()) {
-            return "{ $expr: { " + mongoOp + ": [ " + field + ", " + value + " ] } }";
+            if (isExpr) {
+                context.setUseAggregationSyntax(false);
+                return "{ " + mongoOp + ": [ " + field + ", " + value + " ] }";
+            }
+            return "{ " + mongoOp + ": [" + field + ", " + value + "] }";
         }
         return "$eq".equals(mongoOp) ? "{ " + field + ": " + value + " }"
                 : "{ " + field + ": { " + mongoOp + ": " + value + " } }";
@@ -112,7 +136,7 @@ public class ConditionTranslator {
         String end = between.getEnd() != null ? between.getEnd().toString() : "null";
 
         if (context.isUseAggregationSyntax()) {
-            return "{ $expr: { $and: [ { $gte: [ " + field + ", " + start + " ] }, { $lte: [ " + field + ", " + end + " ] } ] } }";
+            return "{ $and: [{ $gte: [" + field + ", " + start + "] }, { $lte: [" + field + ", " + end + "] }] }";
         }
         return "{ " + field + ": { $gte: " + start + ", $lte: " + end + " } }";
     }
@@ -130,7 +154,7 @@ public class ConditionTranslator {
         }
 
         if (context.isUseAggregationSyntax()) {
-            return "{ $expr: { $in: [ " + field + ", [ " + String.join(", ", values) + " ] ] } }";
+            return "{ $in: [" + field + ", [" + String.join(", ", values) + "]] }";
         }
         return "{ " + field + ": { $in: [ " + String.join(", ", values) + " ] } }";
     }
@@ -142,7 +166,7 @@ public class ConditionTranslator {
 
         if (correlated) {
             String corrName = context.nextCorrelationName();
-            return "{ $expr: { $in: [ " + field + ", \"$" + corrName + "\" ] } }";
+            return "{ $in: [" + field + ", \"$" + corrName + "\"] }";
         }
         return "{ " + field + ": { $in: /* subquery result */ } }";
     }
@@ -153,7 +177,7 @@ public class ConditionTranslator {
         boolean isNull = nullCheck.isNull();
 
         if (context.isUseAggregationSyntax()) {
-            return "{ $expr: { " + (isNull ? "$eq" : "$ne") + ": [ " + field + ", null ] } }";
+            return "{ " + (isNull ? "$eq" : "$ne") + ": [" + field + ", null] }";
         }
         return "{ " + field + ": " + (isNull ? "null" : "{ $ne: null }") + " }";
     }
@@ -174,5 +198,17 @@ public class ConditionTranslator {
             return "{ $where: \"this." + corrName + ".length " + (exists.isExists() ? ">" : "==") + " 0\" }";
         }
         return "{ $where: \"/* subquery result */.length " + (exists.isExists() ? ">" : "==") + " 0\" }";
+    }
+
+    private String indentBlock(String input, String indent) {
+        String[] lines = input.split("\\R", -1);
+        StringBuilder out = new StringBuilder();
+        for (int i = 0; i < lines.length; i++) {
+            out.append(indent).append(lines[i]);
+            if (i < lines.length - 1) {
+                out.append("\n");
+            }
+        }
+        return out.toString();
     }
 }

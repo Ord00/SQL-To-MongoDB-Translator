@@ -13,6 +13,7 @@ public class GenerationContext {
     private int subqueryCounter = 0;
     private int correlationCounter = 0;
     private final Map<String, String> subqueryResults = new HashMap<>();
+    private final Map<String, String> sourcePathMap = new HashMap<>();
     private boolean useAggregationSyntax = false;
 
     public String nextSubqueryName() {
@@ -41,7 +42,32 @@ public class GenerationContext {
     }
 
     public String getIndent() {
-        return "  ".repeat(Math.max(0, indentLevel));
+        return "    ".repeat(Math.max(0, indentLevel));
+    }
+
+    public void mapSourcePath(String source, String pathPrefix) {
+        if (source == null || source.isBlank()) {
+            return;
+        }
+        sourcePathMap.put(source, pathPrefix == null ? "" : pathPrefix);
+    }
+
+    public String resolveFieldPath(String source, String field) {
+        if (source == null || source.isBlank()) {
+            return field;
+        }
+        if (sourcePathMap.containsKey(source)) {
+            String mapped = sourcePathMap.get(source);
+            if (mapped == null || mapped.isBlank()) {
+                return field;
+            }
+            return mapped + "." + field;
+        }
+        String prefix = sourcePathMap.get(source);
+        if (prefix == null) {
+            return source + "." + field;
+        }
+        return prefix.isBlank() ? field : prefix + "." + field;
     }
 
     private String subqueryKey(Object subqueryRef) {

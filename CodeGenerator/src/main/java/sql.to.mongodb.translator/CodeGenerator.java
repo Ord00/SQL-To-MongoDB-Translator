@@ -73,12 +73,13 @@ public class CodeGenerator {
                                                GenerationContext context) throws CodeGenerationException {
         StringBuilder pipeline = new StringBuilder("db." + ir.getMainCollection() + ".aggregate([\n");
         context.setIndentLevel(1);
+        context.setUseAggregationSyntax(true);
 
         List<String> stages = pipelineBuilder.buildStages(ir, context);
 
         pipeline.append(String.join(",\n", stages));
-        pipeline.append("\n]);");
+        pipeline.append("\n])");
 
-        return pipeline.toString();
+        return pipeline.append("\n").toString();
     }
 }

@@ -78,11 +78,12 @@ public class CodeGeneratorTest {
                 "db.collection.find({ income: { $gt: -11.0 } })",
                 rabbitMQTestHelper.getCodeGeneratorResult("SELECT * FROM collection WHERE -11 < income")
         );
+        Assertions.assertEquals(
+                "db.collection.find({ $expr: { $lt: [ \"$income\", \"$age\" ] } })",
+                rabbitMQTestHelper.getCodeGeneratorResult("SELECT * FROM collection WHERE income < age")
+        );
         Assertions.assertThrows(CodeGenerationException.class,
                 () -> rabbitMQTestHelper.getCodeGeneratorResult("SELECT * FROM collection WHERE -11 <> 22"));
-
-        // разобраться со сравнением двух переменных
-        Assertions.assertNull(rabbitMQTestHelper.getCodeGeneratorResult("SELECT * FROM collection WHERE income < age"));
     }
 
     @Test
@@ -157,5 +158,164 @@ public class CodeGeneratorTest {
                 rabbitMQTestHelper.getCodeGeneratorResult(
                         "SELECt a1_A2_, _b_B, C13, _Dd_1_23_ FROM c0lL__EcTi0n WHERE n23_ame > ''")
         );
+    }
+
+    @Test
+    void testGenerationOfLogicalConditionAndIn() throws CodeGenerationException {
+
+        String expectedMongoCode = """
+                db.Race.aggregate([
+                    {
+                        $lookup: {
+                            from: "StaffRace",
+                            localField: "Id_race",
+                            foreignField: "Race",
+                            as: "staffRaceJoin"
+                        }
+                    },
+                    {
+                        $unwind: {
+                            path: "$staffRaceJoin",
+                            preserveNullAndEmptyArrays: true
+                        }
+                    },
+                    {
+                        $lookup: {
+                            from: "Staff",
+                            localField: "staffRaceJoin.Staff",
+                            foreignField: "Id_staff",
+                            as: "staffJoin"
+                        }
+                    },
+                    {
+                        $unwind: {
+                            path: "$staffJoin",
+                            preserveNullAndEmptyArrays: true
+                        }
+                    },
+                    {
+                        $lookup: {
+                            from: "TeamStaff",
+                            localField: "staffJoin.Id_staff",
+                            foreignField: "Staff",
+                            as: "teamStaffJoin"
+                        }
+                    },
+                    {
+                        $unwind: {
+                            path: "$teamStaffJoin",
+                            preserveNullAndEmptyArrays: true
+                        }
+                    },
+                    {
+                        $lookup: {
+                            from: "Team",
+                            localField: "teamStaffJoin.Team",
+                            foreignField: "Id_team",
+                            as: "teamJoin"
+                        }
+                    },
+                    {
+                        $unwind: {
+                            path: "$teamJoin",
+                            preserveNullAndEmptyArrays: true
+                        }
+                    },
+                    {
+                        $lookup: {
+                            from: "Country",
+                            localField: "teamJoin.Country",
+                            foreignField: "Id_country",
+                            as: "countryJoin"
+                        }
+                    },
+                    {
+                        $unwind: {
+                            path: "$countryJoin",
+                            preserveNullAndEmptyArrays: true
+                        }
+                    },
+                    {
+                        $match: {
+                            $expr: {
+                                $and: [
+                                    { $gte: ["$RaceDate", "$teamStaffJoin.EntryDate"] },
+                                    {
+                                        $or: [
+                                            { $eq: ["$teamStaffJoin.ExitDate", null] },
+                                            { $lte: ["$RaceDate", "$teamStaffJoin.ExitDate"] }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    {
+                        $facet: {
+                            "topProfits": [
+                                {
+                                    $project: {
+                                        Profit: { $multiply: ["$TicketPrice", "$SoldTickets"] }
+                                    }
+                                },
+                                { $sort: { Profit: -1 } },
+                                { $limit: 3 },
+                                { $group: { _id: null, profits: { $addToSet: "$Profit" } } }
+                            ],
+                            "data": [{ $match: {} }]
+                        }
+                    },
+                    {
+                        $unwind: "$topProfits"
+                    },
+                    {
+                        $match: {
+                            $expr: {
+                                $in: [
+                                    { $multiply: ["$TicketPrice", "$SoldTickets"] },
+                                    "$topProfits.profits"
+                                ]
+                            }
+                        }
+                    },
+                    {
+                        $group: {
+                            _id: {
+                                Id_country: "$countryJoin.Id_country",
+                                CountryName: "$countryJoin.CountryName"
+                            }
+                        }
+                    },
+                    {
+                        $project: {
+                            _id: 0,
+                            Id_country: "$_id.Id_country",
+                            CountryName: "$_id.CountryName"
+                        }
+                    }
+                ])
+                """;
+
+        String codeToScan = """
+                SELECT DISTINCT Cn.Id_country, Cn.CountryName
+                FROM Race R RIGHT JOIN StaffRace SR
+                	ON R.Id_race = SR.Race
+                	RIGHT JOIN Staff S
+                	ON SR.Staff = S.Id_staff
+                	RIGHT JOIN TeamStaff TS
+                	ON S.Id_staff = TS.Staff
+                	RIGHT JOIN Team Tm
+                	ON TS.Team = Tm.Id_team
+                	RIGHT JOIN Country Cn
+                	ON Tm.Country = Cn.Id_country
+                WHERE R.RaceDate >= TS.EntryDate
+                	AND (TS.ExitDate IS NULL OR R.RaceDate <= TS.ExitDate)
+                	AND R.TicketPrice * R.SoldTickets IN (SELECT R.TicketPrice * R.SoldTickets AS Profit
+                										  FROM Race R
+                										  ORDER BY Profit DESC
+                										  LIMIT 3)""";
+
+        Assertions.assertEquals(expectedMongoCode,
+                rabbitMQTestHelper.getCodeGeneratorResult(codeToScan));
     }
 }

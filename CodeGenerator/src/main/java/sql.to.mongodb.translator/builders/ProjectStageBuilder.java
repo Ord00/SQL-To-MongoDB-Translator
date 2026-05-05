@@ -32,7 +32,9 @@ public class ProjectStageBuilder {
         }
 
         // Для aggregation pipeline
-        StringBuilder project = new StringBuilder(indent(context) + "{ $project: {\n");
+        StringBuilder project = new StringBuilder(indent(context)).append("{\n");
+        context.increaseIndent();
+        project.append(context.getIndent()).append("$project: {\n");
         context.increaseIndent();
 
         boolean hasId = ir.getProjectionFields().stream()
@@ -51,7 +53,9 @@ public class ProjectStageBuilder {
 
         project.append(String.join(",\n", fields));
         context.decreaseIndent();
-        project.append("\n").append(indent(context)).append("} }");
+        project.append("\n").append(context.getIndent()).append("}\n");
+        context.decreaseIndent();
+        project.append(indent(context)).append("}");
 
         return project.toString();
     }
@@ -120,6 +124,6 @@ public class ProjectStageBuilder {
     }
 
     private String indent(GenerationContext context) {
-        return "  ".repeat(Math.max(0, context.getIndentLevel()));
+        return "    ".repeat(Math.max(0, context.getIndentLevel()));
     }
 }
