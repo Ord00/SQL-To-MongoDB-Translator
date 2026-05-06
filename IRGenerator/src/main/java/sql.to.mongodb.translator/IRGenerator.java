@@ -121,23 +121,23 @@ public class IRGenerator {
     // ==================== Terminal ====================
 
     private void processTerminalInQuery(Node terminalNode, GenerationContext ctx) {
-        Token token = terminalNode.getToken();
-        if (token != null && "DISTINCT".equals(token.lexeme)) {
-            ctx.ir.setDistinct(true);
+        switch (terminalNode.getToken().lexeme) {
+            case "DISTINCT" -> ctx.ir.setDistinct(true);
+            case "WHERE" -> ctx.conditionExtractor.setContext(ConditionExtractor.ConditionContext.WHERE);
+            case "HAVING" -> ctx.conditionExtractor.setContext(ConditionExtractor.ConditionContext.HAVING);
         }
     }
 
     // ==================== Condition ====================
 
     private void processConditionNode(Node conditionNode, GenerationContext ctx) {
-        ConditionExtractor.ConditionContext context = determineConditionContext(ctx);
         ConditionNode extractedCondition = ctx.conditionExtractor.extractCondition(
                 conditionNode,
                 this,
                 ctx);
 
         if (extractedCondition != null) {
-            switch (context) {
+            switch (ctx.conditionExtractor.getContext()) {
                 case WHERE -> ctx.ir.setWhereCondition(extractedCondition);
                 case HAVING -> {
                     ctx.ir.setHavingCondition(extractedCondition);
@@ -147,13 +147,6 @@ public class IRGenerator {
                 }
             }
         }
-    }
-
-    private ConditionExtractor.ConditionContext determineConditionContext(GenerationContext ctx) {
-        if (ctx.ir.isHasGroupBy() && ctx.ir.getHavingCondition() != null) {
-            return ConditionExtractor.ConditionContext.HAVING;
-        }
-        return ConditionExtractor.ConditionContext.WHERE;
     }
 
     // ==================== Column Names / Projection ====================

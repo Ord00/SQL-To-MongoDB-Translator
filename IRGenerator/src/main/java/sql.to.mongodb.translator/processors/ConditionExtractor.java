@@ -1,5 +1,7 @@
 package sql.to.mongodb.translator.processors;
 
+import lombok.Getter;
+import lombok.Setter;
 import sql.to.mongodb.translator.IRGenerator;
 import sql.to.mongodb.translator.ir.Constant;
 import sql.to.mongodb.translator.ir.CorrelationSubquery;
@@ -25,9 +27,13 @@ import java.util.*;
 
 import static sql.to.mongodb.translator.processors.ExpressionBuilder.buildAggregateExpression;
 
-public record ConditionExtractor(SqlToMongoIR ir,
-                                 Set<String> outerTables,
-                                 Map<String, String> outerAliases) {
+@Getter
+@Setter
+public class ConditionExtractor {
+    private final SqlToMongoIR ir;
+    private final Set<String> outerTables;
+    private final Map<String, String> outerAliases;
+    private ConditionContext context;
 
     public ConditionExtractor(SqlToMongoIR ir,
                               Set<String> outerTables,
