@@ -39,15 +39,11 @@ public class CorrelationAnalyzer {
         // Проверяем идентификаторы на корреляцию
         if (node.getNodeType() == NodeType.IDENTIFIER) {
             checkIdentifierForCorrelation(node);
-        }
-
-        // Проверяем логические условия
-        if (node.getNodeType() == NodeType.LOGICAL_CHECK) {
+        } else if (node.getNodeType() == NodeType.LOGICAL_CHECK) {
+            // Проверяем логические условия
             processLogicalCheck(node);
-        }
-
-        // Рекурсивно обходим детей
-        if (node.getChildren() != null) {
+        } else if (node.getChildren() != null) {
+            // Рекурсивно обходим детей
             for (Node child : node.getChildren()) {
                 findCorrelationsInNode(child);
             }
@@ -87,6 +83,9 @@ public class CorrelationAnalyzer {
                 } else {
                     rightIdentifiers.addAll(fields);
                 }
+            } else if (child.getNodeType() == NodeType.LOGICAL_CONDITION) {
+                // Рекурсивно обрабатываем вложенные условия
+                findCorrelationsInNode(child);
             }
         }
 
@@ -162,7 +161,7 @@ public class CorrelationAnalyzer {
 
             CorrelationCondition correlation = new CorrelationCondition(outerField, innerField, "=");
 
-            if (containsCorrelation(correlation)) {
+            if (!containsCorrelation(correlation)) {
                 correlations.add(correlation);
             }
         }
@@ -193,7 +192,7 @@ public class CorrelationAnalyzer {
         String[] outerParts = outerIdentifier.split("\\.");
         CorrelationCondition correlation = getCorrelationCondition(operator, outerParts, innerIdentifier);
 
-        if (containsCorrelation(correlation)) {
+        if (!containsCorrelation(correlation)) {
             correlations.add(correlation);
         }
     }
@@ -204,16 +203,20 @@ public class CorrelationAnalyzer {
         String outerTable = outerParts[0];
         String outerColumn = outerParts.length > 1 ? outerParts[1] : outerParts[0];
 
-        // Внутренний идентификатор может быть без таблицы
-        String[] innerParts = innerIdentifier.split("\\.");
-        String innerColumn = innerParts.length > 1 ? innerParts[1] : innerParts[0];
-
         Field outerField = new Field();
         outerField.setSource(outerTable);
         outerField.setField(outerColumn);
 
+        // Внутренний идентификатор может быть без таблицы
+        String[] innerParts = innerIdentifier.split("\\.");
+
         Field innerField = new Field();
-        innerField.setField(innerColumn);
+        if (innerParts.length > 1) {
+            innerField.setSource(innerParts[0]);
+            innerField.setField(innerParts[1]);
+        } else {
+            innerField.setField(innerParts[0]);
+        }
 
         return new CorrelationCondition(outerField, innerField, operator);
     }

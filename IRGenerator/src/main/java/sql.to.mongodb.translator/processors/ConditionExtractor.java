@@ -1,7 +1,6 @@
 package sql.to.mongodb.translator.processors;
 
 import sql.to.mongodb.translator.IRGenerator;
-import sql.to.mongodb.translator.exceptions.IRGenerationException;
 import sql.to.mongodb.translator.ir.Constant;
 import sql.to.mongodb.translator.ir.CorrelationSubquery;
 import sql.to.mongodb.translator.ir.Field;
@@ -223,9 +222,9 @@ public record ConditionExtractor(SqlToMongoIR ir,
 
                 switch (token.category) {
                     case LOGICAL_OPERATOR -> operator = lexeme;
+                    case NOT -> hasNot = true;
                     case LOGICAL_EXPRESSION -> {
                         switch (lexeme) {
-                            case "NOT" -> hasNot = true;
                             case "EXISTS" -> hasExists = true;
                             case "IN" -> hasIn = true;
                             case "BETWEEN" -> hasBetween = true;
@@ -260,7 +259,7 @@ public record ConditionExtractor(SqlToMongoIR ir,
 
         // EXISTS (SELECT ...)
         if (hasExists && subqueryNode != null && irGenerator != null) {
-            return createExistsCondition(subqueryNode, irGenerator);
+            return createExistsCondition(subqueryNode, irGenerator, hasNot);
         }
 
         // IN (SELECT ...)
@@ -370,25 +369,20 @@ public record ConditionExtractor(SqlToMongoIR ir,
                 return ExpressionBuilder.buildArithmeticExpression(node);
 
             case QUERY:
-                try {
-                    // Для подзапроса в IN нужно создать CorrelationSubquery, если есть корреляции
-                    SqlToMongoIR subqueryIR = irGenerator.generateIR(node, outerTables, outerAliases);
+                // Для подзапроса в IN нужно создать CorrelationSubquery, если есть корреляции
+                SqlToMongoIR subqueryIR = irGenerator.generateIR(node, outerTables, outerAliases);
 
-                    // Извлекаем корреляции для этого подзапроса
-                    List<CorrelationCondition> correlations = extractCorrelations(node);
+                // Извлекаем корреляции для этого подзапроса
+                List<CorrelationCondition> correlations = extractCorrelations(node);
 
-                    if (!correlations.isEmpty()) {
-                        CorrelationSubquery correlationSubquery = new CorrelationSubquery();
-                        correlationSubquery.setSubqueryIR(subqueryIR);
-                        correlationSubquery.getCorrelations().addAll(correlations);
-                        return correlationSubquery;
-                    } else {
-                        return new Subquery(subqueryIR);
-                    }
-                } catch (IRGenerationException e) {
-                    // Логирование ошибки
+                if (!correlations.isEmpty()) {
+                    CorrelationSubquery correlationSubquery = new CorrelationSubquery();
+                    correlationSubquery.setSubqueryIR(subqueryIR);
+                    correlationSubquery.getCorrelations().addAll(correlations);
+                    return correlationSubquery;
+                } else {
+                    return new Subquery(subqueryIR);
                 }
-                break;
 
             default:
                 // Если узел имеет детей, рекурсивно обрабатываем
@@ -401,26 +395,24 @@ public record ConditionExtractor(SqlToMongoIR ir,
         return null;
     }
 
-    private ExistsCondition createExistsCondition(Node subqueryNode, IRGenerator irGenerator) {
+    private ExistsCondition createExistsCondition(Node subqueryNode,
+                                                  IRGenerator irGenerator,
+                                                  boolean hasNot) {
         ExistsCondition exists = new ExistsCondition();
-        exists.setExists(true);
+        exists.setExists(!hasNot);
 
-        try {
-            SqlToMongoIR subqueryIR = irGenerator.generateIR(subqueryNode, outerTables, outerAliases);
-            CorrelationSubquery correlationSubquery = new CorrelationSubquery();
-            correlationSubquery.setSubqueryIR(subqueryIR);
+        SqlToMongoIR subqueryIR = irGenerator.generateIR(subqueryNode, outerTables, outerAliases);
+        CorrelationSubquery correlationSubquery = new CorrelationSubquery();
+        correlationSubquery.setSubqueryIR(subqueryIR);
 
-            List<CorrelationCondition> correlations = extractCorrelations(subqueryNode);
-            correlationSubquery.getCorrelations().addAll(correlations);
+        List<CorrelationCondition> correlations = extractCorrelations(subqueryNode);
+        correlationSubquery.getCorrelations().addAll(correlations);
 
-            exists.setSubquery(correlationSubquery);
+        exists.setSubquery(correlationSubquery);
 
-            if (ir != null && !correlations.isEmpty()) {
-                ir.setHasCorrelatedSubqueries(true);
-                ir.setHasSubqueries(true);
-            }
-        } catch (Exception e) {
-            // Логирование ошибки
+        if (ir != null && !correlations.isEmpty()) {
+            ir.setHasCorrelatedSubqueries(true);
+            ir.setHasSubqueries(true);
         }
 
         return exists;

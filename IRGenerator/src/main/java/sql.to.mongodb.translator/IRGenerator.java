@@ -482,6 +482,8 @@ public class IRGenerator {
         if (tableNamesNode.getChildren() == null) return;
 
         JoinInfo currentJoin = new JoinInfo();
+        int rightJoinPos = -1;
+        int curJoinPos = 0;
 
         for (Node child : tableNamesNode.getChildren()) {
             switch (child.getNodeType()) {
@@ -510,6 +512,7 @@ public class IRGenerator {
                         ctx.currentContext.push(operand instanceof JoinTable t ? t.getValue() : "subquery");
                     }
                     ctx.outerTables.add(operand instanceof JoinTable t ? t.getValue() : "subquery");
+                    ctx.outerAliases.put(operand.getAlias(), operand instanceof JoinTable t ? t.getValue() : "subquery");
                 }
                 case TERMINAL, JOIN -> {
                     processJoin(child, currentJoin);
@@ -521,8 +524,14 @@ public class IRGenerator {
                             this,
                             ctx);
                     currentJoin.setJoinCondition(joinCondition);
+
+                    Joinable newLeft = currentJoin.getRight();
+
+                    rightJoinPos = rightJoinTransformation(currentJoin, curJoinPos, rightJoinPos, ctx);
+                    ++curJoinPos;
+
                     ctx.ir.getJoins().add(currentJoin);
-                    currentJoin = new JoinInfo(currentJoin.getRight());
+                    currentJoin = new JoinInfo(newLeft);
                 }
                 case QUERY -> {
                     Joinable operand = processSubqueryAsJoinable(child, ctx);
@@ -539,6 +548,57 @@ public class IRGenerator {
                 }
             }
         }
+        if (rightJoinPos != -1) {
+            rightJoinTransformation(currentJoin, curJoinPos, rightJoinPos, ctx);
+        }
+    }
+
+    private int rightJoinTransformation(JoinInfo currentJoin,
+                                        int curJoinPos,
+                                        int rightJoinPos,
+                                        GenerationContext ctx) {
+        int newRightJoinPos = rightJoinPos;
+
+        if (currentJoin.getType() != JoinInfo.JoinType.RIGHT) {
+            if (rightJoinPos != -1 && curJoinPos != rightJoinPos - 1) {
+                if (rightJoinPos == 0) {
+                    if (ctx.ir.getJoins().getLast().getRight() instanceof JoinTable) {
+                        ctx.ir.setMainCollection(((JoinTable) ctx.ir.getJoins().getLast().getLeft()).getValue());
+                    } else {
+                        throw new IRGenerationException("RIGHT JOIN с подзапросом в качестве второй таблицы!");
+                    }
+                }
+                int left = rightJoinPos;
+                int right = curJoinPos - 1;
+                List<JoinInfo> joins = ctx.ir.getJoins();
+                List<String> curContext = new ArrayList<>();
+                while (left < right) {
+                    JoinInfo temp = joins.get(left);
+                    joins.set(left, joins.get(right));
+                    joins.set(right, temp);
+                    left++;
+                    right--;
+                    for (int i = 0; i < 2; i++) {
+                        curContext.add(ctx.currentContext.pop());
+                    }
+                }
+                for (String s : curContext) {
+                    ctx.currentContext.push(s);
+                }
+                newRightJoinPos = -1;
+            }
+        } else {
+            if (rightJoinPos == -1) {
+                newRightJoinPos = curJoinPos;
+            }
+            Joinable left = currentJoin.getLeft();
+            Joinable right = currentJoin.getRight();
+            currentJoin.setType(JoinInfo.JoinType.LEFT);
+            currentJoin.setLeft(right);
+            currentJoin.setRight(left);
+        }
+
+        return newRightJoinPos;
     }
 
     private Joinable extractJoinableFromTable(Node tableNode,

@@ -47,7 +47,10 @@ public class LogicalConditionParser {
 
         } else if (pA.curToken().lexeme.equals("NOT")) {
 
-            pA.getNextToken();
+            logicalCheckChildren.add(terminal(pA,
+                    t -> t.lexeme.equals("NOT"),
+                    "NOT"));
+
             logicalCheckChildren.add(terminal(pA,
                     t -> t.lexeme.equals("EXISTS"),
                     "EXISTS"));
