@@ -416,13 +416,6 @@ public class CodeGeneratorTest {
                             }
                         },
                         {
-                            $match: {
-                                $expr: {
-                                $setIsSubset: ["$allCompIds", "$teamCompIds"]
-                                }
-                            }
-                        },
-                        {
                             $project: {
                                 _id: 0,
                                 TeamName: 1
@@ -453,6 +446,185 @@ public class CodeGeneratorTest {
                                                 AND Comp2.Id_competition = R3.Competition
                                         )
                               )""";
+
+        Assertions.assertEquals(expectedMongoCode,
+                rabbitMQTestHelper.getCodeGeneratorResult(codeToScan));
+    }
+
+    @Test
+    public void testExistsAndGroupBy() throws CodeGenerationException {
+        String expectedMongoCode = """
+                db.Competition.aggregate([
+                      {
+                          $lookup: {
+                              from: "Race",
+                              let: { compId: "$Id_competition" },
+                              pipeline: [
+                                  {
+                                      $match: {
+                                          $expr: {
+                                              $eq: ["$Competition", "$$compId"]
+                                          }
+                                      }
+                                  },
+                                  {
+                                      $lookup: {
+                                          from: "StaffRace",
+                                          localField: "Id_race",
+                                          foreignField: "Race",
+                                          as: "sr"
+                                      }
+                                  },
+                                  {
+                                      $unwind: {
+                                          path: "$sr",
+                                          preserveNullAndEmptyArrays: true
+                                      }
+                                  },
+                                  {
+                                      $lookup: {
+                                          from: "Staff",
+                                          localField: "sr.Staff",
+                                          foreignField: "Id_staff",
+                                          as: "s"
+                                      }
+                                  },
+                                  {
+                                      $unwind: {
+                                          path: "$s",
+                                          preserveNullAndEmptyArrays: true
+                                      }
+                                  },
+                                  {
+                                      $lookup: {
+                                          from: "TeamStaff",
+                                          localField: "s.Id_staff",
+                                          foreignField: "Staff",
+                                          as: "ts"
+                                      }
+                                  },
+                                  {
+                                      $unwind: {
+                                          path: "$ts",
+                                          preserveNullAndEmptyArrays: true
+                                      }
+                                  },
+                                  {
+                                      $match: {
+                                          $expr: {
+                                              $and: [
+                                                  { $eq: ["$Competition", "$$compId"] },
+                                                  { $gte: ["$RaceDate", "$ts.EntryDate"] },
+                                                  {
+                                                      $or: [
+                                                          { $eq: ["$ts.ExitDate", null] },
+                                                          { $lte: ["$RaceDate", "$ts.ExitDate"] }
+                                                      ]
+                                                  }
+                                              ]
+                                          }
+                                      }
+                                  },
+                                  {
+                                      $lookup: {
+                                          from: "Team",
+                                          localField: "ts.Team",
+                                          foreignField: "Id_team",
+                                          as: "tm"
+                                      }
+                                  },
+                                  {
+                                      $unwind: {
+                                          path: "$tm",
+                                          preserveNullAndEmptyArrays: true
+                                      }
+                                  },
+                                  {
+                                      $lookup: {
+                                          from: "Country",
+                                          localField: "tm.Country",
+                                          foreignField: "Id_country",
+                                          as: "cn"
+                                      }
+                                  },
+                                  {
+                                      $unwind: {
+                                          path: "$cn",
+                                          preserveNullAndEmptyArrays: true
+                                      }
+                                  },
+                                  {
+                                      $group: {
+                                          _id: "$cn.Id_country",
+                                          teams: {
+                                              $addToSet: "$tm.Id_team"
+                                          }
+                                      }
+                                  },
+                                  {
+                                      $project: {
+                                          teams: {
+                                              $setDifference: ["$teams", [null]]
+                                          }
+                                      }
+                                  },
+                                  {
+                                      $project: {
+                                          teamCount: {
+                                              $size: "$teams"
+                                          }
+                                      }
+                                  },
+                                  {
+                                      $match: {
+                                          teamCount: { $lt: 2 }
+                                      }
+                                  }
+                              ],
+                              as: "invalidCountries"
+                          }
+                      },
+                      {
+                          $match: {
+                              $expr: {
+                                  $eq: [
+                                      { $size: "$invalidCountries" },
+                                      0
+                                  ]
+                              }
+                          }
+                      },
+                      {
+                          $project: {
+                              _id: 0,
+                              Id_competition: 1,
+                              CompetitionName: 1
+                          }
+                      }
+                ])
+                """;
+
+        String codeToScan = """
+                SELECT DISTINCT Comp.Id_competition, Comp.CompetitionName
+                FROM Competition Comp JOIN Race R
+                 ON R.Competition = Comp.Id_competition
+                WHERE NOT EXISTS(SELECT 1
+                			 FROM Race R2 LEFT JOIN StaffRace SR2
+                			 	 ON R2.Id_race = SR2.Race
+                				 LEFT JOIN Staff S2
+                				 ON SR2.Staff = S2.Id_staff
+                				 LEFT JOIN TeamStaff TS2
+                				 ON S2.Id_staff = TS2.Staff
+                				 LEFT JOIN Team Tm2
+                				 ON TS2.Team = Tm2.Id_team
+                				 LEFT JOIN Country Cn2
+                				 ON Tm2.Country = Cn2.Id_country
+                			 WHERE R2.Competition = Comp.Id_competition
+                				 AND R2.RaceDate >= TS2.EntryDate
+                				 AND (TS2.ExitDate IS NULL OR R2.RaceDate <= TS2.ExitDate)
+                			 GROUP BY Cn2.Id_country
+                			 HAVING COUNT(DISTINCT Tm2.Id_team) < 2
+                			 )""";
 
         Assertions.assertEquals(expectedMongoCode,
                 rabbitMQTestHelper.getCodeGeneratorResult(codeToScan));
