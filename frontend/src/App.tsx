@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Code2, Database, FileSearch, Maximize2, Minimize2, Braces } from 'lucide-react';
+import { Code2, Database, FileSearch, Maximize2, Minimize2, Braces, GitBranch } from 'lucide-react';
 import SyntaxTree from './SyntaxTree';
+import IRViewer from './IRViewer';
 import { AnalysisResult } from "./types.ts";
 
 function App() {
     const [sqlQuery, setSqlQuery] = useState('');
-    const [activeTab, setActiveTab] = useState<'lexical' | 'syntax' | 'code' | null>(null);
+    const [activeTab, setActiveTab] = useState<'lexical' | 'syntax' | 'ir' | 'code' | null>(null);
     const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [isTreeFullscreen, setIsTreeFullscreen] = useState(false);
@@ -53,7 +54,7 @@ function App() {
                 <div className="flex gap-6 h-[calc(100vh-180px)] w-full">
                     {/* Левый блок ввода */}
                     <div className={`bg-white rounded-lg shadow-md overflow-hidden ${(activeTab || error) && !isTreeFullscreen ? 'w-1/2' : 'w-full'} transition-all duration-300 ${isTreeFullscreen ? 'hidden' : ''}`}>
-                        <div className="p-6 border-b border-gray-200 flex gap-3">
+                        <div className="p-6 border-b border-gray-200 flex flex-wrap gap-3">
                             <button
                                 onClick={analyseSql}
                                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
@@ -84,6 +85,18 @@ function App() {
                             >
                                 <Database size={20} />
                                 Синтаксический анализ
+                            </button>
+                            <button
+                                onClick={() => analysisResult && setActiveTab('ir')}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-md transition-colors ${
+                                    activeTab === 'ir'
+                                        ? 'bg-indigo-600 text-white'
+                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                }`}
+                                disabled={!analysisResult}
+                            >
+                                <GitBranch size={20} />
+                                Промежуточное представление
                             </button>
                             <button
                                 onClick={() => analysisResult && setActiveTab('code')}
@@ -117,7 +130,8 @@ function App() {
                                     {error ? 'Ошибка' :
                                         activeTab === 'lexical' ? 'Лексический анализ' :
                                             activeTab === 'syntax' ? 'Синтаксический анализ' :
-                                                'Сгенерированный MongoDB код'}
+                                                activeTab === 'ir' ? 'Промежуточное представление (IR)' :
+                                                    'Сгенерированный MongoDB код'}
                                 </h2>
                                 <div className="flex gap-2">
                                     {activeTab === 'code' && analysisResult?.mongoCode && (
@@ -132,7 +146,7 @@ function App() {
                                             </svg>
                                         </button>
                                     )}
-                                    {activeTab === 'syntax' && (
+                                    {(activeTab === 'syntax' || activeTab === 'ir') && (
                                         <button
                                             onClick={() => setIsTreeFullscreen(!isTreeFullscreen)}
                                             className="text-gray-500 hover:text-gray-700 p-1"
@@ -185,6 +199,10 @@ function App() {
 
                                 {activeTab === 'syntax' && analysisResult && (
                                     <SyntaxTree data={analysisResult.syntaxResult} isFullscreen={isTreeFullscreen} />
+                                )}
+
+                                {activeTab === 'ir' && analysisResult?.ir && (
+                                    <IRViewer ir={analysisResult.ir} />
                                 )}
 
                                 {activeTab === 'code' && analysisResult?.mongoCode && (

@@ -240,8 +240,8 @@ class IRGeneratorTest {
                 "Profit"));
         expectedSubIR.setHasComplexProjections(true);
         expectedSubIR.getOrderBy().add(new SortField(
-                "Profit",
                 null,
+                "Profit",
                 SortField.SortDirection.DESC));
         expectedSubIR.setLimit(3);
 

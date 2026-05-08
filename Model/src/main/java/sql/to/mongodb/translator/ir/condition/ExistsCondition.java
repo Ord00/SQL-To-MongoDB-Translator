@@ -1,5 +1,6 @@
 package sql.to.mongodb.translator.ir.condition;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -13,6 +14,7 @@ import sql.to.mongodb.translator.ir.CorrelationSubquery;
 @AllArgsConstructor
 @EqualsAndHashCode(callSuper = false)
 public class ExistsCondition extends LeafNode {
+    @JsonProperty("isExists")
     private boolean isExists;
     private CorrelationSubquery subquery;
 }
