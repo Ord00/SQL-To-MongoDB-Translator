@@ -16,7 +16,7 @@ public class SortStageBuilder {
         }
 
         if (context.isUseAggregationSyntax()) {
-            return indent(context) + "{ $sort: " + sortToString(ir) + " }";
+            return "{ $sort: " + sortToString(ir) + " }";
         } else {
             return sortToString(ir);
         }

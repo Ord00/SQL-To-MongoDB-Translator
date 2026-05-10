@@ -401,6 +401,7 @@ class IRGeneratorTest {
         expectedIR.setWhereCondition(new ExistsCondition(
                 false,
                 new CorrelationSubquery(expectedSubCompIR, new ArrayList<>())));
+        expectedIR.setHasSubqueries(true);
 
         String codeToScan = """
                 SELECT Tm.TeamName

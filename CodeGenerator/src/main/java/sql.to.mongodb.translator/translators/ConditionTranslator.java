@@ -1,9 +1,11 @@
 package sql.to.mongodb.translator.translators;
 
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
+import sql.to.mongodb.translator.builders.ExistsSubqueryBuilder;
+import sql.to.mongodb.translator.builders.InSubqueryBuilder;
 import sql.to.mongodb.translator.exceptions.CodeGenerationException;
 import sql.to.mongodb.translator.base.GenerationContext;
-import sql.to.mongodb.translator.helpers.SubqueryHelper;
 import sql.to.mongodb.translator.ir.Constant;
 import sql.to.mongodb.translator.ir.CorrelationSubquery;
 import sql.to.mongodb.translator.ir.Field;
@@ -17,6 +19,7 @@ import sql.to.mongodb.translator.ir.condition.LinkNode;
 import sql.to.mongodb.translator.ir.condition.NullCheck;
 import sql.to.mongodb.translator.ir.expression.Expressionable;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -25,7 +28,8 @@ import java.util.stream.Collectors;
 public class ConditionTranslator {
 
     private final ExpressionTranslator expressionTranslator;
-    private final SubqueryHelper subqueryHelper;
+    private final InSubqueryBuilder inSubqueryBuilder;
+    private final ExistsSubqueryBuilder existsSubqueryBuilder;
 
     private static final Map<String, String> OPERATOR_MAP = Map.of(
             "=", "$eq", "!=", "$ne", "<>", "$ne",
@@ -40,9 +44,11 @@ public class ConditionTranslator {
     );
 
     public ConditionTranslator(ExpressionTranslator expressionTranslator,
-                               SubqueryHelper subqueryHelper) {
+                               @Lazy InSubqueryBuilder inSubqueryBuilder,
+                               @Lazy ExistsSubqueryBuilder existsSubqueryBuilder) {
         this.expressionTranslator = expressionTranslator;
-        this.subqueryHelper = subqueryHelper;
+        this.inSubqueryBuilder = inSubqueryBuilder;
+        this.existsSubqueryBuilder = existsSubqueryBuilder;
     }
 
     public String translate(ConditionNode condition,
@@ -144,31 +150,33 @@ public class ConditionTranslator {
     private String translateIn(InCondition in,
                                GenerationContext context) throws CodeGenerationException {
         String field = expressionTranslator.translate(in.getOperand(), context);
-        List<String> values = new java.util.ArrayList<>();
+        List<String> values = new ArrayList<>();
 
         for (Expressionable expr : in.getInValues()) {
-            if (expr instanceof Subquery subquery) {
-                return translateInWithSubquery(field, subquery, context);
+            if (expr instanceof Subquery) {
+                var result = inSubqueryBuilder.build(in, context);
+                if (result != null) {
+                    context.addStages(result.stages());
+                    return "{\n"
+                            + "    $in: [\n"
+                            + "        " + field + ",\n"
+                            + "        " + result.arrayPath() + "\n"
+                            + "    ]\n"
+                            + "}";
+                }
             }
             values.add(expressionTranslator.translate(expr, context));
         }
 
         if (context.isUseAggregationSyntax()) {
-            return "{ $in: [" + field + ", [" + String.join(", ", values) + "]] }";
+            return "{\n"
+                    + "    $in: [\n"
+                    + "        " + field + ",\n"
+                    + "        [" + String.join(", ", values) + "]\n"
+                    + "    ]\n"
+                    + "}";
         }
         return "{ " + field + ": { $in: [ " + String.join(", ", values) + " ] } }";
-    }
-
-    private String translateInWithSubquery(String field,
-                                           Subquery subquery,
-                                           GenerationContext context) {
-        boolean correlated = subqueryHelper.isCorrelated(subquery);
-
-        if (correlated) {
-            String corrName = context.nextCorrelationName();
-            return "{ $in: [" + field + ", \"$" + corrName + "\"] }";
-        }
-        return "{ " + field + ": { $in: /* subquery result */ } }";
     }
 
     private String translateNullCheck(NullCheck nullCheck,
@@ -183,21 +191,18 @@ public class ConditionTranslator {
     }
 
     private String translateExists(ExistsCondition exists,
-                                   GenerationContext context) {
+                                   GenerationContext context) throws CodeGenerationException {
         CorrelationSubquery subquery = exists.getSubquery();
         if (subquery == null) return "{ $exists: " + exists.isExists() + " }";
 
-        boolean correlated = subqueryHelper.isCorrelated(subquery);
-
-        if (correlated) {
-            String corrName = context.nextCorrelationName();
-            if (context.isUseAggregationSyntax()) {
-                return "{ $expr: { " + (exists.isExists() ? "$gt" : "$eq") +
-                        ": [ { $size: \"$" + corrName + "\" }, 0 ] } }";
-            }
-            return "{ $where: \"this." + corrName + ".length " + (exists.isExists() ? ">" : "==") + " 0\" }";
+        // Для всех подзапросов (и коррелированных, и нет) генерируем стадии
+        var result = existsSubqueryBuilder.build(subquery, exists.isExists(), context);
+        if (result != null) {
+            context.addStages(result.stages());
         }
-        return "{ $where: \"/* subquery result */.length " + (exists.isExists() ? ">" : "==") + " 0\" }";
+
+        // Возвращаем условие, которое всегда true (фильтрация уже сделана в $match)
+        return "{}";
     }
 
     private String indentBlock(String input, String indent) {

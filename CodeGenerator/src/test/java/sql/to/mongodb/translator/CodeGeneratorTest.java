@@ -236,21 +236,6 @@ public class CodeGeneratorTest {
                         }
                     },
                     {
-                        $match: {
-                            $expr: {
-                                $and: [
-                                    { $gte: ["$raceJoin.RaceDate", "$teamStaffJoin.EntryDate"] },
-                                    {
-                                        $or: [
-                                            { $eq: ["$teamStaffJoin.ExitDate", null] },
-                                            { $lte: ["$raceJoin.RaceDate", "$teamStaffJoin.ExitDate"] }
-                                        ]
-                                    }
-                                ]
-                            }
-                        }
-                    },
-                    {
                         $lookup: {
                             from: "Race",
                             pipeline: [
@@ -262,16 +247,16 @@ public class CodeGeneratorTest {
                                 { $sort: { Profit: -1 } },
                                 { $limit: 3 }
                             ],
-                            as: "topProfits"
+                            as: "subquery_1"
                         }
                     },
                     {
                         $addFields: {
-                            topProfitsArray: {
+                            subquery_1Array: {
                                 $map: {
-                                    input: "$topProfits",
-                                    as: "p",
-                                    in: "$$p.Profit"
+                                    input: "$subquery_1",
+                                    as: "item",
+                                    in: "$$item.Profit"
                                 }
                             }
                         }
@@ -279,9 +264,24 @@ public class CodeGeneratorTest {
                     {
                         $match: {
                             $expr: {
-                                $in: [
-                                    { $multiply: ["$raceJoin.TicketPrice", "$raceJoin.SoldTickets"] },
-                                    "$topProfitsArray"
+                                $and: [
+                                    {
+                                        $and: [
+                                            { $gte: ["$raceJoin.RaceDate", "$teamStaffJoin.EntryDate"] },
+                                            {
+                                                $or: [
+                                                    { $eq: ["$teamStaffJoin.ExitDate", null] },
+                                                    { $lte: ["$raceJoin.RaceDate", "$teamStaffJoin.ExitDate"] }
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        $in: [
+                                            { $multiply: ["$raceJoin.TicketPrice", "$raceJoin.SoldTickets"] },
+                                            "$subquery_1Array"
+                                        ]
+                                    }
                                 ]
                             }
                         }
@@ -318,8 +318,8 @@ public class CodeGeneratorTest {
                 	ON Tm.Country = Cn.Id_country
                 WHERE R.RaceDate >= TS.EntryDate
                 	AND (TS.ExitDate IS NULL OR R.RaceDate <= TS.ExitDate)
-                	AND R.TicketPrice * R.SoldTickets IN (SELECT R2.TicketPrice * R2.SoldTickets AS Profit
-                										  FROM Race R2
+                	AND R.TicketPrice * R.SoldTickets IN (SELECT TicketPrice * SoldTickets AS Profit
+                										  FROM Race
                 										  ORDER BY Profit DESC
                 										  LIMIT 3)""";
 

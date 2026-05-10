@@ -3,7 +3,9 @@ package sql.to.mongodb.translator.base;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Getter
@@ -15,6 +17,10 @@ public class GenerationContext {
     private final Map<String, String> subqueryResults = new HashMap<>();
     private final Map<String, String> sourcePathMap = new HashMap<>();
     private boolean useAggregationSyntax = false;
+    private final List<String> pendingStages = new ArrayList<>();
+    private boolean insideSubquery = false;
+    private int subqueryLevel = 0;
+    private final Map<String, String> subqueryArrayNames = new HashMap<>();
 
     public String nextSubqueryName() {
         return "subquery_" + (++subqueryCounter);
@@ -45,11 +51,36 @@ public class GenerationContext {
         return "    ".repeat(Math.max(0, indentLevel));
     }
 
+    public void addStages(List<String> stages) {
+        if (stages != null) {
+            pendingStages.addAll(stages);
+        }
+    }
+
+    public List<String> getAndClearPendingStages() {
+        List<String> result = new ArrayList<>(pendingStages);
+        pendingStages.clear();
+        return result;
+    }
+
     public void mapSourcePath(String source, String pathPrefix) {
         if (source == null || source.isBlank()) {
             return;
         }
         sourcePathMap.put(source, pathPrefix == null ? "" : pathPrefix);
+    }
+
+    public void enterSubquery() {
+        subqueryLevel++;
+    }
+
+    public void exitSubquery() {
+        if (subqueryLevel > 0) subqueryLevel--;
+    }
+
+    public String getSubqueryArrayName(String subqueryId) {
+        return subqueryArrayNames.computeIfAbsent(subqueryId,
+                id -> "subquery_" + (++subqueryCounter) + "Array");
     }
 
     public String resolveFieldPath(String source, String field) {

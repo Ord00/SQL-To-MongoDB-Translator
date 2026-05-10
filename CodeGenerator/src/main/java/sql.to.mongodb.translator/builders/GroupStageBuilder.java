@@ -62,17 +62,19 @@ public class GroupStageBuilder {
         if (ir.getGroupByFields().isEmpty()) {
             group.append("null");
         } else if (ir.getGroupByFields().size() == 1) {
-            group.append("\"$").append(ir.getGroupByFields().getFirst()).append("\"");
+            GroupByField field = ir.getGroupByFields().getFirst();
+            // Используем resolveFieldPath для правильного разрешения пути поля
+            String resolved = context.resolveFieldPath(field.getSource(), field.getField());
+            group.append("\"$").append(resolved).append("\"");
         } else {
             group.append("{\n");
             context.increaseIndent();
             for (int i = 0; i < ir.getGroupByFields().size(); i++) {
                 GroupByField field = ir.getGroupByFields().get(i);
+                String resolved = context.resolveFieldPath(field.getSource(), field.getField());
                 group.append(context.getIndent())
-                        .append(field.getSource())
-                        .append(": \"$")
                         .append(field.getField())
-                        .append("\"");
+                        .append(": \"$").append(resolved).append("\"");
                 if (i < ir.getGroupByFields().size() - 1) group.append(",\n");
             }
             context.decreaseIndent();

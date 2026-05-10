@@ -416,8 +416,10 @@ public class ConditionExtractor {
 
         exists.setSubquery(correlationSubquery);
 
-        if (ir != null && !correlations.isEmpty()) {
-            ir.setHasCorrelatedSubqueries(true);
+        if (ir != null) {
+            if (!correlations.isEmpty()) {
+                ir.setHasCorrelatedSubqueries(true);
+            }
             ir.setHasSubqueries(true);
         }
 

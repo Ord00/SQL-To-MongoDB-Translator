@@ -14,6 +14,7 @@ import sql.to.mongodb.translator.ir.join.JoinTable;
 import sql.to.mongodb.translator.translators.ConditionTranslator;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Component
 public class LookupStageBuilder {
@@ -31,6 +32,34 @@ public class LookupStageBuilder {
         this.subqueryHelper = subqueryHelper;
         this.groupStageBuilder = groupStageBuilder;
         this.projectStageBuilder = projectStageBuilder;
+    }
+
+    public String buildSimplePipelineLookup(String fromCollection,
+                                            String asName,
+                                            List<String> pipelineStages,
+                                            GenerationContext context) {
+        StringBuilder lookup = new StringBuilder(indent(context)).append("{\n");
+        context.increaseIndent();
+        lookup.append(context.getIndent()).append("$lookup: {\n");
+        context.increaseIndent();
+        lookup.append(context.getIndent()).append("from: \"").append(fromCollection).append("\",\n");
+        lookup.append(context.getIndent()).append("pipeline: [\n");
+        context.increaseIndent();
+
+        for (int i = 0; i < pipelineStages.size(); i++) {
+            lookup.append(context.getIndent()).append(pipelineStages.get(i));
+            if (i < pipelineStages.size() - 1) lookup.append(",\n");
+            else lookup.append("\n");
+        }
+
+        context.decreaseIndent();
+        lookup.append(context.getIndent()).append("],\n");
+        lookup.append(context.getIndent()).append("as: \"").append(asName).append("\"\n");
+        context.decreaseIndent();
+        lookup.append(context.getIndent()).append("}\n");
+        context.decreaseIndent();
+        lookup.append(indent(context)).append("}");
+        return lookup.toString();
     }
 
     public String buildSimpleLookup(JoinInfo join, GenerationContext context) {
@@ -68,6 +97,88 @@ public class LookupStageBuilder {
                 || join.getType() == JoinInfo.JoinType.FULL;
         String unwind = buildUnwind(as, preserveNull, context);
         return lookup + ",\n" + unwind;
+    }
+
+    public String buildLookupWithPipeline(String fromCollection,
+                                          String asName,
+                                          List<String> pipelineStages,
+                                          List<CorrelationCondition> correlations,
+                                          GenerationContext context) {
+        StringBuilder lookup = new StringBuilder(indent(context)).append("{\n");
+        context.increaseIndent();
+        lookup.append(context.getIndent()).append("$lookup: {\n");
+        context.increaseIndent();
+        lookup.append(context.getIndent()).append("from: \"").append(fromCollection).append("\",\n");
+
+        // Добавляем let variables если есть корреляции
+        if (correlations != null && !correlations.isEmpty()) {
+            lookup.append(context.getIndent())
+                    .append("let: { ")
+                    .append(buildLetVariables(correlations, context))
+                    .append(" },\n");
+        }
+
+        lookup.append(context.getIndent()).append("pipeline: [\n");
+        context.increaseIndent();
+
+        // Добавляем match для корреляций если есть
+        String correlationMatch = buildCorrelationMatch(correlations, context);
+        if (correlationMatch != null) {
+            lookup.append(context.getIndent()).append(correlationMatch).append(",\n");
+        }
+
+        // Добавляем все стадии подзапроса
+        for (int i = 0; i < pipelineStages.size(); i++) {
+            String stage = pipelineStages.get(i);
+            lookup.append(stage);
+            if (i < pipelineStages.size() - 1) lookup.append(",\n");
+            else lookup.append("\n");
+        }
+
+        context.decreaseIndent();
+        lookup.append(context.getIndent()).append("],\n");
+        lookup.append(context.getIndent()).append("as: \"").append(asName).append("\"\n");
+        context.decreaseIndent();
+        lookup.append(context.getIndent()).append("}\n");
+        context.decreaseIndent();
+        lookup.append(indent(context)).append("}");
+        return lookup.toString();
+    }
+
+    private String buildLetVariables(List<CorrelationCondition> correlations, GenerationContext context) {
+        return correlations.stream()
+                .map(c -> {
+                    String outerField = c.getOuterField().getField();
+                    String resolvedPath = resolveFieldPath(c.getOuterField(), context);
+                    return outerField + ": \"$" + resolvedPath + "\"";
+                })
+                .collect(Collectors.joining(", "));
+    }
+
+    private String resolveFieldPath(Field field, GenerationContext context) {
+        if (field.getSource() == null || field.getSource().isBlank()) {
+            return field.getField();
+        }
+        String mapped = context.getSourcePathMap().get(field.getSource());
+        if (mapped != null && !mapped.isBlank()) {
+            return mapped + "." + field.getField();
+        }
+        return field.getSource() + "." + field.getField();
+    }
+
+    private String buildCorrelationMatch(List<CorrelationCondition> correlations,
+                                         GenerationContext context) {
+        if (correlations == null || correlations.isEmpty()) return null;
+
+        StringBuilder match = new StringBuilder("{ $match: { $expr: { $and: [");
+        for (int i = 0; i < correlations.size(); i++) {
+            CorrelationCondition c = correlations.get(i);
+            if (i > 0) match.append(", ");
+            match.append("{ $eq: [\"$").append(c.getInnerField().getField())
+                    .append("\", \"$$").append(c.getOuterField().getField()).append("\"] }");
+        }
+        match.append("] } } }");
+        return match.toString();
     }
 
     public String buildCorrelatedSubqueryLookup(CorrelationSubquery subquery,

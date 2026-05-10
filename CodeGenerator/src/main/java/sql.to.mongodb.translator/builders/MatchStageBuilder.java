@@ -25,6 +25,9 @@ public class MatchStageBuilder {
             return null;
         }
         String condition = translateCondition(ir.getWhereCondition(), context, true);
+        if (condition == null || condition.isBlank() || "{}".equals(condition)) {
+            return null;
+        }
         condition = wrapAggregationCondition(condition, true);
         return indent(context) + "{\n"
                 + indent(context) + "    $match: " + condition + "\n"
@@ -37,19 +40,6 @@ public class MatchStageBuilder {
             return null;
         }
         String condition = translateCondition(ir.getHavingCondition(), context, true);
-        condition = wrapAggregationCondition(condition, true);
-        return indent(context) + "{\n"
-                + indent(context) + "    $match: " + condition + "\n"
-                + indent(context) + "}";
-    }
-
-    public String buildJoinMatch(List<ConditionNode> conditions,
-                                 GenerationContext context) throws CodeGenerationException {
-        if (conditions == null || conditions.isEmpty()) {
-            return null;
-        }
-        ConditionNode root = combineConditions(conditions);
-        String condition = translateCondition(root, context, true);
         condition = wrapAggregationCondition(condition, true);
         return indent(context) + "{\n"
                 + indent(context) + "    $match: " + condition + "\n"

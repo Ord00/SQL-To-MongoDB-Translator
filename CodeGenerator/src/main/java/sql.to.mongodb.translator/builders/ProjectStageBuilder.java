@@ -123,6 +123,29 @@ public class ProjectStageBuilder {
         return project.toString();
     }
 
+    public String buildAddFieldsWithMap(String arrayName,
+                                        String sourceField,
+                                        String valueField,
+                                        GenerationContext context) {
+        StringBuilder addFields = new StringBuilder();
+        addFields.append(indent(context)).append("{\n");
+        context.increaseIndent();
+        addFields.append(context.getIndent()).append("$addFields: {\n");
+        context.increaseIndent();
+        addFields.append(context.getIndent()).append(arrayName).append(": {\n");
+        addFields.append(context.getIndent()).append("    $map: {\n");
+        addFields.append(context.getIndent()).append("        input: \"$").append(sourceField).append("\",\n");
+        addFields.append(context.getIndent()).append("        as: \"item\",\n");
+        addFields.append(context.getIndent()).append("        in: \"$$item.").append(valueField).append("\"\n");
+        addFields.append(context.getIndent()).append("    }\n");
+        addFields.append(context.getIndent()).append("}\n");
+        context.decreaseIndent();
+        addFields.append(context.getIndent()).append("}\n");
+        context.decreaseIndent();
+        addFields.append(indent(context)).append("}");
+        return addFields.toString();
+    }
+
     private String indent(GenerationContext context) {
         return "    ".repeat(Math.max(0, context.getIndentLevel()));
     }
