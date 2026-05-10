@@ -58,7 +58,8 @@ public class ProjectionTranslator {
         switch (agg.getType()) {
             case COUNT:
                 if (agg.isDistinct()) {
-                    expr = "{ $sum: { $size: { $setUnion: [ [ \"$" + fieldPath + "\" ] ] } } }";
+                    // ??? COUNT(DISTINCT) ????? $setUnion
+                    expr = "{ $size: { $setUnion: [ \"$" + fieldPath + "\" ] } }";
                 } else if (fieldPath == null || "*".equals(fieldPath)) {
                     expr = "{ $sum: 1 }";
                 } else {

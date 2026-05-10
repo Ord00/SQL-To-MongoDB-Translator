@@ -1,14 +1,12 @@
 package sql.to.mongodb.translator.builders;
 
 import org.springframework.stereotype.Component;
+import sql.to.mongodb.translator.code.generator.TranslationResult;
 import sql.to.mongodb.translator.exceptions.CodeGenerationException;
 import sql.to.mongodb.translator.base.GenerationContext;
 import sql.to.mongodb.translator.ir.SqlToMongoIR;
 import sql.to.mongodb.translator.ir.condition.ConditionNode;
-import sql.to.mongodb.translator.ir.condition.LinkNode;
 import sql.to.mongodb.translator.translators.ConditionTranslator;
-
-import java.util.List;
 
 @Component
 public class MatchStageBuilder {
@@ -19,56 +17,39 @@ public class MatchStageBuilder {
         this.conditionTranslator = conditionTranslator;
     }
 
-    public String buildWhere(SqlToMongoIR ir,
-                             GenerationContext context) throws CodeGenerationException {
+    public TranslationResult buildWhere(SqlToMongoIR ir,
+                                        GenerationContext context) throws CodeGenerationException {
         if (ir.getWhereCondition() == null) {
-            return null;
+            return TranslationResult.empty();
         }
-        String condition = translateCondition(ir.getWhereCondition(), context, true);
-        if (condition == null || condition.isBlank() || "{}".equals(condition)) {
-            return null;
-        }
+
+        TranslationResult result = translateCondition(ir.getWhereCondition(), context, true);
+        String condition = result.getCondition();
         condition = wrapAggregationCondition(condition, true);
-        return indent(context) + "{\n"
+        result.setCondition(indent(context) + "{\n"
                 + indent(context) + "    $match: " + condition + "\n"
-                + indent(context) + "}";
+                + indent(context) + "}");
+        return result;
     }
 
-    public String buildHaving(SqlToMongoIR ir,
-                              GenerationContext context) throws CodeGenerationException {
+    public TranslationResult buildHaving(SqlToMongoIR ir,
+                                         GenerationContext context) throws CodeGenerationException {
         if (ir.getHavingCondition() == null) {
-            return null;
+            return TranslationResult.empty();
         }
-        String condition = translateCondition(ir.getHavingCondition(), context, true);
+
+        TranslationResult result = translateCondition(ir.getHavingCondition(), context, true);
+        String condition = result.getCondition();
         condition = wrapAggregationCondition(condition, true);
-        return indent(context) + "{\n"
+        result.setCondition(indent(context) + "{\n"
                 + indent(context) + "    $match: " + condition + "\n"
-                + indent(context) + "}";
+                + indent(context) + "}");
+        return result;
     }
 
-    public String buildFindCondition(SqlToMongoIR ir,
-                                     GenerationContext context) throws CodeGenerationException {
-        if (ir.getWhereCondition() == null) {
-            return null;
-        }
-        String condition = translateCondition(ir.getWhereCondition(), context, false);
-        if (condition != null && condition.startsWith("{ $")) {
-            return "{ $expr: " + condition + " }";
-        }
-        return condition;
-    }
-
-    private ConditionNode combineConditions(List<ConditionNode> conditions) {
-        if (conditions.size() == 1) return conditions.getFirst();
-        LinkNode root = new LinkNode();
-        root.setType(LinkNode.LinkType.AND);
-        root.getChildren().addAll(conditions);
-        return root;
-    }
-
-    private String translateCondition(ConditionNode conditionNode,
-                                      GenerationContext context,
-                                      boolean useAggregationSyntax) throws CodeGenerationException {
+    private TranslationResult translateCondition(ConditionNode conditionNode,
+                                                 GenerationContext context,
+                                                 boolean useAggregationSyntax) throws CodeGenerationException {
         boolean originalSyntax = context.isUseAggregationSyntax();
         context.setUseAggregationSyntax(useAggregationSyntax);
         try {
@@ -76,6 +57,19 @@ public class MatchStageBuilder {
         } finally {
             context.setUseAggregationSyntax(originalSyntax);
         }
+    }
+
+    public String buildFindCondition(SqlToMongoIR ir,
+                                     GenerationContext context) throws CodeGenerationException {
+        if (ir.getWhereCondition() == null) {
+            return null;
+        }
+        TranslationResult result = translateCondition(ir.getWhereCondition(), context, false);
+        String condition = result.getCondition();
+        if (condition != null && condition.startsWith("{ $")) {
+            return "{ $expr: " + condition + " }";
+        }
+        return condition;
     }
 
     private String indent(GenerationContext context) {

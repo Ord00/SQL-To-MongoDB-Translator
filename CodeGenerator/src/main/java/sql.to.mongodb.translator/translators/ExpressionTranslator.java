@@ -4,6 +4,7 @@ import org.springframework.stereotype.Component;
 import sql.to.mongodb.translator.exceptions.CodeGenerationException;
 import sql.to.mongodb.translator.base.GenerationContext;
 import sql.to.mongodb.translator.helpers.FormatHelper;
+import sql.to.mongodb.translator.ir.Aggregate;
 import sql.to.mongodb.translator.ir.Constant;
 import sql.to.mongodb.translator.ir.CorrelationSubquery;
 import sql.to.mongodb.translator.ir.Field;
@@ -35,9 +36,9 @@ public class ExpressionTranslator {
             case UnaryOperation unary -> translateUnary(unary, context);
             case CaseExpression caseExpr -> translateCase(caseExpr, context);
             case Subquery subq -> translateSubquery(subq, context);
+            case Aggregate agg -> translateAggregate(agg, context);
             case null, default -> "null";
         };
-
     }
 
     private String translateField(Field field, GenerationContext context) {
@@ -100,6 +101,28 @@ public class ExpressionTranslator {
         result.append(context.getIndent()).append("} }");
 
         return result.toString();
+    }
+
+    private String translateAggregate(Aggregate agg, GenerationContext context) {
+        String fieldPath = agg.getField() != null ? agg.getField().getField() : null;
+        String type = agg.getType().name().toLowerCase();
+
+        if (agg.isDistinct() && agg.getType() == Aggregate.AggregateType.COUNT) {
+            // COUNT(DISTINCT field) - ?????????? ??? ????, ??????? ????? ???????????? ? HAVING
+            // ????? $group ??? ???? ????? ?????????? ??? ??, ??? ? ????????
+            String alias = agg.getField() != null ? agg.getField().getField() : "count";
+            return "\"" + alias + "\"";
+        }
+
+        if (fieldPath == null || "*".equals(fieldPath)) {
+            if (agg.getType() == Aggregate.AggregateType.COUNT) {
+                return "\"count\"";
+            }
+            return "\"" + type + "\"";
+        }
+
+        // ??? ??????? ????????? ?????????? ?????? ?? ???? ????? $group
+        return "\"" + fieldPath + "\"";
     }
 
     private String translateSubquery(Subquery subquery, GenerationContext context) {

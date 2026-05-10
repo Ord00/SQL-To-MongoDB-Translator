@@ -1,6 +1,7 @@
 package sql.to.mongodb.translator.builders;
 
 import org.springframework.stereotype.Component;
+import sql.to.mongodb.translator.code.generator.TranslationResult;
 import sql.to.mongodb.translator.exceptions.CodeGenerationException;
 import sql.to.mongodb.translator.base.GenerationContext;
 import sql.to.mongodb.translator.ir.SqlToMongoIR;
@@ -11,7 +12,6 @@ import java.util.List;
 
 @Component
 public class PipelineBuilder {
-
     private final MatchStageBuilder matchStageBuilder;
     private final LookupStageBuilder lookupStageBuilder;
     private final GroupStageBuilder groupStageBuilder;
@@ -35,7 +35,6 @@ public class PipelineBuilder {
 
         List<String> stages = new ArrayList<>();
 
-        // Если мы внутри подзапроса, не добавляем source mappings для внешних таблиц
         if (!context.isInsideSubquery()) {
             initSourceMappings(ir, context);
         }
@@ -46,24 +45,27 @@ public class PipelineBuilder {
             if (lookup != null) stages.add(lookup);
         }
 
-        String where = matchStageBuilder.buildWhere(ir, context);
-        if (where != null) {
-            stages.addAll(context.getAndClearPendingStages());
-            stages.add(where);
-        }
+        // WHERE - получаем результат со стадиями и условием
+        TranslationResult whereResult = matchStageBuilder.buildWhere(ir, context);
+        stages.addAll(whereResult.getPrerequisiteStages());
+        String where = whereResult.getCondition();
+        if (where != null) stages.add(where);
 
+        // GROUP BY
         String group = groupStageBuilder.build(ir, context);
         if (group != null) stages.add(group);
 
-        String having = matchStageBuilder.buildHaving(ir, context);
-        if (having != null) {
-            stages.addAll(context.getAndClearPendingStages());
-            stages.add(having);
-        }
+        // HAVING
+        TranslationResult havingResult = matchStageBuilder.buildHaving(ir, context);
+        stages.addAll(havingResult.getPrerequisiteStages());
+        String having = havingResult.getCondition();
+        if (having != null) stages.add(having);
 
+        // SORT
         String sort = sortStageBuilder.build(ir, context);
         if (sort != null) stages.add(sort);
 
+        // LIMIT / OFFSET
         if (ir.getOffset() != null) {
             stages.add(indent(context) + "{ $skip: " + ir.getOffset() + " }");
         }
@@ -71,12 +73,14 @@ public class PipelineBuilder {
             stages.add(indent(context) + "{ $limit: " + ir.getLimit() + " }");
         }
 
+        // DISTINCT без агрегации
         if (ir.isDistinct() && !ir.isHasGroupBy() && !ir.isHasAggregateFunctions()) {
             stages.add(buildDistinctGroup(ir, context));
             stages.add(buildDistinctProject(ir, context));
             return stages;
         }
 
+        // PROJECT
         String project = projectStageBuilder.build(ir, context);
         if (project != null) stages.add(project);
 
@@ -88,19 +92,9 @@ public class PipelineBuilder {
         ir.getAliases().forEach((alias, table) -> {
             if (table.equals(ir.getMainCollection())) {
                 context.mapSourcePath(alias, "");
-            } else {
-                context.mapSourcePath(alias, toJoinAlias(table));
             }
-            context.mapSourcePath(table, table.equals(ir.getMainCollection()) ? "" : toJoinAlias(table));
+            context.mapSourcePath(table, table.equals(ir.getMainCollection()) ? "" : alias);
         });
-        for (var join : ir.getJoins()) {
-            if (join.getRight() instanceof sql.to.mongodb.translator.ir.join.JoinTable rightTable) {
-                context.mapSourcePath(rightTable.getValue(), toJoinAlias(rightTable.getValue()));
-                if (rightTable.getAlias() != null && !rightTable.getAlias().isBlank()) {
-                    context.mapSourcePath(rightTable.getAlias(), toJoinAlias(rightTable.getValue()));
-                }
-            }
-        }
     }
 
     private String buildDistinctGroup(SqlToMongoIR ir, GenerationContext context) {
@@ -152,10 +146,6 @@ public class PipelineBuilder {
         context.decreaseIndent();
         project.append(indent(context)).append("}");
         return project.toString();
-    }
-
-    private String toJoinAlias(String table) {
-        return Character.toLowerCase(table.charAt(0)) + table.substring(1) + "Join";
     }
 
     private String indent(GenerationContext context) {

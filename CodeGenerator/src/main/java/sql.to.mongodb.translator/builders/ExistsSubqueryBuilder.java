@@ -1,11 +1,12 @@
 package sql.to.mongodb.translator.builders;
 
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 import sql.to.mongodb.translator.exceptions.CodeGenerationException;
 import sql.to.mongodb.translator.base.GenerationContext;
 import sql.to.mongodb.translator.ir.CorrelationSubquery;
 import sql.to.mongodb.translator.ir.SqlToMongoIR;
-import sql.to.mongodb.translator.translators.ConditionTranslator;
+import sql.to.mongodb.translator.ir.condition.CorrelationCondition;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -13,18 +14,15 @@ import java.util.List;
 @Component
 public class ExistsSubqueryBuilder {
 
-    private final ConditionTranslator conditionTranslator;
-    private final LookupStageBuilder lookupStageBuilder;
     private final PipelineBuilder pipelineBuilder;
+    private final LookupStageBuilder lookupStageBuilder;
     private final ProjectStageBuilder projectStageBuilder;
 
-    public ExistsSubqueryBuilder(ConditionTranslator conditionTranslator,
+    public ExistsSubqueryBuilder(@Lazy PipelineBuilder pipelineBuilder,
                                  LookupStageBuilder lookupStageBuilder,
-                                 PipelineBuilder pipelineBuilder,
                                  ProjectStageBuilder projectStageBuilder) {
-        this.conditionTranslator = conditionTranslator;
-        this.lookupStageBuilder = lookupStageBuilder;
         this.pipelineBuilder = pipelineBuilder;
+        this.lookupStageBuilder = lookupStageBuilder;
         this.projectStageBuilder = projectStageBuilder;
     }
 
@@ -41,18 +39,25 @@ public class ExistsSubqueryBuilder {
 
         boolean originalSyntax = context.isUseAggregationSyntax();
         context.setUseAggregationSyntax(true);
+        context.setInsideSubquery(true);
         context.enterSubquery();
 
         try {
-            // Строим pipeline для подзапроса через PipelineBuilder
+            // Строим pipeline для подзапроса
             List<String> pipelineStages = pipelineBuilder.buildStages(subIR, context);
 
-            String project = projectStageBuilder.buildForSubquery(subIR, context);
-            if (project != null) {
-                pipelineStages.add(project);
+            List<CorrelationCondition> correlations = subquery.getCorrelations();
+            if (correlations != null && !correlations.isEmpty()) {
+                String correlationMatch = lookupStageBuilder.buildCorrelationMatch(correlations, context);
+                if (correlationMatch != null) {
+                    pipelineStages.addFirst(correlationMatch);
+                }
             }
 
-            // Создаём $lookup с let и pipeline
+            // Добавляем проекцию
+            projectStageBuilder.addProjectionStages(subIR, context, pipelineStages);
+
+            // Создаём $lookup
             String lookup = lookupStageBuilder.buildLookupWithPipeline(
                     subIR.getMainCollection(),
                     subqueryName,
@@ -62,12 +67,12 @@ public class ExistsSubqueryBuilder {
             );
             stages.add(lookup);
 
-            // Добавляем $match для NOT EXISTS (размер массива = 0)
+            // Добавляем $match для EXISTS/NOT EXISTS
             String match = buildExistsMatch(subqueryName, isExists, context);
             stages.add(match);
 
         } finally {
-            context.exitSubquery();
+            context.setInsideSubquery(false);
             context.setUseAggregationSyntax(originalSyntax);
         }
 

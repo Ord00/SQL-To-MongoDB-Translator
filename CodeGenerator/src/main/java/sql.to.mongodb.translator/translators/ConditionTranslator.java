@@ -4,8 +4,10 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 import sql.to.mongodb.translator.builders.ExistsSubqueryBuilder;
 import sql.to.mongodb.translator.builders.InSubqueryBuilder;
+import sql.to.mongodb.translator.code.generator.TranslationResult;
 import sql.to.mongodb.translator.exceptions.CodeGenerationException;
 import sql.to.mongodb.translator.base.GenerationContext;
+import sql.to.mongodb.translator.ir.Aggregate;
 import sql.to.mongodb.translator.ir.Constant;
 import sql.to.mongodb.translator.ir.CorrelationSubquery;
 import sql.to.mongodb.translator.ir.Field;
@@ -22,13 +24,12 @@ import sql.to.mongodb.translator.ir.expression.Expressionable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 @Component
 public class ConditionTranslator {
 
     private final ExpressionTranslator expressionTranslator;
-    private final InSubqueryBuilder inSubqueryBuilder;
+    private final InSubqueryBuilder  inSubqueryBuilder;
     private final ExistsSubqueryBuilder existsSubqueryBuilder;
 
     private static final Map<String, String> OPERATOR_MAP = Map.of(
@@ -51,34 +52,35 @@ public class ConditionTranslator {
         this.existsSubqueryBuilder = existsSubqueryBuilder;
     }
 
-    public String translate(ConditionNode condition,
-                            GenerationContext context) throws CodeGenerationException {
+    public TranslationResult translate(ConditionNode condition,
+                                       GenerationContext context) throws CodeGenerationException {
         return switch (condition) {
             case LinkNode link -> translateLink(link, context);
-            case Comparison comp -> translateComparison(comp, context);
-            case BetweenCondition between -> translateBetween(between, context);
+            case Comparison comp -> new TranslationResult(translateComparison(comp, context));
+            case BetweenCondition between -> new TranslationResult(translateBetween(between, context));
             case InCondition in -> translateIn(in, context);
-            case NullCheck nullCheck -> translateNullCheck(nullCheck, context);
+            case NullCheck nullCheck -> new TranslationResult(translateNullCheck(nullCheck, context));
             case ExistsCondition exists -> translateExists(exists, context);
-            case null, default -> "{}";
+            case null, default -> TranslationResult.empty();
         };
-
     }
 
-    private String translateLink(LinkNode link, GenerationContext context) {
-        List<String> parts = link.getChildren().stream()
-                .map(c -> {
-                    try {
-                        return translate(c, context);
-                    } catch (Exception e) {
-                        return "{}";
-                    }
-                })
-                .filter(s -> !s.isEmpty() && !"{}".equals(s))
-                .collect(Collectors.toList());
+    private TranslationResult translateLink(LinkNode link,
+                                            GenerationContext context) throws CodeGenerationException {
+        List<String> parts = new ArrayList<>();
+        List<String> allStages = new ArrayList<>();
 
-        if (parts.isEmpty()) return "{}";
-        if (parts.size() == 1) return parts.getFirst();
+        for (ConditionNode child : link.getChildren()) {
+            TranslationResult result = translate(child, context);
+            allStages.addAll(result.getPrerequisiteStages());
+            String cond = result.getCondition();
+            if (cond != null && !cond.isBlank() && !"{}".equals(cond)) {
+                parts.add(cond);
+            }
+        }
+
+        if (parts.isEmpty()) return new TranslationResult("{}", allStages);
+        if (parts.size() == 1) return new TranslationResult(parts.getFirst(), allStages);
 
         String op = link.getType() == LinkNode.LinkType.AND ? "$and" : "$or";
         if (context.isUseAggregationSyntax()) {
@@ -93,9 +95,9 @@ public class ConditionTranslator {
             }
             result.append("    ]\n");
             result.append("}");
-            return result.toString();
+            return new TranslationResult(result.toString(), allStages);
         }
-        return "{ " + op + ": [ " + String.join(", ", parts) + " ] }";
+        return new TranslationResult("{ " + op + ": [ " + String.join(", ", parts) + " ] }", allStages);
     }
 
     private String translateComparison(Comparison comp,
@@ -104,6 +106,13 @@ public class ConditionTranslator {
         String field;
         String value;
         String mongoOp;
+
+        if (comp.getOperand() instanceof Aggregate && comp.getValue() instanceof Constant) {
+            field = expressionTranslator.translate(comp.getOperand(), context);
+            value = expressionTranslator.translate(comp.getValue(), context);
+            mongoOp = OPERATOR_MAP.getOrDefault(comp.getOperator(), "$eq");
+            return "{ " + field + ": { " + mongoOp + ": " + value + " } }";
+        }
 
         boolean isExpr = false;
 
@@ -147,36 +156,36 @@ public class ConditionTranslator {
         return "{ " + field + ": { $gte: " + start + ", $lte: " + end + " } }";
     }
 
-    private String translateIn(InCondition in,
-                               GenerationContext context) throws CodeGenerationException {
-        String field = expressionTranslator.translate(in.getOperand(), context);
-        List<String> values = new ArrayList<>();
-
+    private TranslationResult translateIn(InCondition in,
+                                          GenerationContext context) throws CodeGenerationException {
+        // Проверяем наличие подзапроса
         for (Expressionable expr : in.getInValues()) {
             if (expr instanceof Subquery) {
                 var result = inSubqueryBuilder.build(in, context);
                 if (result != null) {
-                    context.addStages(result.stages());
-                    return "{\n"
+                    String condition = "{\n"
                             + "    $in: [\n"
-                            + "        " + field + ",\n"
+                            + "        " + expressionTranslator.translate(in.getOperand(), context) + ",\n"
                             + "        " + result.arrayPath() + "\n"
                             + "    ]\n"
                             + "}";
+                    return new TranslationResult(condition, result.stages());
                 }
             }
+        }
+
+        // Обычный IN без подзапроса
+        String field = expressionTranslator.translate(in.getOperand(), context);
+        List<String> values = new ArrayList<>();
+        for (Expressionable expr : in.getInValues()) {
             values.add(expressionTranslator.translate(expr, context));
         }
 
-        if (context.isUseAggregationSyntax()) {
-            return "{\n"
-                    + "    $in: [\n"
-                    + "        " + field + ",\n"
-                    + "        [" + String.join(", ", values) + "]\n"
-                    + "    ]\n"
-                    + "}";
-        }
-        return "{ " + field + ": { $in: [ " + String.join(", ", values) + " ] } }";
+        String condition = context.isUseAggregationSyntax()
+                ? "{ $in: [" + field + ", [" + String.join(", ", values) + "]] }"
+                : "{ " + field + ": { $in: [ " + String.join(", ", values) + " ] } }";
+
+        return new TranslationResult(condition);
     }
 
     private String translateNullCheck(NullCheck nullCheck,
@@ -190,19 +199,20 @@ public class ConditionTranslator {
         return "{ " + field + ": " + (isNull ? "null" : "{ $ne: null }") + " }";
     }
 
-    private String translateExists(ExistsCondition exists,
-                                   GenerationContext context) throws CodeGenerationException {
+    private TranslationResult translateExists(ExistsCondition exists,
+                                              GenerationContext context) throws CodeGenerationException {
         CorrelationSubquery subquery = exists.getSubquery();
-        if (subquery == null) return "{ $exists: " + exists.isExists() + " }";
-
-        // Для всех подзапросов (и коррелированных, и нет) генерируем стадии
-        var result = existsSubqueryBuilder.build(subquery, exists.isExists(), context);
-        if (result != null) {
-            context.addStages(result.stages());
+        if (subquery == null) {
+            return new TranslationResult("{ $exists: " + exists.isExists() + " }");
         }
 
-        // Возвращаем условие, которое всегда true (фильтрация уже сделана в $match)
-        return "{}";
+        var result = existsSubqueryBuilder.build(subquery, exists.isExists(), context);
+        if (result != null && result.stages() != null) {
+            // EXISTS полностью обрабатывается стадиями, условие не нужно
+            return new TranslationResult("{}", result.stages());
+        }
+
+        return TranslationResult.empty();
     }
 
     private String indentBlock(String input, String indent) {

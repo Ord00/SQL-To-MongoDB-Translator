@@ -81,46 +81,40 @@ public class ProjectStageBuilder {
         return "{ " + String.join(", ", fields) + " }";
     }
 
-    /**
-     * Построение проекции для подзапроса (используется в LookupStageBuilder)
-     * @param subIR IR подзапроса
-     * @param context контекст генерации (используется для отступов и синтаксиса)
-     * @return строка $project стадии
-     */
-    public String buildForSubquery(SqlToMongoIR subIR,
-                                   GenerationContext context) throws CodeGenerationException {
+    public void addProjectionStages(SqlToMongoIR subIR,
+                                    GenerationContext context,
+                                    List<String> pipelineStages) throws CodeGenerationException {
         if (subIR == null || subIR.getProjectionFields().isEmpty()) {
-            return null;
+            return;
         }
 
-        // Если поле-подзапрос и это не агрегация - простая проекция
-        if (subIR.getProjectionFields().size() == 1) {
-            Projectionable only = subIR.getProjectionFields().getFirst();
-            if (only instanceof ProjectionField pf) {
-                return "{ $project: { _id: 0, " + pf.getField() + ": 1 } }";
+        // Проверяем, есть ли COUNT(DISTINCT)
+        boolean hasDistinctCount = false;
+        for (Projectionable proj : subIR.getProjectionFields()) {
+            if (proj instanceof AggregateProjection agg && agg.isDistinct()) {
+                hasDistinctCount = true;
+                break;
             }
-            return "{ $project: { _id: 0, result: 1 } }";
         }
 
-        // Сложная проекция с несколькими полями
-        StringBuilder project = new StringBuilder("{ $project: { _id: 0");
+        // TODO
+        if (hasDistinctCount) {
+            // Добавляем $project с $setDifference и $project с $size
+            pipelineStages.add("{ $project: { teams: { $setDifference: [ \"$teams\", [null] ] } } }");
+            pipelineStages.add("{ $project: { teamCount: { $size: \"$teams\" } } }");
+            return;
+        }
 
+        // Обычная проекция
+        StringBuilder project = new StringBuilder("{ $project: { _id: 0");
         for (Projectionable proj : subIR.getProjectionFields()) {
             if (proj instanceof ProjectionField pf) {
                 String fieldName = pf.getAlias() != null ? pf.getAlias() : pf.getField();
                 project.append(", ").append(fieldName).append(": 1");
-            } else if (proj instanceof AggregateProjection agg) {
-                // Для подзапросов с агрегациями используем транслятор
-                String aggStr = projectionTranslator.translate(agg, context, false);
-                if (!aggStr.isEmpty()) {
-                    String name = agg.getAlias() != null ? agg.getAlias() : agg.getType().name().toLowerCase();
-                    project.append(", ").append(name).append(": 1");
-                }
             }
         }
-
         project.append(" } }");
-        return project.toString();
+        pipelineStages.add(project.toString());
     }
 
     public String buildAddFieldsWithMap(String arrayName,

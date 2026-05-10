@@ -3,9 +3,7 @@ package sql.to.mongodb.translator.base;
 import lombok.Getter;
 import lombok.Setter;
 
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 @Getter
@@ -17,7 +15,6 @@ public class GenerationContext {
     private final Map<String, String> subqueryResults = new HashMap<>();
     private final Map<String, String> sourcePathMap = new HashMap<>();
     private boolean useAggregationSyntax = false;
-    private final List<String> pendingStages = new ArrayList<>();
     private boolean insideSubquery = false;
     private int subqueryLevel = 0;
     private final Map<String, String> subqueryArrayNames = new HashMap<>();
@@ -49,18 +46,6 @@ public class GenerationContext {
 
     public String getIndent() {
         return "    ".repeat(Math.max(0, indentLevel));
-    }
-
-    public void addStages(List<String> stages) {
-        if (stages != null) {
-            pendingStages.addAll(stages);
-        }
-    }
-
-    public List<String> getAndClearPendingStages() {
-        List<String> result = new ArrayList<>(pendingStages);
-        pendingStages.clear();
-        return result;
     }
 
     public void mapSourcePath(String source, String pathPrefix) {
@@ -103,5 +88,18 @@ public class GenerationContext {
 
     private String subqueryKey(Object subqueryRef) {
         return "subq@" + System.identityHashCode(subqueryRef);
+    }
+
+    public String formatMultiline(String content, int baseLevel) {
+        String[] lines = content.split("\\R");
+        StringBuilder sb = new StringBuilder();
+        for (String line : lines) {
+            sb.append("    ".repeat(baseLevel)).append(line).append("\n");
+        }
+        return sb.toString();
+    }
+
+    public String indent(int level) {
+        return "    ".repeat(Math.max(0, level));
     }
 }

@@ -63,87 +63,20 @@ public class GroupStageBuilder {
             group.append("null");
         } else if (ir.getGroupByFields().size() == 1) {
             GroupByField field = ir.getGroupByFields().getFirst();
-            // Используем resolveFieldPath для правильного разрешения пути поля
-            String resolved = context.resolveFieldPath(field.getSource(), field.getField());
-            group.append("\"$").append(resolved).append("\"");
+            group.append("\"$").append(field.getField()).append("\"");
         } else {
             group.append("{\n");
             context.increaseIndent();
             for (int i = 0; i < ir.getGroupByFields().size(); i++) {
                 GroupByField field = ir.getGroupByFields().get(i);
-                String resolved = context.resolveFieldPath(field.getSource(), field.getField());
                 group.append(context.getIndent())
                         .append(field.getField())
-                        .append(": \"$").append(resolved).append("\"");
+                        .append(": \"$").append(field.getField()).append("\"");
                 if (i < ir.getGroupByFields().size() - 1) group.append(",\n");
             }
             context.decreaseIndent();
             group.append("\n").append(context.getIndent()).append("}");
         }
-    }
-
-    /**
-     * Построение $group стадии для подзапроса с использованием контекста
-     * @param subIR IR подзапроса
-     * @param context контекст генерации (используется для отступов и синтаксиса)
-     * @return строка $group стадии или null если GROUP BY нет
-     */
-    public String buildForSubquery(SqlToMongoIR subIR,
-                                   GenerationContext context) {
-        if (subIR == null || !subIR.isHasGroupBy()) {
-            return null;
-        }
-
-        StringBuilder group = new StringBuilder();
-
-        // Добавляем отступ если в агрегационном контексте
-        if (context.isUseAggregationSyntax()) {
-            group.append(indent(context));
-        }
-
-        group.append("{ $group: { _id: ");
-
-        if (subIR.getGroupByFields().isEmpty()) {
-            group.append("null");
-        } else if (subIR.getGroupByFields().size() == 1) {
-            group.append("\"$").append(subIR.getGroupByFields().getFirst()).append("\"");
-        } else {
-            group.append("{\n");
-            int savedIndent = context.getIndentLevel();
-            context.setIndentLevel(savedIndent + 1);
-
-            for (int i = 0; i < subIR.getGroupByFields().size(); i++) {
-                GroupByField field = subIR.getGroupByFields().get(i);
-                group.append(indent(context))
-                        .append(field.getSource())
-                        .append(": \"$")
-                        .append(field.getField())
-                        .append("\"");
-                if (i < subIR.getGroupByFields().size() - 1) group.append(",\n");
-            }
-
-            context.setIndentLevel(savedIndent);
-            group.append("\n").append(indent(context)).append("}");
-        }
-
-        // Добавляем агрегации для подзапроса
-        boolean hasAggregations = false;
-        for (Projectionable proj : subIR.getProjectionFields()) {
-            if (proj instanceof AggregateProjection agg) {
-                if (!hasAggregations) {
-                    hasAggregations = true;
-                }
-                String field = agg.getField() != null ? agg.getField().getField() : null;
-                if (field != null && !field.isEmpty()) {
-                    group.append(", ").append(agg.getType().name().toLowerCase())
-                            .append(": { $").append(agg.getType().name().toLowerCase())
-                            .append(": \"$").append(field).append("\" }");
-                }
-            }
-        }
-
-        group.append(" } }");
-        return group.toString();
     }
 
     private String indent(GenerationContext context) {

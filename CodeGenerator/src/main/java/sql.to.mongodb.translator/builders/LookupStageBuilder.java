@@ -1,17 +1,12 @@
 package sql.to.mongodb.translator.builders;
 
 import org.springframework.stereotype.Component;
-import sql.to.mongodb.translator.exceptions.CodeGenerationException;
 import sql.to.mongodb.translator.base.GenerationContext;
-import sql.to.mongodb.translator.helpers.SubqueryHelper;
-import sql.to.mongodb.translator.ir.CorrelationSubquery;
 import sql.to.mongodb.translator.ir.Field;
-import sql.to.mongodb.translator.ir.SqlToMongoIR;
 import sql.to.mongodb.translator.ir.condition.Comparison;
 import sql.to.mongodb.translator.ir.condition.CorrelationCondition;
 import sql.to.mongodb.translator.ir.join.JoinInfo;
 import sql.to.mongodb.translator.ir.join.JoinTable;
-import sql.to.mongodb.translator.translators.ConditionTranslator;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -19,20 +14,7 @@ import java.util.stream.Collectors;
 @Component
 public class LookupStageBuilder {
 
-    private final ConditionTranslator conditionTranslator;
-    private final SubqueryHelper subqueryHelper;
-    private final GroupStageBuilder groupStageBuilder;
-    private final ProjectStageBuilder projectStageBuilder;
-
-    public LookupStageBuilder(ConditionTranslator conditionTranslator,
-                              SubqueryHelper subqueryHelper,
-                              GroupStageBuilder groupStageBuilder,
-                              ProjectStageBuilder projectStageBuilder) {
-        this.conditionTranslator = conditionTranslator;
-        this.subqueryHelper = subqueryHelper;
-        this.groupStageBuilder = groupStageBuilder;
-        this.projectStageBuilder = projectStageBuilder;
-    }
+    public LookupStageBuilder() {}
 
     public String buildSimplePipelineLookup(String fromCollection,
                                             String asName,
@@ -64,11 +46,12 @@ public class LookupStageBuilder {
 
     public String buildSimpleLookup(JoinInfo join, GenerationContext context) {
         String rightTable = join.getRight() instanceof JoinTable t ? t.getValue() : "subquery";
-        String as = toJoinAlias(rightTable);
+        String as;
         if (join.getRight() != null && join.getRight().getAlias() != null) {
-            context.mapSourcePath(join.getRight().getAlias(), as);
+            as = join.getRight().getAlias();
+        } else {
+            as = toJoinAlias(rightTable);
         }
-        context.mapSourcePath(rightTable, as);
 
         String localField = "_id";
         String foreignField = "_id";
@@ -121,12 +104,6 @@ public class LookupStageBuilder {
         lookup.append(context.getIndent()).append("pipeline: [\n");
         context.increaseIndent();
 
-        // Добавляем match для корреляций если есть
-        String correlationMatch = buildCorrelationMatch(correlations, context);
-        if (correlationMatch != null) {
-            lookup.append(context.getIndent()).append(correlationMatch).append(",\n");
-        }
-
         // Добавляем все стадии подзапроса
         for (int i = 0; i < pipelineStages.size(); i++) {
             String stage = pipelineStages.get(i);
@@ -166,7 +143,7 @@ public class LookupStageBuilder {
         return field.getSource() + "." + field.getField();
     }
 
-    private String buildCorrelationMatch(List<CorrelationCondition> correlations,
+    public String buildCorrelationMatch(List<CorrelationCondition> correlations,
                                          GenerationContext context) {
         if (correlations == null || correlations.isEmpty()) return null;
 
@@ -179,63 +156,6 @@ public class LookupStageBuilder {
         }
         match.append("] } } }");
         return match.toString();
-    }
-
-    public String buildCorrelatedSubqueryLookup(CorrelationSubquery subquery,
-                                                String subqueryName,
-                                                GenerationContext context) throws CodeGenerationException {
-        String fromCollection = subquery.getSubqueryIR().getMainCollection();
-        List<CorrelationCondition> correlations = subquery.getCorrelations();
-
-        StringBuilder lookup = new StringBuilder(indent(context) + "{ $lookup: {\n");
-        context.increaseIndent();
-        lookup.append(context.getIndent())
-                .append("from: \"")
-                .append(fromCollection)
-                .append("\",\n");
-        lookup.append(context.getIndent())
-                .append("let: { ")
-                .append(subqueryHelper.buildLetVariables(correlations))
-                .append(" },\n");
-        lookup.append(context.getIndent()).append("pipeline: [\n");
-        context.increaseIndent();
-
-        String match = subqueryHelper.buildCorrelationMatch(correlations, context);
-        if (match != null) {
-            lookup.append(context.getIndent()).append(match).append(",\n");
-        }
-
-        SqlToMongoIR subIR = subquery.getSubqueryIR();
-        if (subIR.getWhereCondition() != null) {
-            context.setUseAggregationSyntax(true);
-            String where = conditionTranslator.translate(subIR.getWhereCondition(), context);
-            lookup.append(context.getIndent()).append("{ $match: ").append(where).append(" },\n");
-        }
-
-        if (subIR.isHasGroupBy()) {
-            lookup.append(context.getIndent()).append(buildSubqueryGroup(subIR, context)).append(",\n");
-        }
-
-        String project = projectStageBuilder.buildForSubquery(subIR, context);
-        if (project != null) {
-            lookup.append(context.getIndent()).append(project).append("\n");
-        } else {
-            lookup.append(context.getIndent()).append("{ $project: { _id: 0, result: 1 } }\n");
-        }
-
-        context.decreaseIndent();
-        lookup.append(context.getIndent()).append("],\n");
-        lookup.append(context.getIndent()).append("as: \"").append(subqueryName).append("\"\n");
-        context.decreaseIndent();
-        lookup.append(indent(context)).append("} }");
-
-        return lookup.toString();
-    }
-
-    private String buildSubqueryGroup(SqlToMongoIR subIR,
-                                      GenerationContext context) {
-        String group = groupStageBuilder.buildForSubquery(subIR, context);
-        return group != null ? group : "";
     }
 
     public String buildUnwind(String path, boolean preserveNull, GenerationContext context) {
