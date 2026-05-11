@@ -472,40 +472,68 @@ public class CodeGeneratorTest {
                                           from: "StaffRace",
                                           localField: "Id_race",
                                           foreignField: "Race",
-                                          as: "sr"
+                                          as: "SR2"
                                       }
                                   },
                                   {
                                       $unwind: {
-                                          path: "$sr",
+                                          path: "$SR2",
                                           preserveNullAndEmptyArrays: true
                                       }
                                   },
                                   {
                                       $lookup: {
                                           from: "Staff",
-                                          localField: "sr.Staff",
+                                          localField: "SR2.Staff",
                                           foreignField: "Id_staff",
-                                          as: "s"
+                                          as: "S2"
                                       }
                                   },
                                   {
                                       $unwind: {
-                                          path: "$s",
+                                          path: "$S2",
                                           preserveNullAndEmptyArrays: true
                                       }
                                   },
                                   {
                                       $lookup: {
                                           from: "TeamStaff",
-                                          localField: "s.Id_staff",
+                                          localField: "S2.Id_staff",
                                           foreignField: "Staff",
-                                          as: "ts"
+                                          as: "TS2"
                                       }
                                   },
                                   {
                                       $unwind: {
-                                          path: "$ts",
+                                          path: "$TS2",
+                                          preserveNullAndEmptyArrays: true
+                                      }
+                                  },
+                                  {
+                                      $lookup: {
+                                          from: "Team",
+                                          localField: "TS2.Team",
+                                          foreignField: "Id_team",
+                                          as: "Tm2"
+                                      }
+                                  },
+                                  {
+                                      $unwind: {
+                                          path: "$Tm2",
+                                          preserveNullAndEmptyArrays: true
+                                      }
+                                  },
+                                  {
+                                      $lookup: {
+                                          from: "Country",
+                                          localField: "Tm2.Country",
+                                          foreignField: "Id_country",
+                                          as: "Cn2"
+                                      }
+                                  },
+                                  {
+                                      $unwind: {
+                                          path: "$Cn2",
                                           preserveNullAndEmptyArrays: true
                                       }
                                   },
@@ -514,11 +542,11 @@ public class CodeGeneratorTest {
                                           $expr: {
                                               $and: [
                                                   { $eq: ["$Competition", "$$compId"] },
-                                                  { $gte: ["$RaceDate", "$ts.EntryDate"] },
+                                                  { $gte: ["$RaceDate", "$TS2.EntryDate"] },
                                                   {
                                                       $or: [
-                                                          { $eq: ["$ts.ExitDate", null] },
-                                                          { $lte: ["$RaceDate", "$ts.ExitDate"] }
+                                                          { $eq: ["$TS2.ExitDate", null] },
+                                                          { $lte: ["$RaceDate", "$TS2.ExitDate"] }
                                                       ]
                                                   }
                                               ]
@@ -526,38 +554,10 @@ public class CodeGeneratorTest {
                                       }
                                   },
                                   {
-                                      $lookup: {
-                                          from: "Team",
-                                          localField: "ts.Team",
-                                          foreignField: "Id_team",
-                                          as: "tm"
-                                      }
-                                  },
-                                  {
-                                      $unwind: {
-                                          path: "$tm",
-                                          preserveNullAndEmptyArrays: true
-                                      }
-                                  },
-                                  {
-                                      $lookup: {
-                                          from: "Country",
-                                          localField: "tm.Country",
-                                          foreignField: "Id_country",
-                                          as: "cn"
-                                      }
-                                  },
-                                  {
-                                      $unwind: {
-                                          path: "$cn",
-                                          preserveNullAndEmptyArrays: true
-                                      }
-                                  },
-                                  {
                                       $group: {
-                                          _id: "$cn.Id_country",
+                                          _id: "$Cn2.Id_country",
                                           teams: {
-                                              $addToSet: "$tm.Id_team"
+                                              $addToSet: "$Tm2.Id_team"
                                           }
                                       }
                                   },
@@ -605,8 +605,8 @@ public class CodeGeneratorTest {
                 """;
 
         String codeToScan = """
-                SELECT DISTINCT Comp.Id_competition, Comp.CompetitionName
-                FROM Competition
+                SELECT Comp.Id_competition, Comp.CompetitionName
+                FROM Competition Comp
                 WHERE NOT EXISTS(SELECT 1
                 			 FROM Race R2 LEFT JOIN StaffRace SR2
                 			 	 ON R2.Id_race = SR2.Race

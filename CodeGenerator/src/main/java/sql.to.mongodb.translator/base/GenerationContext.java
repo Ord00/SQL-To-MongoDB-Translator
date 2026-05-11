@@ -89,17 +89,4 @@ public class GenerationContext {
     private String subqueryKey(Object subqueryRef) {
         return "subq@" + System.identityHashCode(subqueryRef);
     }
-
-    public String formatMultiline(String content, int baseLevel) {
-        String[] lines = content.split("\\R");
-        StringBuilder sb = new StringBuilder();
-        for (String line : lines) {
-            sb.append("    ".repeat(baseLevel)).append(line).append("\n");
-        }
-        return sb.toString();
-    }
-
-    public String indent(int level) {
-        return "    ".repeat(Math.max(0, level));
-    }
 }

@@ -35,9 +35,7 @@ public class PipelineBuilder {
 
         List<String> stages = new ArrayList<>();
 
-        if (!context.isInsideSubquery()) {
-            initSourceMappings(ir, context);
-        }
+        initSourceMappings(ir, context);
 
         // Обработка JOIN
         for (var join : ir.getJoins()) {

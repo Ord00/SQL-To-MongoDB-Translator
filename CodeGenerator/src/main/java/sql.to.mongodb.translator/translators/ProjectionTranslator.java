@@ -3,7 +3,6 @@ package sql.to.mongodb.translator.translators;
 import org.springframework.stereotype.Component;
 import sql.to.mongodb.translator.exceptions.CodeGenerationException;
 import sql.to.mongodb.translator.base.GenerationContext;
-import sql.to.mongodb.translator.helpers.FieldHelper;
 import sql.to.mongodb.translator.helpers.SubqueryHelper;
 import sql.to.mongodb.translator.ir.projection.AggregateProjection;
 import sql.to.mongodb.translator.ir.projection.ArithmeticProjection;
@@ -45,7 +44,7 @@ public class ProjectionTranslator {
             String name = field.getAlias() != null ? field.getAlias() : field.getField();
             return name + ": 1";
         }
-        String fieldPath = FieldHelper.getFullFieldName(field);
+        String fieldPath = context.resolveFieldPath(field.getAlias(), field.getField());
         String name = field.getAlias() != null ? field.getAlias() : field.getField();
         return context.getIndent() + name + ": \"$" + fieldPath + "\"";
     }

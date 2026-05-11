@@ -139,8 +139,9 @@ public class LookupStageBuilder {
         String mapped = context.getSourcePathMap().get(field.getSource());
         if (mapped != null && !mapped.isBlank()) {
             return mapped + "." + field.getField();
+        } else {
+            return field.getField();
         }
-        return field.getSource() + "." + field.getField();
     }
 
     public String buildCorrelationMatch(List<CorrelationCondition> correlations,
