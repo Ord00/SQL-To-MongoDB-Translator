@@ -71,7 +71,9 @@ public class ProjectStageBuilder {
         return project.toString();
     }
 
-    public void addProjectionStages(SqlToMongoIR ir, List<String> pipelineStages) {
+    public void addProjectionStages(SqlToMongoIR ir,
+                                    List<String> pipelineStages,
+                                    GenerationContext context) {
         if (ir == null) return;
 
         // Проверяем, есть ли COUNT(DISTINCT) в HAVING или проекциях
@@ -93,10 +95,42 @@ public class ProjectStageBuilder {
         }
 
         if (hasDistinctCount) {
+            String firstVar = context.getVariableName();
+
             // $project с $setDifference
-            pipelineStages.add("{ $project: { teams: { $setDifference: [ \"$teams\", [null] ] } } }");
+            StringBuilder sb = new StringBuilder(indent(context)).append("{\n");
+            context.increaseIndent();
+            sb.append(context.getIndent()).append("$project: {\n");
+            context.increaseIndent();
+            sb.append(context.getIndent()).append(firstVar).append(": {\n");
+            context.increaseIndent();
+            sb.append(indent(context)).append("$setDifference: [\"$").append(firstVar).append("\", [null]]\n");
+            context.decreaseIndent();
+            sb.append(indent(context)).append("}\n");
+            context.decreaseIndent();
+            sb.append(indent(context)).append("}\n");
+            context.decreaseIndent();
+            sb.append(indent(context)).append("}");
+
+            pipelineStages.add(sb.toString());
             // $project с $size
-            pipelineStages.add("{ $project: { teamCount: { $size: \"$teams\" } } }");
+            sb.setLength(0);
+            String secondVar = context.nextVariableName();
+
+            sb.append(indent(context)).append("{\n");
+            context.increaseIndent();
+            sb.append(indent(context)).append("$project: {\n");
+            context.increaseIndent();
+            sb.append(indent(context)).append(secondVar).append(": {\n");
+            context.increaseIndent();
+            sb.append(indent(context)).append("$size: \"$").append(firstVar).append("\"\n");
+            context.decreaseIndent();
+            sb.append(indent(context)).append("}\n");
+            context.decreaseIndent();
+            sb.append(indent(context)).append("}\n");
+            context.decreaseIndent();
+            sb.append(indent(context)).append("}");
+            pipelineStages.add(sb.toString());
         }
     }
 

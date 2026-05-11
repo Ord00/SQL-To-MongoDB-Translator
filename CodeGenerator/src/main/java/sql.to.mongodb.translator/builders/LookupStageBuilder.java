@@ -14,7 +14,8 @@ import java.util.stream.Collectors;
 @Component
 public class LookupStageBuilder {
 
-    public LookupStageBuilder() {}
+    public LookupStageBuilder() {
+    }
 
     public String buildSimplePipelineLookup(String fromCollection,
                                             String asName,
@@ -22,23 +23,23 @@ public class LookupStageBuilder {
                                             GenerationContext context) {
         StringBuilder lookup = new StringBuilder(indent(context)).append("{\n");
         context.increaseIndent();
-        lookup.append(context.getIndent()).append("$lookup: {\n");
+        lookup.append(indent(context)).append("$lookup: {\n");
         context.increaseIndent();
-        lookup.append(context.getIndent()).append("from: \"").append(fromCollection).append("\",\n");
-        lookup.append(context.getIndent()).append("pipeline: [\n");
+        lookup.append(indent(context)).append("from: \"").append(fromCollection).append("\",\n");
+        lookup.append(indent(context)).append("pipeline: [\n");
         context.increaseIndent();
 
         for (int i = 0; i < pipelineStages.size(); i++) {
-            lookup.append(context.getIndent()).append(pipelineStages.get(i));
+            lookup.append(indent(context)).append(pipelineStages.get(i));
             if (i < pipelineStages.size() - 1) lookup.append(",\n");
             else lookup.append("\n");
         }
 
         context.decreaseIndent();
-        lookup.append(context.getIndent()).append("],\n");
-        lookup.append(context.getIndent()).append("as: \"").append(asName).append("\"\n");
+        lookup.append(indent(context)).append("],\n");
+        lookup.append(indent(context)).append("as: \"").append(asName).append("\"\n");
         context.decreaseIndent();
-        lookup.append(context.getIndent()).append("}\n");
+        lookup.append(indent(context)).append("}\n");
         context.decreaseIndent();
         lookup.append(indent(context)).append("}");
         return lookup.toString();
@@ -87,6 +88,7 @@ public class LookupStageBuilder {
                                           List<String> pipelineStages,
                                           List<CorrelationCondition> correlations,
                                           GenerationContext context) {
+        context.setIndentLevel(1);
         StringBuilder lookup = new StringBuilder(indent(context)).append("{\n");
         context.increaseIndent();
         lookup.append(context.getIndent()).append("$lookup: {\n");
@@ -113,9 +115,12 @@ public class LookupStageBuilder {
         }
 
         context.decreaseIndent();
+        lookup.append(context.getIndent()).append("],\n");
+        lookup.append(context.getIndent()).append("as: \"").append(asName).append("\"\n");
         context.decreaseIndent();
+        lookup.append(context.getIndent()).append("}\n");
         context.decreaseIndent();
-
+        lookup.append(indent(context)).append("}");
         return lookup.toString();
     }
 
@@ -142,17 +147,55 @@ public class LookupStageBuilder {
     }
 
     public String buildCorrelationMatch(List<CorrelationCondition> correlations,
-                                         GenerationContext context) {
+                                        GenerationContext context) {
         if (correlations == null || correlations.isEmpty()) return null;
 
-        StringBuilder match = new StringBuilder("{ $match: { $expr: { $and: [");
+        StringBuilder match = new StringBuilder();
+
+        match.append(indent(context)).append("{\n");
+        context.increaseIndent();
+        match.append(indent(context)).append("$match: {\n");
+        context.increaseIndent();
+        match.append(indent(context)).append("$expr: {\n");
+        context.increaseIndent();
+
+        boolean isMultiCor = false;
+        if (correlations.size() > 1) {
+            isMultiCor = true;
+            match.append(indent(context)).append("$and: [\n");
+            context.increaseIndent();
+        }
+
         for (int i = 0; i < correlations.size(); i++) {
             CorrelationCondition c = correlations.get(i);
-            if (i > 0) match.append(", ");
-            match.append("{ $eq: [\"$").append(c.getInnerField().getField())
-                    .append("\", \"$$").append(c.getOuterField().getField()).append("\"] }");
+
+            match.append(indent(context));
+            if (isMultiCor) {
+                match.append("{ ");
+            }
+            match.append("$eq: [\"$")
+                    .append(c.getInnerField().getField())
+                    .append("\", \"$$")
+                    .append(c.getOuterField().getField())
+                    .append("\"]");
+
+            context.decreaseIndent();
+
+            if (i < correlations.size() - 1) match.append(",");
+            match.append("\n");
         }
-        match.append("] } } }");
+
+        if (isMultiCor) {
+            match.append(indent(context)).append("]\n");
+            context.decreaseIndent();
+        }
+
+        match.append(indent(context)).append("}\n");
+        context.decreaseIndent();
+        match.append(indent(context)).append("}\n");
+        context.decreaseIndent();
+        match.append(indent(context)).append("}");
+
         return match.toString();
     }
 
@@ -170,9 +213,14 @@ public class LookupStageBuilder {
             unwind.append(indent(context)).append("}");
             return unwind.toString();
         }
-        return indent(context) + "{\n"
-                + indent(context) + "    $unwind: \"$" + path + "\"\n"
-                + indent(context) + "}";
+
+        StringBuilder unwind = new StringBuilder(indent(context)).append("{\n");
+        context.increaseIndent();
+        unwind.append(indent(context)).append("$unwind: \"$").append(path).append("\"\n");
+        context.decreaseIndent();
+        unwind.append(indent(context)).append("}");
+
+        return unwind.toString();
     }
 
     private String indent(GenerationContext context) {
@@ -205,5 +253,6 @@ public class LookupStageBuilder {
         return Character.toLowerCase(table.charAt(0)) + table.substring(1) + "Join";
     }
 
-    private record JoinFields(String localField, String foreignField) { }
+    private record JoinFields(String localField, String foreignField) {
+    }
 }

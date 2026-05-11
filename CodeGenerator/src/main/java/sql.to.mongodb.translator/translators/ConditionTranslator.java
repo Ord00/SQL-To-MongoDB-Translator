@@ -108,10 +108,23 @@ public class ConditionTranslator {
         String mongoOp;
 
         if (comp.getOperand() instanceof Aggregate && comp.getValue() instanceof Constant) {
-            field = expressionTranslator.translate(comp.getOperand(), context);
+            field = context.getVariableName();
             value = expressionTranslator.translate(comp.getValue(), context);
             mongoOp = OPERATOR_MAP.getOrDefault(comp.getOperator(), "$eq");
-            return "{ " + field + ": { " + mongoOp + ": " + value + " } }";
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("{\n");
+            context.increaseIndent();
+            sb.append(indent(context))
+                    .append(field)
+                    .append(": { ")
+                    .append(mongoOp)
+                    .append(": ")
+                    .append(value)
+                    .append(" }\n");
+            context.decreaseIndent();
+            sb.append(indent(context)).append("}\n");
+            return sb.toString();
         }
 
         boolean isExpr = false;
@@ -225,5 +238,9 @@ public class ConditionTranslator {
             }
         }
         return out.toString();
+    }
+
+    private String indent(GenerationContext context) {
+        return "    ".repeat(Math.max(0, context.getIndentLevel()));
     }
 }

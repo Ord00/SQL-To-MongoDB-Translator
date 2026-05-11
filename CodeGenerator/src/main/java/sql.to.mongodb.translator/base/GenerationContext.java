@@ -21,6 +21,10 @@ public class GenerationContext {
     private int subqueryLevel = 0;
     private final Map<String, String> subqueryArrayNames = new HashMap<>();
 
+    public String getVariableName() {
+        return "var" + (variableCounter);
+    }
+
     public String nextVariableName() {
         return "var" + (++variableCounter);
     }

@@ -51,25 +51,28 @@ public class ProjectionTranslator {
 
     private String translateAggregate(AggregateProjection agg, GenerationContext context) {
         String name = agg.getAlias() != null ? agg.getAlias() : agg.getType().name().toLowerCase();
-        String fieldPath = agg.getField() != null ? agg.getField().getField() : null;
+        String fieldPath = context.resolveFieldPath(agg.getField().getSource(), agg.getField().getField());
 
-        String expr;
+        StringBuilder expr =  new StringBuilder();
         switch (agg.getType()) {
             case COUNT:
                 if (agg.isDistinct()) {
-                    String resolved = context.resolveFieldPath(agg.getField().getSource(), fieldPath);
-                    expr = "{ $addToSet: \"$" + resolved + "\" }";
+                    expr.append("{\n");
+                    context.increaseIndent();
+                    expr.append(indent(context)).append("$addToSet: \"$").append(fieldPath).append("\"\n");
+                    context.decreaseIndent();
+                    expr.append(indent(context)).append("}");
                 } else if (fieldPath == null || "*".equals(fieldPath)) {
-                    expr = "{ $sum: 1 }";
+                    expr.append("{ $sum: 1 }");
                 } else {
-                    expr = "{ $sum: 1 }";
+                    expr.append("{ $sum: 1 }");
                 }
                 break;
-            case SUM: expr = "{ $sum: \"$" + fieldPath + "\" }"; break;
-            case AVG: expr = "{ $avg: \"$" + fieldPath + "\" }"; break;
-            case MIN: expr = "{ $min: \"$" + fieldPath + "\" }"; break;
-            case MAX: expr = "{ $max: \"$" + fieldPath + "\" }"; break;
-            default: expr = "{ $first: \"$$ROOT\" }";
+            case SUM: expr.append("{ $sum: \"$").append(fieldPath).append("\" }"); break;
+            case AVG: expr.append("{ $avg: \"$").append(fieldPath).append("\" }"); break;
+            case MIN: expr.append("{ $min: \"$").append(fieldPath).append("\" }"); break;
+            case MAX: expr.append("{ $max: \"$").append(fieldPath).append("\" }"); break;
+            default: expr.append("{ $first: \"$$ROOT\" }");
         }
         return context.getIndent() + name + ": " + expr;
     }
@@ -104,5 +107,9 @@ public class ProjectionTranslator {
                     + ".result\", 0 ] }, null ] }";
         }
         return context.getIndent() + name + ": null";
+    }
+
+    private String indent(GenerationContext context) {
+        return "    ".repeat(Math.max(0, context.getIndentLevel()));
     }
 }

@@ -455,152 +455,152 @@ public class CodeGeneratorTest {
     public void testExistsAndGroupBy() throws CodeGenerationException {
         String expectedMongoCode = """
                 db.Competition.aggregate([
-                      {
-                          $lookup: {
-                              from: "Race",
-                              let: { Id_competition: "$Id_competition" },
-                              pipeline: [
-                                  {
-                                      $match: {
-                                          $expr: {
-                                              $eq: ["$Competition", "$$Id_competition"]
-                                          }
-                                      }
-                                  },
-                                  {
-                                      $lookup: {
-                                          from: "StaffRace",
-                                          localField: "Id_race",
-                                          foreignField: "Race",
-                                          as: "SR2"
-                                      }
-                                  },
-                                  {
-                                      $unwind: {
-                                          path: "$SR2",
-                                          preserveNullAndEmptyArrays: true
-                                      }
-                                  },
-                                  {
-                                      $lookup: {
-                                          from: "Staff",
-                                          localField: "SR2.Staff",
-                                          foreignField: "Id_staff",
-                                          as: "S2"
-                                      }
-                                  },
-                                  {
-                                      $unwind: {
-                                          path: "$S2",
-                                          preserveNullAndEmptyArrays: true
-                                      }
-                                  },
-                                  {
-                                      $lookup: {
-                                          from: "TeamStaff",
-                                          localField: "S2.Id_staff",
-                                          foreignField: "Staff",
-                                          as: "TS2"
-                                      }
-                                  },
-                                  {
-                                      $unwind: {
-                                          path: "$TS2",
-                                          preserveNullAndEmptyArrays: true
-                                      }
-                                  },
-                                  {
-                                      $lookup: {
-                                          from: "Team",
-                                          localField: "TS2.Team",
-                                          foreignField: "Id_team",
-                                          as: "Tm2"
-                                      }
-                                  },
-                                  {
-                                      $unwind: {
-                                          path: "$Tm2",
-                                          preserveNullAndEmptyArrays: true
-                                      }
-                                  },
-                                  {
-                                      $lookup: {
-                                          from: "Country",
-                                          localField: "Tm2.Country",
-                                          foreignField: "Id_country",
-                                          as: "Cn2"
-                                      }
-                                  },
-                                  {
-                                      $unwind: {
-                                          path: "$Cn2",
-                                          preserveNullAndEmptyArrays: true
-                                      }
-                                  },
-                                  {
-                                      $match: {
-                                          $expr: {
-                                              $and: [
-                                                  { $eq: ["$Competition", "$$Id_competition"] },
-                                                  { $gte: ["$RaceDate", "$TS2.EntryDate"] },
-                                                  {
-                                                      $or: [
-                                                          { $eq: ["$TS2.ExitDate", null] },
-                                                          { $lte: ["$RaceDate", "$TS2.ExitDate"] }
-                                                      ]
-                                                  }
-                                              ]
-                                          }
-                                      }
-                                  },
-                                  {
-                                      $group: {
-                                          _id: "$Cn2.Id_country",
-                                          var1: {
-                                              $addToSet: "$Tm2.Id_team"
-                                          }
-                                      }
-                                  },
-                                  {
-                                      $project: {
-                                          var1: {
-                                              $setDifference: ["$var1", [null]]
-                                          }
-                                      }
-                                  },
-                                  {
-                                      $project: {
-                                          var2: {
-                                              $size: "$var1"
-                                          }
-                                      }
-                                  },
-                                  {
-                                      $match: {
-                                          var2: { $lt: 2 }
-                                      }
-                                  }
-                              ],
-                              as: "subquery_1"
-                          }
-                      },
-                      {
-                          $match: {
-                              $expr: {
-                                  $eq: [
-                                      { $size: "$subquery_1" },
-                                      0
-                                  ]
-                              }
-                          }
-                      },
-                      {
-                          $project: {
-                              _id: 0,
-                              Id_competition: 1,
-                              CompetitionName: 1
-                          }
-                      }
+                    {
+                        $lookup: {
+                            from: "Race",
+                            let: { Id_competition: "$Id_competition" },
+                            pipeline: [
+                                {
+                                    $match: {
+                                        $expr: {
+                                            $eq: ["$Competition", "$$Id_competition"]
+                                        }
+                                    }
+                                },
+                                {
+                                    $lookup: {
+                                        from: "StaffRace",
+                                        localField: "Id_race",
+                                        foreignField: "Race",
+                                        as: "SR2"
+                                    }
+                                },
+                                {
+                                    $unwind: {
+                                        path: "$SR2",
+                                        preserveNullAndEmptyArrays: true
+                                    }
+                                },
+                                {
+                                    $lookup: {
+                                        from: "Staff",
+                                        localField: "SR2.Staff",
+                                        foreignField: "Id_staff",
+                                        as: "S2"
+                                    }
+                                },
+                                {
+                                    $unwind: {
+                                        path: "$S2",
+                                        preserveNullAndEmptyArrays: true
+                                    }
+                                },
+                                {
+                                    $lookup: {
+                                        from: "TeamStaff",
+                                        localField: "S2.Id_staff",
+                                        foreignField: "Staff",
+                                        as: "TS2"
+                                    }
+                                },
+                                {
+                                    $unwind: {
+                                        path: "$TS2",
+                                        preserveNullAndEmptyArrays: true
+                                    }
+                                },
+                                {
+                                    $lookup: {
+                                        from: "Team",
+                                        localField: "TS2.Team",
+                                        foreignField: "Id_team",
+                                        as: "Tm2"
+                                    }
+                                },
+                                {
+                                    $unwind: {
+                                        path: "$Tm2",
+                                        preserveNullAndEmptyArrays: true
+                                    }
+                                },
+                                {
+                                    $lookup: {
+                                        from: "Country",
+                                        localField: "Tm2.Country",
+                                        foreignField: "Id_country",
+                                        as: "Cn2"
+                                    }
+                                },
+                                {
+                                    $unwind: {
+                                        path: "$Cn2",
+                                        preserveNullAndEmptyArrays: true
+                                    }
+                                },
+                                {
+                                    $match: {
+                                        $expr: {
+                                            $and: [
+                                                { $eq: ["$Competition", "$$Id_competition"] },
+                                                { $gte: ["$RaceDate", "$TS2.EntryDate"] },
+                                                {
+                                                    $or: [
+                                                        { $eq: ["$TS2.ExitDate", null] },
+                                                        { $lte: ["$RaceDate", "$TS2.ExitDate"] }
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    }
+                                },
+                                {
+                                    $group: {
+                                        _id: "$Cn2.Id_country",
+                                        var1: {
+                                            $addToSet: "$Tm2.Id_team"
+                                        }
+                                    }
+                                },
+                                {
+                                    $project: {
+                                        var1: {
+                                            $setDifference: ["$var1", [null]]
+                                        }
+                                    }
+                                },
+                                {
+                                    $project: {
+                                        var2: {
+                                            $size: "$var1"
+                                        }
+                                    }
+                                },
+                                {
+                                    $match: {
+                                        var2: { $lt: 2.0 }
+                                    }
+                                }
+                            ],
+                            as: "subquery_1"
+                        }
+                    },
+                    {
+                        $match: {
+                            $expr: {
+                                $eq: [
+                                    { $size: "$subquery_1" },
+                                    0
+                                ]
+                            }
+                        }
+                    },
+                    {
+                        $project: {
+                            _id: 0,
+                            Id_competition: 1,
+                            CompetitionName: 1
+                        }
+                    }
                 ])
                 """;
 

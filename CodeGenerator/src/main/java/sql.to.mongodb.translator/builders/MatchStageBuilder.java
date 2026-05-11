@@ -25,11 +25,15 @@ public class MatchStageBuilder {
 
         TranslationResult result = translateCondition(ir.getWhereCondition(), context, true);
         String condition = result.getCondition();
-        condition = wrapAggregationCondition(condition, true);
+        condition = wrapAggregationCondition(condition, context);
         if (condition != null) {
-            result.setCondition(indent(context) + "{\n"
-                    + indent(context) + "    $match: " + condition + "\n"
-                    + indent(context) + "}");
+            StringBuilder sb = new StringBuilder();
+            sb.append(indent(context)).append("{\n");
+            context.increaseIndent();
+            sb.append(indent(context)).append("$match: ").append((condition));
+            context.decreaseIndent();
+            sb.append(indent(context)).append("}");
+            result.setCondition(sb.toString());
         }
         return result;
     }
@@ -40,11 +44,15 @@ public class MatchStageBuilder {
             return TranslationResult.empty();
         }
 
+        StringBuilder sb = new StringBuilder();
+        sb.append(indent(context)).append("{\n");
+        context.increaseIndent();
         TranslationResult result = translateCondition(ir.getHavingCondition(), context, true);
         String condition = result.getCondition();
-        result.setCondition(indent(context) + "{\n"
-                + indent(context) + "    $match: " + condition + "\n"
-                + indent(context) + "}");
+        sb.append(indent(context)).append("$match: ").append((condition));
+        context.decreaseIndent();
+        sb.append(indent(context)).append("}");
+        result.setCondition(sb.toString());
         return result;
     }
 
@@ -77,8 +85,9 @@ public class MatchStageBuilder {
         return "    ".repeat(Math.max(0, context.getIndentLevel()));
     }
 
-    private String wrapAggregationCondition(String condition, boolean useAggregationSyntax) {
-        if (!useAggregationSyntax || condition == null || condition.isBlank()) {
+    private String wrapAggregationCondition(String condition,
+                                            GenerationContext context) {
+        if (condition == null || condition.isBlank()) {
             return condition;
         }
         if (condition.contains("\n")) {
@@ -86,23 +95,31 @@ public class MatchStageBuilder {
             if (condition.startsWith("{\n") && condition.endsWith("\n}")) {
                 exprBody = condition.substring(2, condition.length() - 2);
             }
-            return "{\n"
-                    + "            $expr: {\n"
-                    + indentMultiline(exprBody, "            ") + "\n"
-                    + "            }\n"
-                    + "        }";
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("{\n");
+            for (int i = 1; i < 3; i++) {
+                context.increaseIndent();
+            }
+            sb.append(indent(context)).append("$expr: {\n");
+            sb.append(indentMultiline(exprBody, context)).append("\n");
+            sb.append(indent(context)).append("}\n");
+            context.decreaseIndent();
+            sb.append(indent(context)).append("}\n");
+            context.decreaseIndent();
+            return sb.toString();
         }
         return "{ $expr: " + condition + " }";
     }
 
-    private String indentMultiline(String input, String indent) {
+    private String indentMultiline(String input, GenerationContext context) {
         String[] lines = input.split("\\R", -1);
         if (lines.length <= 1) {
             return input;
         }
         StringBuilder out = new StringBuilder();
         for (int i = 0; i < lines.length; i++) {
-            out.append(indent).append(lines[i]);
+            out.append(indent(context)).append(lines[i]);
             if (i < lines.length - 1) {
                 out.append("\n");
             }

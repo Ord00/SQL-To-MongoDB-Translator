@@ -54,7 +54,7 @@ public class PipelineBuilder {
         if (group != null) stages.add(group);
 
         if (context.isInsideSubquery() && ir.isHasAggregateFunctions() && ir.isHasGroupBy()) {
-            projectStageBuilder.addProjectionStages(ir, stages);
+            projectStageBuilder.addProjectionStages(ir, stages, context);
         }
 
         // HAVING

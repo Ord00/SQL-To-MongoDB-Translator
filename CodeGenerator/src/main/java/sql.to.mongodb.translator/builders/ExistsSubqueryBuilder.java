@@ -41,6 +41,9 @@ public class ExistsSubqueryBuilder {
 
         try {
             subIR.getProjectionFields().clear();
+            for (int i = 0; i < 3; ++i) {
+                context.increaseIndent();
+            }
 
             // Строим pipeline для подзапроса
             List<String> pipelineStages = pipelineBuilder.buildStages(subIR, context);
@@ -76,19 +79,54 @@ public class ExistsSubqueryBuilder {
     }
 
     private String buildExistsMatch(String arrayName, boolean isExists, GenerationContext context) {
-        String indent = context.getIndent();
+        StringBuilder sb = new StringBuilder();
+
         if (isExists) {
-            return indent + "{\n"
-                    + indent + "    $match: {\n"
-                    + indent + "        $expr: { $gt: [ { $size: \"$" + arrayName + "\" }, 0 ] }\n"
-                    + indent + "    }\n"
-                    + indent + "}";
+            sb.append(indent(context)).append("{\n");
+            context.increaseIndent();
+            sb.append(indent(context)).append("$match: {\n");
+            context.increaseIndent();
+            sb.append(indent(context)).append("$expr: {\n");
+            context.increaseIndent();
+            sb.append(indent(context)).append("$gt: [\n");
+            context.increaseIndent();
+            sb.append(indent(context)).append("{ $size: \"$").append(arrayName).append("\" },\n");
+            sb.append(indent(context)).append("0\n");
+            context.decreaseIndent();
+            sb.append(indent(context)).append("]\n");
+            context.decreaseIndent();
+            sb.append(indent(context)).append("}\n");
+            context.decreaseIndent();
+            sb.append(indent(context)).append("}\n");
+            context.decreaseIndent();
+            sb.append(indent(context)).append("}");
+
+            return sb.toString();
         } else {
-            return indent + "{\n"
-                    + indent + "    $match: {\n"
-                    + indent + "        $expr: { $eq: [ { $size: \"$" + arrayName + "\" }, 0 ] }\n"
-                    + indent + "    }\n"
-                    + indent + "}";
+            sb.append(indent(context)).append("{\n");
+            context.increaseIndent();
+            sb.append(indent(context)).append("$match: {\n");
+            context.increaseIndent();
+            sb.append(indent(context)).append("$expr: {\n");
+            context.increaseIndent();
+            sb.append(indent(context)).append("$eq: [\n");
+            context.increaseIndent();
+            sb.append(indent(context)).append("{ $size: \"$").append(arrayName).append("\" },\n");
+            sb.append(indent(context)).append("0\n");
+            context.decreaseIndent();
+            sb.append(indent(context)).append("]\n");
+            context.decreaseIndent();
+            sb.append(indent(context)).append("}\n");
+            context.decreaseIndent();
+            sb.append(indent(context)).append("}\n");
+            context.decreaseIndent();
+            sb.append(indent(context)).append("}");
+
+            return sb.toString();
         }
+    }
+
+    private String indent(GenerationContext context) {
+        return "    ".repeat(Math.max(0, context.getIndentLevel()));
     }
 }

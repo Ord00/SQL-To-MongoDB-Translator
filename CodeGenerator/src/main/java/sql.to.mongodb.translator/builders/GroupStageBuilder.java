@@ -52,7 +52,7 @@ public class GroupStageBuilder {
         }
 
         // Агрегации из HAVING
-        List<AggregateProjection> havingAggregations = extractAggregationsFromHaving(ir.getHavingCondition());
+        List<AggregateProjection> havingAggregations = extractAggregationsFromHaving(ir.getHavingCondition(), context);
         for (AggregateProjection agg : havingAggregations) {
             String aggStr = projectionTranslator.translate(agg, context, false);
             if (!aggStr.isEmpty()) {
@@ -94,16 +94,19 @@ public class GroupStageBuilder {
         }
     }
 
-    private List<AggregateProjection> extractAggregationsFromHaving(ConditionNode havingCondition) {
+    private List<AggregateProjection> extractAggregationsFromHaving(ConditionNode havingCondition,
+                                                                    GenerationContext context) {
         List<AggregateProjection> aggregations = new ArrayList<>();
         if (havingCondition == null) return aggregations;
 
         // Рекурсивно обходим дерево условий
-        extractAggregationsRecursive(havingCondition, aggregations);
+        extractAggregationsRecursive(havingCondition, aggregations, context);
         return aggregations;
     }
 
-    private void extractAggregationsRecursive(ConditionNode node, List<AggregateProjection> aggregations) {
+    private void extractAggregationsRecursive(ConditionNode node,
+                                              List<AggregateProjection> aggregations,
+                                              GenerationContext context) {
         if (node == null) return;
 
         if (node instanceof Comparison comp) {
@@ -113,11 +116,14 @@ public class GroupStageBuilder {
                 aggProj.setType(agg.getType());
                 aggProj.setDistinct(agg.isDistinct());
                 if (agg.getField() != null) {
-                    aggProj.setField(new ProjectionField(agg.getField().getSource(), agg.getField().getField(), null));
+                    aggProj.setField(new ProjectionField(
+                            agg.getField().getSource(),
+                            agg.getField().getField(),
+                            null));
                 }
-                // Для COUNT(DISTINCT) используем alias "teams"
+
                 if (agg.isDistinct() && agg.getType() == Aggregate.AggregateType.COUNT) {
-                    aggProj.setAlias("teams");
+                    aggProj.setAlias(context.nextVariableName());
                 }
                 aggregations.add(aggProj);
             }
@@ -125,7 +131,7 @@ public class GroupStageBuilder {
 
         if (node instanceof LinkNode link) {
             for (ConditionNode child : link.getChildren()) {
-                extractAggregationsRecursive(child, aggregations);
+                extractAggregationsRecursive(child, aggregations, context);
             }
         }
     }
