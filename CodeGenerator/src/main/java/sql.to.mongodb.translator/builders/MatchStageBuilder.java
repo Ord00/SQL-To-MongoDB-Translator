@@ -26,9 +26,11 @@ public class MatchStageBuilder {
         TranslationResult result = translateCondition(ir.getWhereCondition(), context, true);
         String condition = result.getCondition();
         condition = wrapAggregationCondition(condition, true);
-        result.setCondition(indent(context) + "{\n"
-                + indent(context) + "    $match: " + condition + "\n"
-                + indent(context) + "}");
+        if (condition != null) {
+            result.setCondition(indent(context) + "{\n"
+                    + indent(context) + "    $match: " + condition + "\n"
+                    + indent(context) + "}");
+        }
         return result;
     }
 
@@ -40,7 +42,6 @@ public class MatchStageBuilder {
 
         TranslationResult result = translateCondition(ir.getHavingCondition(), context, true);
         String condition = result.getCondition();
-        condition = wrapAggregationCondition(condition, true);
         result.setCondition(indent(context) + "{\n"
                 + indent(context) + "    $match: " + condition + "\n"
                 + indent(context) + "}");

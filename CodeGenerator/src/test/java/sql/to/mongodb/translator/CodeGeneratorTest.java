@@ -458,12 +458,12 @@ public class CodeGeneratorTest {
                       {
                           $lookup: {
                               from: "Race",
-                              let: { compId: "$Id_competition" },
+                              let: { Id_competition: "$Id_competition" },
                               pipeline: [
                                   {
                                       $match: {
                                           $expr: {
-                                              $eq: ["$Competition", "$$compId"]
+                                              $eq: ["$Competition", "$$Id_competition"]
                                           }
                                       }
                                   },
@@ -541,7 +541,7 @@ public class CodeGeneratorTest {
                                       $match: {
                                           $expr: {
                                               $and: [
-                                                  { $eq: ["$Competition", "$$compId"] },
+                                                  { $eq: ["$Competition", "$$Id_competition"] },
                                                   { $gte: ["$RaceDate", "$TS2.EntryDate"] },
                                                   {
                                                       $or: [
@@ -556,39 +556,39 @@ public class CodeGeneratorTest {
                                   {
                                       $group: {
                                           _id: "$Cn2.Id_country",
-                                          teams: {
+                                          var1: {
                                               $addToSet: "$Tm2.Id_team"
                                           }
                                       }
                                   },
                                   {
                                       $project: {
-                                          teams: {
-                                              $setDifference: ["$teams", [null]]
+                                          var1: {
+                                              $setDifference: ["$var1", [null]]
                                           }
                                       }
                                   },
                                   {
                                       $project: {
-                                          teamCount: {
-                                              $size: "$teams"
+                                          var2: {
+                                              $size: "$var1"
                                           }
                                       }
                                   },
                                   {
                                       $match: {
-                                          teamCount: { $lt: 2 }
+                                          var2: { $lt: 2 }
                                       }
                                   }
                               ],
-                              as: "invalidCountries"
+                              as: "subquery_1"
                           }
                       },
                       {
                           $match: {
                               $expr: {
                                   $eq: [
-                                      { $size: "$invalidCountries" },
+                                      { $size: "$subquery_1" },
                                       0
                                   ]
                               }

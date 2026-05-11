@@ -16,14 +16,11 @@ public class ExistsSubqueryBuilder {
 
     private final PipelineBuilder pipelineBuilder;
     private final LookupStageBuilder lookupStageBuilder;
-    private final ProjectStageBuilder projectStageBuilder;
 
     public ExistsSubqueryBuilder(@Lazy PipelineBuilder pipelineBuilder,
-                                 LookupStageBuilder lookupStageBuilder,
-                                 ProjectStageBuilder projectStageBuilder) {
+                                 LookupStageBuilder lookupStageBuilder) {
         this.pipelineBuilder = pipelineBuilder;
         this.lookupStageBuilder = lookupStageBuilder;
-        this.projectStageBuilder = projectStageBuilder;
     }
 
     public record ExistsSubqueryResult(List<String> stages, String arrayName) { }
@@ -43,6 +40,8 @@ public class ExistsSubqueryBuilder {
         context.enterSubquery();
 
         try {
+            subIR.getProjectionFields().clear();
+
             // Строим pipeline для подзапроса
             List<String> pipelineStages = pipelineBuilder.buildStages(subIR, context);
 
@@ -53,9 +52,6 @@ public class ExistsSubqueryBuilder {
                     pipelineStages.addFirst(correlationMatch);
                 }
             }
-
-            // Добавляем проекцию
-            projectStageBuilder.addProjectionStages(subIR, context, pipelineStages);
 
             // Создаём $lookup
             String lookup = lookupStageBuilder.buildLookupWithPipeline(

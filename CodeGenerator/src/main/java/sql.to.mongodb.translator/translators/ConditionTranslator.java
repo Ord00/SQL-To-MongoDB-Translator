@@ -209,7 +209,7 @@ public class ConditionTranslator {
         var result = existsSubqueryBuilder.build(subquery, exists.isExists(), context);
         if (result != null && result.stages() != null) {
             // EXISTS полностью обрабатывается стадиями, условие не нужно
-            return new TranslationResult("{}", result.stages());
+            return new TranslationResult(null, result.stages());
         }
 
         return TranslationResult.empty();

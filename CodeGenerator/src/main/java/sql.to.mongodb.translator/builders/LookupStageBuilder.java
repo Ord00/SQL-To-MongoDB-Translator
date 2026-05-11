@@ -113,12 +113,9 @@ public class LookupStageBuilder {
         }
 
         context.decreaseIndent();
-        lookup.append(context.getIndent()).append("],\n");
-        lookup.append(context.getIndent()).append("as: \"").append(asName).append("\"\n");
         context.decreaseIndent();
-        lookup.append(context.getIndent()).append("}\n");
         context.decreaseIndent();
-        lookup.append(indent(context)).append("}");
+
         return lookup.toString();
     }
 

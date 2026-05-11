@@ -53,6 +53,10 @@ public class PipelineBuilder {
         String group = groupStageBuilder.build(ir, context);
         if (group != null) stages.add(group);
 
+        if (context.isInsideSubquery() && ir.isHasAggregateFunctions() && ir.isHasGroupBy()) {
+            projectStageBuilder.addProjectionStages(ir, stages);
+        }
+
         // HAVING
         TranslationResult havingResult = matchStageBuilder.buildHaving(ir, context);
         stages.addAll(havingResult.getPrerequisiteStages());

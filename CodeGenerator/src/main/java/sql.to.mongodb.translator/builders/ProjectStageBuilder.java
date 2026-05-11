@@ -44,10 +44,21 @@ public class ProjectStageBuilder {
         }
 
         List<String> fields = new ArrayList<>();
-        for (Projectionable proj : ir.getProjectionFields()) {
-            String field = projectionTranslator.translate(proj, context, false);
-            if (!field.isEmpty()) {
-                fields.add(field);
+
+        if (!context.isInsideSubquery()) {
+            // Проекция с 1, а не с "$field"
+            for (Projectionable proj : ir.getProjectionFields()) {
+                if (proj instanceof ProjectionField pf) {
+                    String name = pf.getAlias() != null ? pf.getAlias() : pf.getField();
+                    fields.add(context.getIndent() + name + ": 1");
+                }
+            }
+        } else {
+            for (Projectionable proj : ir.getProjectionFields()) {
+                String field = projectionTranslator.translate(proj, context, false);
+                if (!field.isEmpty()) {
+                    fields.add(field);
+                }
             }
         }
 
@@ -58,6 +69,35 @@ public class ProjectStageBuilder {
         project.append(indent(context)).append("}");
 
         return project.toString();
+    }
+
+    public void addProjectionStages(SqlToMongoIR ir, List<String> pipelineStages) {
+        if (ir == null) return;
+
+        // Проверяем, есть ли COUNT(DISTINCT) в HAVING или проекциях
+        boolean hasDistinctCount = false;
+
+        // Проверяем проекции
+        for (Projectionable proj : ir.getProjectionFields()) {
+            if (proj instanceof AggregateProjection agg &&
+                    agg.isDistinct() &&
+                    agg.getType() == AggregateProjection.AggregateType.COUNT) {
+                hasDistinctCount = true;
+                break;
+            }
+        }
+
+        // Если не нашли в проекциях, проверяем HAVING (по флагам)
+        if (!hasDistinctCount && ir.isHasAggregateFunctions() && ir.isHasGroupBy()) {
+            hasDistinctCount = true;
+        }
+
+        if (hasDistinctCount) {
+            // $project с $setDifference
+            pipelineStages.add("{ $project: { teams: { $setDifference: [ \"$teams\", [null] ] } } }");
+            // $project с $size
+            pipelineStages.add("{ $project: { teamCount: { $size: \"$teams\" } } }");
+        }
     }
 
     /**
@@ -79,42 +119,6 @@ public class ProjectStageBuilder {
         }
         if (fields.isEmpty()) return null;
         return "{ " + String.join(", ", fields) + " }";
-    }
-
-    public void addProjectionStages(SqlToMongoIR subIR,
-                                    GenerationContext context,
-                                    List<String> pipelineStages) throws CodeGenerationException {
-        if (subIR == null || subIR.getProjectionFields().isEmpty()) {
-            return;
-        }
-
-        // Проверяем, есть ли COUNT(DISTINCT)
-        boolean hasDistinctCount = false;
-        for (Projectionable proj : subIR.getProjectionFields()) {
-            if (proj instanceof AggregateProjection agg && agg.isDistinct()) {
-                hasDistinctCount = true;
-                break;
-            }
-        }
-
-        // TODO
-        if (hasDistinctCount) {
-            // Добавляем $project с $setDifference и $project с $size
-            pipelineStages.add("{ $project: { teams: { $setDifference: [ \"$teams\", [null] ] } } }");
-            pipelineStages.add("{ $project: { teamCount: { $size: \"$teams\" } } }");
-            return;
-        }
-
-        // Обычная проекция
-        StringBuilder project = new StringBuilder("{ $project: { _id: 0");
-        for (Projectionable proj : subIR.getProjectionFields()) {
-            if (proj instanceof ProjectionField pf) {
-                String fieldName = pf.getAlias() != null ? pf.getAlias() : pf.getField();
-                project.append(", ").append(fieldName).append(": 1");
-            }
-        }
-        project.append(" } }");
-        pipelineStages.add(project.toString());
     }
 
     public String buildAddFieldsWithMap(String arrayName,

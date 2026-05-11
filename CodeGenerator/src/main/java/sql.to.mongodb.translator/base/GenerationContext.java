@@ -2,6 +2,7 @@ package sql.to.mongodb.translator.base;
 
 import lombok.Getter;
 import lombok.Setter;
+import sql.to.mongodb.translator.ir.projection.AggregateProjection;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -10,6 +11,7 @@ import java.util.Map;
 @Setter
 public class GenerationContext {
     private int indentLevel = 0;
+    private int variableCounter = 0;
     private int subqueryCounter = 0;
     private int correlationCounter = 0;
     private final Map<String, String> subqueryResults = new HashMap<>();
@@ -19,12 +21,23 @@ public class GenerationContext {
     private int subqueryLevel = 0;
     private final Map<String, String> subqueryArrayNames = new HashMap<>();
 
+    public String nextVariableName() {
+        return "var" + (++variableCounter);
+    }
+
     public String nextSubqueryName() {
         return "subquery_" + (++subqueryCounter);
     }
 
     public String nextCorrelationName() {
         return "corr_" + (++correlationCounter);
+    }
+
+    public String getVariableNameForAggregate(AggregateProjection agg) {
+        if (agg.getAlias() != null && !agg.getAlias().isBlank()) {
+            return agg.getAlias();
+        }
+        return nextVariableName();
     }
 
     public String getOrCreateSubqueryName(Object subqueryRef) {

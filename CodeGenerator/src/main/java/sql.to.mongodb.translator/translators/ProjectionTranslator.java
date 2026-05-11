@@ -57,8 +57,8 @@ public class ProjectionTranslator {
         switch (agg.getType()) {
             case COUNT:
                 if (agg.isDistinct()) {
-                    // ??? COUNT(DISTINCT) ????? $setUnion
-                    expr = "{ $size: { $setUnion: [ \"$" + fieldPath + "\" ] } }";
+                    String resolved = context.resolveFieldPath(agg.getField().getSource(), fieldPath);
+                    expr = "{ $addToSet: \"$" + resolved + "\" }";
                 } else if (fieldPath == null || "*".equals(fieldPath)) {
                     expr = "{ $sum: 1 }";
                 } else {
