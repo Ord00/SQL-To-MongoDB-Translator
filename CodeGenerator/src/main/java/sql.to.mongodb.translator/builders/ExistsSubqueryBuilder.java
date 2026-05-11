@@ -45,11 +45,23 @@ public class ExistsSubqueryBuilder {
                 context.increaseIndent();
             }
 
+            List<CorrelationCondition> correlations = subquery.getCorrelations();
+            if (correlations != null && !correlations.isEmpty()) {
+                for (CorrelationCondition corr : correlations) {
+                    String outerField = context.resolveFieldPath(
+                            corr.getOuterField().getSource(),
+                            corr.getOuterField().getField());
+
+                    String varName = corr.getOuterField().getField().toLowerCase();
+                    context.addCorrelation(outerField, varName);
+                }
+            }
+
             // Строим pipeline для подзапроса
             List<String> pipelineStages = pipelineBuilder.buildStages(subIR, context);
 
-            List<CorrelationCondition> correlations = subquery.getCorrelations();
             if (correlations != null && !correlations.isEmpty()) {
+
                 String correlationMatch = lookupStageBuilder.buildCorrelationMatch(correlations, context);
                 if (correlationMatch != null) {
                     pipelineStages.addFirst(correlationMatch);

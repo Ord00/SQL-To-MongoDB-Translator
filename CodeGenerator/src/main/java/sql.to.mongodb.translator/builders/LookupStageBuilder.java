@@ -127,7 +127,7 @@ public class LookupStageBuilder {
     private String buildLetVariables(List<CorrelationCondition> correlations, GenerationContext context) {
         return correlations.stream()
                 .map(c -> {
-                    String outerField = c.getOuterField().getField();
+                    String outerField = c.getOuterField().getField().toLowerCase();
                     String resolvedPath = resolveFieldPath(c.getOuterField(), context);
                     return outerField + ": \"$" + resolvedPath + "\"";
                 })
@@ -176,7 +176,7 @@ public class LookupStageBuilder {
             match.append("$eq: [\"$")
                     .append(c.getInnerField().getField())
                     .append("\", \"$$")
-                    .append(c.getOuterField().getField())
+                    .append(c.getOuterField().getField().toLowerCase())
                     .append("\"]");
 
             context.decreaseIndent();

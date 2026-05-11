@@ -42,6 +42,10 @@ public class ExpressionTranslator {
     }
 
     private String translateField(Field field, GenerationContext context) {
+        if (context.isCorrelationField(field)) {
+            String varName = context.getCorrelationVariableForField(field);
+            return "\"$$" + varName + "\"";
+        }
         String result = context.resolveFieldPath(field.getSource(), field.getField());
         return context.isUseAggregationSyntax() ? "\"$" + result + "\"" : result;
     }

@@ -458,12 +458,12 @@ public class CodeGeneratorTest {
                     {
                         $lookup: {
                             from: "Race",
-                            let: { Id_competition: "$Id_competition" },
+                            let: { id_competition: "$Id_competition" },
                             pipeline: [
                                 {
                                     $match: {
                                         $expr: {
-                                            $eq: ["$Competition", "$$Id_competition"]
+                                            $eq: ["$Competition", "$$id_competition"]
                                         }
                                     }
                                 },
@@ -541,8 +541,12 @@ public class CodeGeneratorTest {
                                     $match: {
                                         $expr: {
                                             $and: [
-                                                { $eq: ["$Competition", "$$Id_competition"] },
-                                                { $gte: ["$RaceDate", "$TS2.EntryDate"] },
+                                                {
+                                                    $and: [
+                                                        { $eq: ["$Competition", "$$id_competition"] },
+                                                        { $gte: ["$RaceDate", "$TS2.EntryDate"] }
+                                                    ]
+                                                },
                                                 {
                                                     $or: [
                                                         { $eq: ["$TS2.ExitDate", null] },

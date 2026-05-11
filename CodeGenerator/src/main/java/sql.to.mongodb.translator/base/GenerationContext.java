@@ -3,6 +3,8 @@ package sql.to.mongodb.translator.base;
 import lombok.Getter;
 import lombok.Setter;
 import sql.to.mongodb.translator.ir.projection.AggregateProjection;
+import sql.to.mongodb.translator.ir.Field;
+
 
 import java.util.HashMap;
 import java.util.Map;
@@ -20,6 +22,7 @@ public class GenerationContext {
     private boolean insideSubquery = false;
     private int subqueryLevel = 0;
     private final Map<String, String> subqueryArrayNames = new HashMap<>();
+    private final Map<String, String> correlationVariables = new HashMap<>();
 
     public String getVariableName() {
         return "var" + (variableCounter);
@@ -101,6 +104,30 @@ public class GenerationContext {
             return source + "." + field;
         }
         return prefix.isBlank() ? field : prefix + "." + field;
+    }
+
+    public void addCorrelation(String originalField, String varName) {
+        correlationVariables.put(originalField, varName);
+    }
+
+    public String getCorrelationVariable(String originalField) {
+        return correlationVariables.get(originalField);
+    }
+
+    public boolean isCorrelationField(Field field) {
+        if (field.getSource() == null) return false;
+        String fullField = field.getSource() + "." + field.getField();
+        return correlationVariables.containsKey(fullField) ||
+                correlationVariables.containsKey(field.getField());
+    }
+
+    public String getCorrelationVariableForField(Field field) {
+        String fullField = field.getSource() + "." + field.getField();
+        String varName = correlationVariables.get(fullField);
+        if (varName == null) {
+            varName = correlationVariables.get(field.getField());
+        }
+        return varName;
     }
 
     private String subqueryKey(Object subqueryRef) {
