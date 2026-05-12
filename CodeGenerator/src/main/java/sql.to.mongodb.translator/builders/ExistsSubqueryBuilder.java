@@ -123,6 +123,7 @@ public class ExistsSubqueryBuilder {
             context.setUseAggregationSyntax(originalSyntax);
             // сбросить состояние с алиасами
             context.popAliases();
+            context.leaveSubquery();
         }
 
         return new ExistsSubqueryResult(stages, subqueryName);

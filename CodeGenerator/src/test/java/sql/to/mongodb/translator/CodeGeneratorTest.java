@@ -327,130 +327,6 @@ public class CodeGeneratorTest {
                 rabbitMQTestHelper.getCodeGeneratorResult(codeToScan));
     }
 
-//    @Test
-//    public void testExistsAndJoin() throws CodeGenerationException {
-//            String expectedMongoCode = """
-//                    db.Team.aggregate([
-//                        {
-//                            $lookup: {
-//                                from: "Competition",
-//                                pipeline: [],
-//                                as: "allCompetitions"
-//                            }
-//                        },
-//                        {
-//                            $lookup: {
-//                                from: "Race",
-//                                let: { teamId: "$Id_team" },
-//                                pipeline: [
-//                                    {
-//                                        $lookup: {
-//                                            from: "StaffRace",
-//                                            localField: "Id_race",
-//                                            foreignField: "Race",
-//                                            as: "sr"
-//                                        }
-//                                    },
-//                                    { $unwind: "$sr" },
-//                                    {
-//                                        $lookup: {
-//                                            from: "Staff",
-//                                            localField: "sr.Staff",
-//                                            foreignField: "Id_staff",
-//                                            as: "s"
-//                                        }
-//                                    },
-//                                    { $unwind: "$s" },
-//                                    {
-//                                        $lookup: {
-//                                            from: "TeamStaff",
-//                                            localField: "s.Id_staff",
-//                                            foreignField: "Staff",
-//                                            as: "ts"
-//                                        }
-//                                    },
-//                                    { $unwind: "$ts" },
-//                                    {
-//                                        $match: {
-//                                            $expr: {
-//                                                $and: [
-//                                                    { $eq: ["$ts.Team", "$$teamId"] },
-//                                                    { $gte: ["$RaceDate", "$ts.EntryDate"] },
-//                                                    {
-//                                                        $or: [
-//                                                            { $eq: ["$ts.ExitDate", null] },
-//                                                            { $lte: ["$RaceDate", "$ts.ExitDate"] }
-//                                                        ]
-//                                                    }
-//                                                ]
-//                                            }
-//                                        }
-//                                    },
-//                                    {
-//                                        $project: {
-//                                            Competition: 1
-//                                        }
-//                                    }
-//                                ],
-//                                as: "teamCompetitions"
-//                            }
-//                        },
-//                        {
-//                            $addFields: {
-//                                teamCompIds: {
-//                                    $setUnion: ["$teamCompetitions.Competition", []]
-//                                },
-//                                allCompIds: {
-//                                    $setUnion: ["$allCompetitions.Id_competition", []]
-//                                }
-//                            }
-//                        },
-//                        {
-//                            $match: {
-//                                $expr: {
-//                                    $eq: [
-//                                        { $size: "$teamCompIds" },
-//                                        { $size: "$allCompIds" }
-//                                    ]
-//                                }
-//                            }
-//                        },
-//                        {
-//                            $project: {
-//                                _id: 0,
-//                                TeamName: 1
-//                            }
-//                        }
-//                    ])
-//                    """;
-//
-//            String codeToScan = """
-//                    SELECT Tm.TeamName
-//                    FROM Team Tm
-//                    WHERE NOT EXISTS
-//                              (SELECT 1
-//                              FROM Competition Comp2
-//                              WHERE NOT EXISTS
-//                                        (SELECT 1
-//                                        FROM Race R3 JOIN StaffRace SR3
-//                                        ON R3.Id_race = SR3.Race
-//                                        JOIN Staff S3
-//                                        ON SR3.Staff = S3.Id_staff
-//                                        JOIN TeamStaff TS3
-//                                        ON S3.Id_staff = TS3.Staff
-//                                        JOIN Team Tm3
-//                                        ON TS3.Team = Tm3.Id_team
-//                                        WHERE R3.RaceDate >= TS3.EntryDate
-//                                                AND (TS3.ExitDate IS NULL OR R3.RaceDate <= TS3.ExitDate)
-//                                                AND Tm.Id_team = Tm3.Id_team
-//                                                AND Comp2.Id_competition = R3.Competition
-//                                        )
-//                              )""";
-//
-//        Assertions.assertEquals(expectedMongoCode,
-//                rabbitMQTestHelper.getCodeGeneratorResult(codeToScan));
-//    }
-
     @Test
     public void testExistsAndGroupBy() throws CodeGenerationException {
         String expectedMongoCode = """
@@ -458,7 +334,9 @@ public class CodeGeneratorTest {
                     {
                         $lookup: {
                             from: "Race",
-                            let: { id_competition: "$Id_competition" },
+                            let: {
+                                id_competition: "$Id_competition"
+                            },
                             pipeline: [
                                 {
                                     $lookup: {
@@ -641,8 +519,8 @@ public class CodeGeneratorTest {
                                     $lookup: {
                                         from: "Race",
                                         let: {
-                                            id_competition: "$Id_competition",
-                                            outer_id_team: "$$id_team"
+                                            outer_id_team: "$$id_team",
+                                            id_competition: "$Id_competition"
                                         },
                                         pipeline: [
                                             {
@@ -694,39 +572,22 @@ public class CodeGeneratorTest {
                                                     $expr: {
                                                         $and: [
                                                             {
-                                                                $gte: [
-                                                                    "$RaceDate",
-                                                                    "$TS3.EntryDate"
-                                                                ]
-                                                            },
-                                                            {
-                                                                $or: [
+                                                                $and: [
                                                                     {
-                                                                        $eq: [
-                                                                            "$TS3.ExitDate",
-                                                                            null
+                                                                        $and: [
+                                                                            { $gte: ["$RaceDate", "$TS3.EntryDate"] },
+                                                                            {
+                                                                                $or: [
+                                                                                    { $eq: ["$TS3.ExitDate", null] },
+                                                                                    { $lte: ["$RaceDate", "$TS3.ExitDate"] }
+                                                                                ]
+                                                                            }
                                                                         ]
                                                                     },
-                                                                    {
-                                                                        $lte: [
-                                                                            "$RaceDate",
-                                                                            "$TS3.ExitDate"
-                                                                        ]
-                                                                    }
+                                                                    { $eq: ["$$outer_id_team", "$Tm3.Id_team"] }
                                                                 ]
                                                             },
-                                                            {
-                                                                $eq: [
-                                                                    "$Tm3.Id_team",
-                                                                    "$$outer_id_team"
-                                                                ]
-                                                            },
-                                                            {
-                                                                $eq: [
-                                                                    "$Competition",
-                                                                    "$$id_competition"
-                                                                ]
-                                                            }
+                                                            { $eq: ["$$id_competition", "$Competition"] }
                                                         ]
                                                     }
                                                 }

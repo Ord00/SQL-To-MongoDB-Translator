@@ -86,21 +86,22 @@ public class LookupStageBuilder {
                                           String asName,
                                           List<String> pipelineStages,
                                           GenerationContext context) {
-        context.setIndentLevel(1);
+        context.setIndentLevel(1 + 3 * (context.getSubqueryLevel() - 1));
         StringBuilder lookup = new StringBuilder(indent(context)).append("{\n");
         context.increaseIndent();
-        lookup.append(context.getIndent()).append("$lookup: {\n");
+        lookup.append(indent(context)).append("$lookup: {\n");
         context.increaseIndent();
-        lookup.append(context.getIndent()).append("from: \"").append(fromCollection).append("\",\n");
+        lookup.append(indent(context)).append("from: \"").append(fromCollection).append("\",\n");
 
+        lookup.append(indent(context)).append("let: {\n");
+        context.increaseIndent();
+        lookup.append(buildLetVariables(context)).append("\n");
+        context.decreaseIndent();
+        lookup.append(indent(context)).append("},\n");
 
-        lookup.append(context.getIndent())
-                .append("let: { ")
-                .append(buildLetVariables(context))
-                .append(" },\n");
         context.clearCorrelationVariables();
 
-        lookup.append(context.getIndent()).append("pipeline: [\n");
+        lookup.append(indent(context)).append("pipeline: [\n");
         context.increaseIndent();
 
         // Добавляем все стадии подзапроса
@@ -112,10 +113,10 @@ public class LookupStageBuilder {
         }
 
         context.decreaseIndent();
-        lookup.append(context.getIndent()).append("],\n");
-        lookup.append(context.getIndent()).append("as: \"").append(asName).append("\"\n");
+        lookup.append(indent(context)).append("],\n");
+        lookup.append(indent(context)).append("as: \"").append(asName).append("\"\n");
         context.decreaseIndent();
-        lookup.append(context.getIndent()).append("}\n");
+        lookup.append(indent(context)).append("}\n");
         context.decreaseIndent();
         lookup.append(indent(context)).append("}");
         return lookup.toString();
@@ -124,8 +125,9 @@ public class LookupStageBuilder {
     private String buildLetVariables(GenerationContext context) {
         return context.getCorrelationVariables().values().stream()
                 .map(correlationVariable ->
-                        correlationVariable.getMongoName() + ": \"$" + correlationVariable.getLink() + "\"")
-                .collect(Collectors.joining(", "));
+                        context.getIndent() + correlationVariable.getMongoName()
+                                + ": \"$" + correlationVariable.getLink() + "\"")
+                .collect(Collectors.joining(",\n"));
     }
 
     public String buildUnwind(String path, boolean preserveNull, GenerationContext context) {

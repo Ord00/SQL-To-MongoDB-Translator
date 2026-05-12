@@ -78,6 +78,10 @@ public class GenerationContext {
         subqueryLevel++;
     }
 
+    public void leaveSubquery() {
+        subqueryLevel--;
+    }
+
     public String resolveFieldPath(String source, String field) {
         if (source == null || source.isBlank()) {
             return field;
