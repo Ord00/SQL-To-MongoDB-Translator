@@ -30,4 +30,8 @@ public class FormatHelper {
 
         return String.valueOf(value);
     }
+
+    public static String indent(GenerationContext context) {
+        return "    ".repeat(Math.max(0, context.getIndentLevel()));
+    }
 }

@@ -10,6 +10,8 @@ import sql.to.mongodb.translator.ir.join.JoinTable;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static sql.to.mongodb.translator.helpers.FormatHelper.indent;
+
 @Component
 public class LookupStageBuilder {
 
@@ -34,14 +36,7 @@ public class LookupStageBuilder {
             else lookup.append("\n");
         }
 
-        context.decreaseIndent();
-        lookup.append(indent(context)).append("],\n");
-        lookup.append(indent(context)).append("as: \"").append(asName).append("\"\n");
-        context.decreaseIndent();
-        lookup.append(indent(context)).append("}\n");
-        context.decreaseIndent();
-        lookup.append(indent(context)).append("}");
-        return lookup.toString();
+        return closeLookup(asName, context, lookup);
     }
 
     public String buildSimpleLookup(JoinInfo join, GenerationContext context) {
@@ -112,6 +107,10 @@ public class LookupStageBuilder {
             else lookup.append("\n");
         }
 
+        return closeLookup(asName, context, lookup);
+    }
+
+    private String closeLookup(String asName, GenerationContext context, StringBuilder lookup) {
         context.decreaseIndent();
         lookup.append(indent(context)).append("],\n");
         lookup.append(indent(context)).append("as: \"").append(asName).append("\"\n");
@@ -152,10 +151,6 @@ public class LookupStageBuilder {
         unwind.append(indent(context)).append("}");
 
         return unwind.toString();
-    }
-
-    private String indent(GenerationContext context) {
-        return "    ".repeat(Math.max(0, context.getIndentLevel()));
     }
 
     private JoinFields resolveJoinFields(Comparison comparison,

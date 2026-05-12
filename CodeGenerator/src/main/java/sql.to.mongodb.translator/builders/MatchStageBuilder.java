@@ -8,6 +8,8 @@ import sql.to.mongodb.translator.ir.SqlToMongoIR;
 import sql.to.mongodb.translator.ir.condition.ConditionNode;
 import sql.to.mongodb.translator.translators.ConditionTranslator;
 
+import static sql.to.mongodb.translator.helpers.FormatHelper.indent;
+
 @Component
 public class MatchStageBuilder {
 
@@ -79,10 +81,6 @@ public class MatchStageBuilder {
             return "{ $expr: " + condition + " }";
         }
         return condition;
-    }
-
-    private String indent(GenerationContext context) {
-        return "    ".repeat(Math.max(0, context.getIndentLevel()));
     }
 
     private String wrapAggregationCondition(String condition,

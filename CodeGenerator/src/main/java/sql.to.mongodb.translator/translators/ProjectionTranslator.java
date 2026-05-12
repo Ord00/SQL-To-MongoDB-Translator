@@ -11,6 +11,8 @@ import sql.to.mongodb.translator.ir.projection.ProjectionField;
 import sql.to.mongodb.translator.ir.projection.Projectionable;
 import sql.to.mongodb.translator.ir.projection.SubqueryProjection;
 
+import static sql.to.mongodb.translator.helpers.FormatHelper.indent;
+
 @Component
 public class ProjectionTranslator {
 
@@ -107,9 +109,5 @@ public class ProjectionTranslator {
                     + ".result\", 0 ] }, null ] }";
         }
         return context.getIndent() + name + ": null";
-    }
-
-    private String indent(GenerationContext context) {
-        return "    ".repeat(Math.max(0, context.getIndentLevel()));
     }
 }

@@ -6,9 +6,7 @@ import sql.to.mongodb.translator.base.GenerationContext;
 import sql.to.mongodb.translator.helpers.FormatHelper;
 import sql.to.mongodb.translator.ir.Aggregate;
 import sql.to.mongodb.translator.ir.Constant;
-import sql.to.mongodb.translator.ir.CorrelationSubquery;
 import sql.to.mongodb.translator.ir.Field;
-import sql.to.mongodb.translator.ir.Subquery;
 import sql.to.mongodb.translator.ir.expression.BinaryOperation;
 import sql.to.mongodb.translator.ir.expression.CaseExpression;
 import sql.to.mongodb.translator.ir.expression.Expressionable;
@@ -35,7 +33,6 @@ public class ExpressionTranslator {
             case BinaryOperation binary -> translateBinary(binary, context);
             case UnaryOperation unary -> translateUnary(unary, context);
             case CaseExpression caseExpr -> translateCase(caseExpr, context);
-            case Subquery subq -> translateSubquery(subq, context);
             case Aggregate agg -> translateAggregate(agg, context);
             case null, default -> "null";
         };
@@ -124,12 +121,5 @@ public class ExpressionTranslator {
         }
 
         return "\"" + fieldPath + "\"";
-    }
-
-    private String translateSubquery(Subquery subquery, GenerationContext context) {
-        if (subquery instanceof CorrelationSubquery) {
-            return "\"$" + context.nextCorrelationName() + "\"";
-        }
-        return "/* subquery */";
     }
 }

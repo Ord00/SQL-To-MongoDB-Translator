@@ -10,6 +10,8 @@ import sql.to.mongodb.translator.ir.projection.ProjectionField;
 import java.util.ArrayList;
 import java.util.List;
 
+import static sql.to.mongodb.translator.helpers.FormatHelper.indent;
+
 @Component
 public class PipelineBuilder {
     private final MatchStageBuilder matchStageBuilder;
@@ -151,9 +153,5 @@ public class PipelineBuilder {
         context.decreaseIndent();
         project.append(indent(context)).append("}");
         return project.toString();
-    }
-
-    private String indent(GenerationContext context) {
-        return "    ".repeat(Math.max(0, context.getIndentLevel()));
     }
 }

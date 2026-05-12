@@ -25,7 +25,6 @@ public class GenerationContext {
     private boolean useAggregationSyntax = false;
     private boolean insideSubquery = false;
     private int subqueryLevel = 0;
-    private final Map<String, String> subqueryArrayNames = new HashMap<>();
     private final Map<String, CorrelationVariable> correlationVariables = new HashMap<>();
     private List<CorrelationCondition> correlationConditions = new ArrayList<>();
     private final Stack<Map<String, String>> aliasesStack = new Stack<>();
@@ -40,10 +39,6 @@ public class GenerationContext {
 
     public String nextSubqueryName() {
         return "subquery_" + (++subqueryCounter);
-    }
-
-    public String nextCorrelationName() {
-        return "corr_" + (++correlationCounter);
     }
 
     public String getOrCreateSubqueryName(Object subqueryRef) {

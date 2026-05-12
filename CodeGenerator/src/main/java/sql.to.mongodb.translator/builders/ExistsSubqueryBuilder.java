@@ -37,8 +37,6 @@ public class ExistsSubqueryBuilder {
 
         List<String> stages = new ArrayList<>();
 
-        // установить состояние с алиасами
-
         boolean originalSyntax = context.isUseAggregationSyntax();
         context.setUseAggregationSyntax(true);
         context.setInsideSubquery(true);
@@ -140,19 +138,7 @@ public class ExistsSubqueryBuilder {
             sb.append(indent(context)).append("$expr: {\n");
             context.increaseIndent();
             sb.append(indent(context)).append("$gt: [\n");
-            context.increaseIndent();
-            sb.append(indent(context)).append("{ $size: \"$").append(arrayName).append("\" },\n");
-            sb.append(indent(context)).append("0\n");
-            context.decreaseIndent();
-            sb.append(indent(context)).append("]\n");
-            context.decreaseIndent();
-            sb.append(indent(context)).append("}\n");
-            context.decreaseIndent();
-            sb.append(indent(context)).append("}\n");
-            context.decreaseIndent();
-            sb.append(indent(context)).append("}");
-
-            return sb.toString();
+            return buildExistsSizePart(arrayName, context, sb);
         } else {
             sb.append(indent(context)).append("{\n");
             context.increaseIndent();
@@ -161,20 +147,24 @@ public class ExistsSubqueryBuilder {
             sb.append(indent(context)).append("$expr: {\n");
             context.increaseIndent();
             sb.append(indent(context)).append("$eq: [\n");
-            context.increaseIndent();
-            sb.append(indent(context)).append("{ $size: \"$").append(arrayName).append("\" },\n");
-            sb.append(indent(context)).append("0\n");
-            context.decreaseIndent();
-            sb.append(indent(context)).append("]\n");
-            context.decreaseIndent();
-            sb.append(indent(context)).append("}\n");
-            context.decreaseIndent();
-            sb.append(indent(context)).append("}\n");
-            context.decreaseIndent();
-            sb.append(indent(context)).append("}");
-
-            return sb.toString();
+            return buildExistsSizePart(arrayName, context, sb);
         }
+    }
+
+    private String buildExistsSizePart(String arrayName, GenerationContext context, StringBuilder sb) {
+        context.increaseIndent();
+        sb.append(indent(context)).append("{ $size: \"$").append(arrayName).append("\" },\n");
+        sb.append(indent(context)).append("0\n");
+        context.decreaseIndent();
+        sb.append(indent(context)).append("]\n");
+        context.decreaseIndent();
+        sb.append(indent(context)).append("}\n");
+        context.decreaseIndent();
+        sb.append(indent(context)).append("}\n");
+        context.decreaseIndent();
+        sb.append(indent(context)).append("}");
+
+        return sb.toString();
     }
 
     private String indent(GenerationContext context) {

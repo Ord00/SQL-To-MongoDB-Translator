@@ -33,8 +33,4 @@ public class SortStageBuilder {
                         (s.getDirection() == SortField.SortDirection.ASC ? 1 : -1))
                 .collect(Collectors.joining(", ")) + " }";
     }
-
-    private String indent(GenerationContext context) {
-        return "    ".repeat(Math.max(0, context.getIndentLevel()));
-    }
 }

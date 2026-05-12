@@ -25,6 +25,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import static sql.to.mongodb.translator.helpers.FormatHelper.indent;
+
 @Component
 public class ConditionTranslator {
 
@@ -87,7 +89,7 @@ public class ConditionTranslator {
             StringBuilder result = new StringBuilder("{\n");
             result.append("    ").append(op).append(": [\n");
             for (int i = 0; i < parts.size(); i++) {
-                result.append(indentBlock(parts.get(i), "        "));
+                result.append(indentBlock(parts.get(i)));
                 if (i < parts.size() - 1) {
                     result.append(",");
                 }
@@ -97,7 +99,9 @@ public class ConditionTranslator {
             result.append("}");
             return new TranslationResult(result.toString(), allStages);
         }
-        return new TranslationResult("{ " + op + ": [ " + String.join(", ", parts) + " ] }", allStages);
+        return new TranslationResult(
+                "{ " + op + ": [ " + String.join(", ", parts) + " ] }",
+                allStages);
     }
 
     private String translateComparison(Comparison comp,
@@ -228,19 +232,15 @@ public class ConditionTranslator {
         return TranslationResult.empty();
     }
 
-    private String indentBlock(String input, String indent) {
+    private String indentBlock(String input) {
         String[] lines = input.split("\\R", -1);
         StringBuilder out = new StringBuilder();
         for (int i = 0; i < lines.length; i++) {
-            out.append(indent).append(lines[i]);
+            out.append("        ").append(lines[i]);
             if (i < lines.length - 1) {
                 out.append("\n");
             }
         }
         return out.toString();
-    }
-
-    private String indent(GenerationContext context) {
-        return "    ".repeat(Math.max(0, context.getIndentLevel()));
     }
 }

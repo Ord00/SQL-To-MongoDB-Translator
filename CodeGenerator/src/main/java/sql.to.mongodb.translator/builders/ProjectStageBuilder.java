@@ -12,6 +12,8 @@ import sql.to.mongodb.translator.translators.ProjectionTranslator;
 import java.util.ArrayList;
 import java.util.List;
 
+import static sql.to.mongodb.translator.helpers.FormatHelper.indent;
+
 @Component
 public class ProjectStageBuilder {
 
@@ -77,6 +79,36 @@ public class ProjectStageBuilder {
         if (ir == null) return;
 
         // Проверяем, есть ли COUNT(DISTINCT) в HAVING или проекциях
+        boolean hasDistinctCount = isDistinctCount(ir);
+
+        if (hasDistinctCount) {
+            String firstVar = context.getVariableName();
+
+            // $project с $setDifference
+            StringBuilder sb = new StringBuilder(indent(context)).append("{\n");
+            context.increaseIndent();
+            sb.append(context.getIndent()).append("$project: {\n");
+            context.increaseIndent();
+            sb.append(context.getIndent()).append(firstVar).append(": {\n");
+            context.increaseIndent();
+            sb.append(indent(context)).append("$setDifference: [\"$").append(firstVar).append("\", [null]]\n");
+            buildClosingBrackets(pipelineStages, context, sb);
+            // $project с $size
+            sb.setLength(0);
+            String secondVar = context.nextVariableName();
+
+            sb.append(indent(context)).append("{\n");
+            context.increaseIndent();
+            sb.append(indent(context)).append("$project: {\n");
+            context.increaseIndent();
+            sb.append(indent(context)).append(secondVar).append(": {\n");
+            context.increaseIndent();
+            sb.append(indent(context)).append("$size: \"$").append(firstVar).append("\"\n");
+            buildClosingBrackets(pipelineStages, context, sb);
+        }
+    }
+
+    private static boolean isDistinctCount(SqlToMongoIR ir) {
         boolean hasDistinctCount = false;
 
         // Проверяем проекции
@@ -93,45 +125,18 @@ public class ProjectStageBuilder {
         if (!hasDistinctCount && ir.isHasAggregateFunctions() && ir.isHasGroupBy()) {
             hasDistinctCount = true;
         }
+        return hasDistinctCount;
+    }
 
-        if (hasDistinctCount) {
-            String firstVar = context.getVariableName();
+    private void buildClosingBrackets(List<String> pipelineStages, GenerationContext context, StringBuilder sb) {
+        context.decreaseIndent();
+        sb.append(indent(context)).append("}\n");
+        context.decreaseIndent();
+        sb.append(indent(context)).append("}\n");
+        context.decreaseIndent();
+        sb.append(indent(context)).append("}");
 
-            // $project с $setDifference
-            StringBuilder sb = new StringBuilder(indent(context)).append("{\n");
-            context.increaseIndent();
-            sb.append(context.getIndent()).append("$project: {\n");
-            context.increaseIndent();
-            sb.append(context.getIndent()).append(firstVar).append(": {\n");
-            context.increaseIndent();
-            sb.append(indent(context)).append("$setDifference: [\"$").append(firstVar).append("\", [null]]\n");
-            context.decreaseIndent();
-            sb.append(indent(context)).append("}\n");
-            context.decreaseIndent();
-            sb.append(indent(context)).append("}\n");
-            context.decreaseIndent();
-            sb.append(indent(context)).append("}");
-
-            pipelineStages.add(sb.toString());
-            // $project с $size
-            sb.setLength(0);
-            String secondVar = context.nextVariableName();
-
-            sb.append(indent(context)).append("{\n");
-            context.increaseIndent();
-            sb.append(indent(context)).append("$project: {\n");
-            context.increaseIndent();
-            sb.append(indent(context)).append(secondVar).append(": {\n");
-            context.increaseIndent();
-            sb.append(indent(context)).append("$size: \"$").append(firstVar).append("\"\n");
-            context.decreaseIndent();
-            sb.append(indent(context)).append("}\n");
-            context.decreaseIndent();
-            sb.append(indent(context)).append("}\n");
-            context.decreaseIndent();
-            sb.append(indent(context)).append("}");
-            pipelineStages.add(sb.toString());
-        }
+        pipelineStages.add(sb.toString());
     }
 
     /**
@@ -176,9 +181,5 @@ public class ProjectStageBuilder {
         context.decreaseIndent();
         addFields.append(indent(context)).append("}");
         return addFields.toString();
-    }
-
-    private String indent(GenerationContext context) {
-        return "    ".repeat(Math.max(0, context.getIndentLevel()));
     }
 }
