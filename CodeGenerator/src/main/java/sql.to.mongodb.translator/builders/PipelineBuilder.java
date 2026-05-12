@@ -10,6 +10,9 @@ import sql.to.mongodb.translator.ir.projection.ProjectionField;
 import java.util.ArrayList;
 import java.util.List;
 
+import static sql.to.mongodb.translator.helpers.FormatHelper.IndentChangeType.DOWN;
+import static sql.to.mongodb.translator.helpers.FormatHelper.IndentChangeType.NONE;
+import static sql.to.mongodb.translator.helpers.FormatHelper.IndentChangeType.UP;
 import static sql.to.mongodb.translator.helpers.FormatHelper.indent;
 
 @Component
@@ -37,9 +40,7 @@ public class PipelineBuilder {
 
         List<String> stages = new ArrayList<>();
 
-        // установить состояние с алиасами
         context.pushAliases(ir.getAliases());
-
         initSourceMappings(ir, context);
 
         // Обработка JOIN
@@ -48,7 +49,7 @@ public class PipelineBuilder {
             if (lookup != null) stages.add(lookup);
         }
 
-        // WHERE - получаем результат со стадиями и условием
+        // WHERE
         TranslationResult whereResult = matchStageBuilder.buildWhere(ir, context);
         stages.addAll(whereResult.getPrerequisiteStages());
         String where = whereResult.getCondition();
@@ -74,10 +75,10 @@ public class PipelineBuilder {
 
         // LIMIT / OFFSET
         if (ir.getOffset() != null) {
-            stages.add(indent(context) + "{ $skip: " + ir.getOffset() + " }");
+            stages.add(indent(NONE, context) + "{ $skip: " + ir.getOffset() + " }");
         }
         if (ir.getLimit() != null) {
-            stages.add(indent(context) + "{ $limit: " + ir.getLimit() + " }");
+            stages.add(indent(NONE, context) + "{ $limit: " + ir.getLimit() + " }");
         }
 
         // DISTINCT без агрегации
@@ -105,53 +106,46 @@ public class PipelineBuilder {
     }
 
     private String buildDistinctGroup(SqlToMongoIR ir, GenerationContext context) {
-        StringBuilder group = new StringBuilder(indent(context)).append("{\n");
-        context.increaseIndent();
-        group.append(context.getIndent()).append("$group: {\n");
-        context.increaseIndent();
-        group.append(context.getIndent()).append("_id: {\n");
-        context.increaseIndent();
+        StringBuilder group = new StringBuilder(indent(UP, context)).append("{\n");
+        group.append(indent(UP, context)).append("$group: {\n");
+        group.append(indent(UP, context)).append("_id: {\n");
         for (int i = 0; i < ir.getProjectionFields().size(); i++) {
             if (!(ir.getProjectionFields().get(i) instanceof ProjectionField field)) {
                 continue;
             }
             String resolved = context.resolveFieldPath(field.getSource(), field.getField());
-            group.append(context.getIndent()).append(field.getField()).append(": \"$").append(resolved).append("\"");
+            group.append(indent(NONE, context)).append(field.getField()).append(": \"$").append(resolved).append("\"");
             if (i < ir.getProjectionFields().size() - 1) {
                 group.append(",");
             }
             group.append("\n");
         }
         context.decreaseIndent();
-        group.append(context.getIndent()).append("}\n");
-        context.decreaseIndent();
-        group.append(context.getIndent()).append("}\n");
-        context.decreaseIndent();
-        group.append(indent(context)).append("}");
+
+        group.append(indent(DOWN, context)).append("}\n");
+        group.append(indent(DOWN, context)).append("}\n");
+        group.append(indent(NONE, context)).append("}");
         return group.toString();
     }
 
     private String buildDistinctProject(SqlToMongoIR ir, GenerationContext context) {
-        StringBuilder project = new StringBuilder(indent(context)).append("{\n");
-        context.increaseIndent();
-        project.append(context.getIndent()).append("$project: {\n");
-        context.increaseIndent();
-        project.append(context.getIndent()).append("_id: 0");
+        StringBuilder project = new StringBuilder(indent(UP, context)).append("{\n");
+        project.append(indent(UP, context)).append("$project: {\n");
+        project.append(indent(NONE, context)).append("_id: 0");
         for (var projection : ir.getProjectionFields()) {
             if (projection instanceof ProjectionField field) {
                 project.append(",\n")
-                        .append(context.getIndent())
+                        .append(indent(NONE, context))
                         .append(field.getField())
                         .append(": \"$_id.")
                         .append(field.getField())
                         .append("\"");
             }
         }
+        context.decreaseIndent();
         project.append("\n");
-        context.decreaseIndent();
-        project.append(context.getIndent()).append("}\n");
-        context.decreaseIndent();
-        project.append(indent(context)).append("}");
+        project.append(indent(DOWN, context)).append("}\n");
+        project.append(indent(NONE, context)).append("}");
         return project.toString();
     }
 }

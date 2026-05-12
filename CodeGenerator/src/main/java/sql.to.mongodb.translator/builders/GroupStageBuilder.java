@@ -17,6 +17,11 @@ import sql.to.mongodb.translator.translators.ProjectionTranslator;
 import java.util.ArrayList;
 import java.util.List;
 
+import static sql.to.mongodb.translator.helpers.FormatHelper.IndentChangeType.DOWN;
+import static sql.to.mongodb.translator.helpers.FormatHelper.IndentChangeType.NONE;
+import static sql.to.mongodb.translator.helpers.FormatHelper.IndentChangeType.UP;
+import static sql.to.mongodb.translator.helpers.FormatHelper.indent;
+
 @Component
 public class GroupStageBuilder {
 
@@ -31,13 +36,11 @@ public class GroupStageBuilder {
             return null;
         }
 
-        StringBuilder group = new StringBuilder(indent(context)).append("{\n");
-        context.increaseIndent();
-        group.append(context.getIndent()).append("$group: {\n");
-        context.increaseIndent();
+        StringBuilder group = new StringBuilder(indent(UP, context)).append("{\n");
+        group.append(indent(UP, context)).append("$group: {\n");
 
         // _id
-        group.append(context.getIndent()).append("_id: ");
+        group.append(indent(NONE, context)).append("_id: ");
         buildGroupId(ir, group, context);
 
         // Агрегации из проекции
@@ -46,7 +49,7 @@ public class GroupStageBuilder {
             if (proj instanceof AggregateProjection agg) {
                 String aggStr = projectionTranslator.translate(agg, context, false);
                 if (!aggStr.isEmpty()) {
-                    aggregations.add(aggStr.replace(context.getIndent(), context.getIndent()));
+                    aggregations.add(aggStr.replace(indent(NONE, context), indent(NONE, context)));
                 }
             }
         }
@@ -56,7 +59,7 @@ public class GroupStageBuilder {
         for (AggregateProjection agg : havingAggregations) {
             String aggStr = projectionTranslator.translate(agg, context, false);
             if (!aggStr.isEmpty()) {
-                aggregations.add(aggStr.replace(context.getIndent(), context.getIndent()));
+                aggregations.add(aggStr.replace(indent(NONE, context), indent(NONE, context)));
             }
         }
 
@@ -65,9 +68,8 @@ public class GroupStageBuilder {
         }
 
         context.decreaseIndent();
-        group.append("\n").append(context.getIndent()).append("}\n");
-        context.decreaseIndent();
-        group.append(indent(context)).append("}");
+        group.append("\n").append(indent(DOWN, context)).append("}\n");
+        group.append(indent(NONE, context)).append("}");
 
         return group.toString();
     }
@@ -84,13 +86,13 @@ public class GroupStageBuilder {
             context.increaseIndent();
             for (int i = 0; i < ir.getGroupByFields().size(); i++) {
                 GroupByField field = ir.getGroupByFields().get(i);
-                group.append(context.getIndent())
+                group.append(indent(NONE, context))
                         .append(field.getField())
                         .append(": \"$").append(field.getField()).append("\"");
                 if (i < ir.getGroupByFields().size() - 1) group.append(",\n");
             }
             context.decreaseIndent();
-            group.append("\n").append(context.getIndent()).append("}");
+            group.append("\n").append(indent(NONE, context)).append("}");
         }
     }
 
@@ -99,7 +101,6 @@ public class GroupStageBuilder {
         List<AggregateProjection> aggregations = new ArrayList<>();
         if (havingCondition == null) return aggregations;
 
-        // Рекурсивно обходим дерево условий
         extractAggregationsRecursive(havingCondition, aggregations, context);
         return aggregations;
     }
@@ -111,7 +112,6 @@ public class GroupStageBuilder {
 
         if (node instanceof Comparison comp) {
             if (comp.getOperand() instanceof Aggregate agg) {
-                // Создаём AggregateProjection из Aggregate
                 AggregateProjection aggProj = new AggregateProjection();
                 aggProj.setType(agg.getType());
                 aggProj.setDistinct(agg.isDistinct());
@@ -134,9 +134,5 @@ public class GroupStageBuilder {
                 extractAggregationsRecursive(child, aggregations, context);
             }
         }
-    }
-
-    private String indent(GenerationContext context) {
-        return "    ".repeat(Math.max(0, context.getIndentLevel()));
     }
 }

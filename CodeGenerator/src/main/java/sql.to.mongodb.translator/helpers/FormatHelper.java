@@ -31,7 +31,19 @@ public class FormatHelper {
         return String.valueOf(value);
     }
 
-    public static String indent(GenerationContext context) {
-        return "    ".repeat(Math.max(0, context.getIndentLevel()));
+    public static String indent(IndentChangeType changeType, GenerationContext context) {
+        String result = "    ".repeat(Math.max(0, context.getIndentLevel()));
+        switch (changeType) {
+            case UP -> context.increaseIndent();
+            case DOWN -> context.decreaseIndent();
+            case NONE -> {}
+        }
+        return result;
+    }
+
+    public enum IndentChangeType {
+        UP,
+        DOWN,
+        NONE
     }
 }

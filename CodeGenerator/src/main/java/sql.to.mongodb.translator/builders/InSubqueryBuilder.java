@@ -14,6 +14,11 @@ import sql.to.mongodb.translator.translators.ExpressionTranslator;
 import java.util.ArrayList;
 import java.util.List;
 
+import static sql.to.mongodb.translator.helpers.FormatHelper.IndentChangeType.DOWN;
+import static sql.to.mongodb.translator.helpers.FormatHelper.IndentChangeType.NONE;
+import static sql.to.mongodb.translator.helpers.FormatHelper.IndentChangeType.UP;
+import static sql.to.mongodb.translator.helpers.FormatHelper.indent;
+
 @Component
 public class InSubqueryBuilder {
 
@@ -73,12 +78,17 @@ public class InSubqueryBuilder {
             // Строим pipeline стадии для подзапроса
             List<String> pipelineStages = new ArrayList<>();
 
+
             // Project стадия
+            for (int i = 0; i < 4; ++i) {
+                context.increaseIndent();
+            }
+
             String projectStage = "{\n"
-                    + context.getIndent() + "                $project: {\n"
-                    + context.getIndent() + "                    " + alias + ": " + expressionStr + "\n"
-                    + context.getIndent() + "                }\n"
-                    + context.getIndent() + "            }";
+                    + indent(UP, context) + "$project: {\n"
+                    + indent(DOWN, context) + alias + ": " + expressionStr + "\n"
+                    + indent(DOWN, context) + "}\n"
+                    + indent(NONE, context) + "}";
             pipelineStages.add(projectStage);
 
             // Sort (если есть) - используем SortStageBuilder
@@ -90,6 +100,10 @@ public class InSubqueryBuilder {
             // Limit
             if (subIR.getLimit() != null) {
                 pipelineStages.add("{ $limit: " + subIR.getLimit() + " }");
+            }
+
+            for (int i = 0; i < 3; ++i) {
+                context.decreaseIndent();
             }
 
             // Используем LookupStageBuilder для создания $lookup

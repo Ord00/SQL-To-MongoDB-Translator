@@ -16,15 +16,15 @@ import java.util.Stack;
 @Getter
 @Setter
 public class GenerationContext {
-    private int indentLevel = 0;
     private int variableCounter = 0;
     private int subqueryCounter = 0;
     private int correlationCounter = 0;
-    private final Map<String, String> subqueryResults = new HashMap<>();
-    private final Map<String, String> sourcePathMap = new HashMap<>();
+    private int subqueryLevel = 0;
+    private int indentLevel = 0;
     private boolean useAggregationSyntax = false;
     private boolean insideSubquery = false;
-    private int subqueryLevel = 0;
+    private final Map<String, String> subqueryResults = new HashMap<>();
+    private final Map<String, String> sourcePathMap = new HashMap<>();
     private final Map<String, CorrelationVariable> correlationVariables = new HashMap<>();
     private List<CorrelationCondition> correlationConditions = new ArrayList<>();
     private final Stack<Map<String, String>> aliasesStack = new Stack<>();
@@ -37,8 +37,8 @@ public class GenerationContext {
         return "var" + (++variableCounter);
     }
 
-    public String nextSubqueryName() {
-        return "subquery_" + (++subqueryCounter);
+    public String getSubqueryName(Object subqueryRef) {
+        return subqueryResults.get(subqueryKey(subqueryRef));
     }
 
     public String getOrCreateSubqueryName(Object subqueryRef) {
@@ -46,8 +46,8 @@ public class GenerationContext {
         return subqueryResults.computeIfAbsent(key, ignored -> nextSubqueryName());
     }
 
-    public String getSubqueryName(Object subqueryRef) {
-        return subqueryResults.get(subqueryKey(subqueryRef));
+    public String nextSubqueryName() {
+        return "subquery_" + (++subqueryCounter);
     }
 
     public void increaseIndent() {
@@ -58,8 +58,12 @@ public class GenerationContext {
         if (indentLevel > 0) indentLevel--;
     }
 
-    public String getIndent() {
-        return "    ".repeat(Math.max(0, indentLevel));
+    public void enterSubquery() {
+        subqueryLevel++;
+    }
+
+    public void leaveSubquery() {
+        subqueryLevel--;
     }
 
     public void mapSourcePath(String source, String pathPrefix) {
@@ -67,14 +71,6 @@ public class GenerationContext {
             return;
         }
         sourcePathMap.put(source, pathPrefix == null ? "" : pathPrefix);
-    }
-
-    public void enterSubquery() {
-        subqueryLevel++;
-    }
-
-    public void leaveSubquery() {
-        subqueryLevel--;
     }
 
     public String resolveFieldPath(String source, String field) {

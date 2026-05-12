@@ -14,6 +14,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import static sql.to.mongodb.translator.helpers.FormatHelper.IndentChangeType.DOWN;
+import static sql.to.mongodb.translator.helpers.FormatHelper.IndentChangeType.NONE;
+import static sql.to.mongodb.translator.helpers.FormatHelper.IndentChangeType.UP;
+import static sql.to.mongodb.translator.helpers.FormatHelper.indent;
+
 @Component
 public class ExistsSubqueryBuilder {
 
@@ -48,8 +53,6 @@ public class ExistsSubqueryBuilder {
                 context.increaseIndent();
             }
 
-            // до построения стадий обновить список своих переменных в соответствии с внешним запросом
-            // после построения стадий второй раз проверить свои корреляции, чтобы обновить контекст корреляций
             Map<String, String> aliases = context.peekAliases();
 
             List<CorrelationCondition> outerCorr = new ArrayList<>();
@@ -119,7 +122,6 @@ public class ExistsSubqueryBuilder {
         } finally {
             context.setInsideSubquery(false);
             context.setUseAggregationSyntax(originalSyntax);
-            // сбросить состояние с алиасами
             context.popAliases();
             context.leaveSubquery();
         }
@@ -131,43 +133,28 @@ public class ExistsSubqueryBuilder {
         StringBuilder sb = new StringBuilder();
 
         if (isExists) {
-            sb.append(indent(context)).append("{\n");
-            context.increaseIndent();
-            sb.append(indent(context)).append("$match: {\n");
-            context.increaseIndent();
-            sb.append(indent(context)).append("$expr: {\n");
-            context.increaseIndent();
-            sb.append(indent(context)).append("$gt: [\n");
+            sb.append(indent(UP, context)).append("{\n");
+            sb.append(indent(UP, context)).append("$match: {\n");
+            sb.append(indent(UP, context)).append("$expr: {\n");
+            sb.append(indent(NONE, context)).append("$gt: [\n");
             return buildExistsSizePart(arrayName, context, sb);
         } else {
-            sb.append(indent(context)).append("{\n");
-            context.increaseIndent();
-            sb.append(indent(context)).append("$match: {\n");
-            context.increaseIndent();
-            sb.append(indent(context)).append("$expr: {\n");
-            context.increaseIndent();
-            sb.append(indent(context)).append("$eq: [\n");
+            sb.append(indent(UP, context)).append("{\n");
+            sb.append(indent(UP, context)).append("$match: {\n");
+            sb.append(indent(UP, context)).append("$expr: {\n");
+            sb.append(indent(NONE, context)).append("$eq: [\n");
             return buildExistsSizePart(arrayName, context, sb);
         }
     }
 
     private String buildExistsSizePart(String arrayName, GenerationContext context, StringBuilder sb) {
         context.increaseIndent();
-        sb.append(indent(context)).append("{ $size: \"$").append(arrayName).append("\" },\n");
-        sb.append(indent(context)).append("0\n");
-        context.decreaseIndent();
-        sb.append(indent(context)).append("]\n");
-        context.decreaseIndent();
-        sb.append(indent(context)).append("}\n");
-        context.decreaseIndent();
-        sb.append(indent(context)).append("}\n");
-        context.decreaseIndent();
-        sb.append(indent(context)).append("}");
-
+        sb.append(indent(NONE, context)).append("{ $size: \"$").append(arrayName).append("\" },\n");
+        sb.append(indent(DOWN, context)).append("0\n");
+        sb.append(indent(DOWN, context)).append("]\n");
+        sb.append(indent(DOWN, context)).append("}\n");
+        sb.append(indent(DOWN, context)).append("}\n");
+        sb.append(indent(NONE, context)).append("}");
         return sb.toString();
-    }
-
-    private String indent(GenerationContext context) {
-        return "    ".repeat(Math.max(0, context.getIndentLevel()));
     }
 }

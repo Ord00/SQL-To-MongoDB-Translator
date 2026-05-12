@@ -8,6 +8,9 @@ import sql.to.mongodb.translator.ir.SqlToMongoIR;
 import sql.to.mongodb.translator.ir.condition.ConditionNode;
 import sql.to.mongodb.translator.translators.ConditionTranslator;
 
+import static sql.to.mongodb.translator.helpers.FormatHelper.IndentChangeType.DOWN;
+import static sql.to.mongodb.translator.helpers.FormatHelper.IndentChangeType.NONE;
+import static sql.to.mongodb.translator.helpers.FormatHelper.IndentChangeType.UP;
 import static sql.to.mongodb.translator.helpers.FormatHelper.indent;
 
 @Component
@@ -29,13 +32,10 @@ public class MatchStageBuilder {
         String condition = result.getCondition();
         condition = wrapAggregationCondition(condition, context);
         if (condition != null) {
-            StringBuilder sb = new StringBuilder();
-            sb.append(indent(context)).append("{\n");
-            context.increaseIndent();
-            sb.append(indent(context)).append("$match: ").append((condition));
-            context.decreaseIndent();
-            sb.append(indent(context)).append("}");
-            result.setCondition(sb.toString());
+            String sb = indent(UP, context) + "{\n" +
+                    indent(DOWN, context) + "$match: " + (condition) +
+                    indent(NONE, context) + "}";
+            result.setCondition(sb);
         }
         return result;
     }
@@ -47,13 +47,11 @@ public class MatchStageBuilder {
         }
 
         StringBuilder sb = new StringBuilder();
-        sb.append(indent(context)).append("{\n");
-        context.increaseIndent();
+        sb.append(indent(UP, context)).append("{\n");
         TranslationResult result = translateCondition(ir.getHavingCondition(), context, true);
         String condition = result.getCondition();
-        sb.append(indent(context)).append("$match: ").append((condition));
-        context.decreaseIndent();
-        sb.append(indent(context)).append("}");
+        sb.append(indent(DOWN, context)).append("$match: ").append((condition));
+        sb.append(indent(NONE, context)).append("}");
         result.setCondition(sb.toString());
         return result;
     }
@@ -99,12 +97,10 @@ public class MatchStageBuilder {
             for (int i = 1; i < 3; i++) {
                 context.increaseIndent();
             }
-            sb.append(indent(context)).append("$expr: {\n");
+            sb.append(indent(NONE, context)).append("$expr: {\n");
             sb.append(indentMultiline(exprBody, context)).append("\n");
-            sb.append(indent(context)).append("}\n");
-            context.decreaseIndent();
-            sb.append(indent(context)).append("}\n");
-            context.decreaseIndent();
+            sb.append(indent(DOWN, context)).append("}\n");
+            sb.append(indent(DOWN, context)).append("}\n");
             return sb.toString();
         }
         return "{ $expr: " + condition + " }";
@@ -117,7 +113,7 @@ public class MatchStageBuilder {
         }
         StringBuilder out = new StringBuilder();
         for (int i = 0; i < lines.length; i++) {
-            out.append(indent(context)).append(lines[i]);
+            out.append(indent(NONE, context)).append(lines[i]);
             if (i < lines.length - 1) {
                 out.append("\n");
             }

@@ -12,6 +12,9 @@ import sql.to.mongodb.translator.translators.ProjectionTranslator;
 import java.util.ArrayList;
 import java.util.List;
 
+import static sql.to.mongodb.translator.helpers.FormatHelper.IndentChangeType.DOWN;
+import static sql.to.mongodb.translator.helpers.FormatHelper.IndentChangeType.NONE;
+import static sql.to.mongodb.translator.helpers.FormatHelper.IndentChangeType.UP;
 import static sql.to.mongodb.translator.helpers.FormatHelper.indent;
 
 @Component
@@ -34,25 +37,22 @@ public class ProjectStageBuilder {
         }
 
         // Для aggregation pipeline
-        StringBuilder project = new StringBuilder(indent(context)).append("{\n");
-        context.increaseIndent();
-        project.append(context.getIndent()).append("$project: {\n");
-        context.increaseIndent();
+        StringBuilder project = new StringBuilder(indent(UP, context)).append("{\n");
+        project.append(indent(UP, context)).append("$project: {\n");
 
         boolean hasId = ir.getProjectionFields().stream()
                 .anyMatch(p -> p instanceof ProjectionField f && "_id".equals(f.getField()));
         if (!hasId) {
-            project.append(context.getIndent()).append("_id: 0,\n");
+            project.append(indent(NONE, context)).append("_id: 0,\n");
         }
 
         List<String> fields = new ArrayList<>();
 
         if (!context.isInsideSubquery()) {
-            // Проекция с 1, а не с "$field"
             for (Projectionable proj : ir.getProjectionFields()) {
                 if (proj instanceof ProjectionField pf) {
                     String name = pf.getAlias() != null ? pf.getAlias() : pf.getField();
-                    fields.add(context.getIndent() + name + ": 1");
+                    fields.add(indent(NONE, context) + name + ": 1");
                 }
             }
         } else {
@@ -66,9 +66,8 @@ public class ProjectStageBuilder {
 
         project.append(String.join(",\n", fields));
         context.decreaseIndent();
-        project.append("\n").append(context.getIndent()).append("}\n");
-        context.decreaseIndent();
-        project.append(indent(context)).append("}");
+        project.append("\n").append(indent(DOWN, context)).append("}\n");
+        project.append(indent(NONE, context)).append("}");
 
         return project.toString();
     }
@@ -78,33 +77,32 @@ public class ProjectStageBuilder {
                                     GenerationContext context) {
         if (ir == null) return;
 
-        // Проверяем, есть ли COUNT(DISTINCT) в HAVING или проекциях
         boolean hasDistinctCount = isDistinctCount(ir);
 
         if (hasDistinctCount) {
             String firstVar = context.getVariableName();
 
             // $project с $setDifference
-            StringBuilder sb = new StringBuilder(indent(context)).append("{\n");
-            context.increaseIndent();
-            sb.append(context.getIndent()).append("$project: {\n");
-            context.increaseIndent();
-            sb.append(context.getIndent()).append(firstVar).append(": {\n");
-            context.increaseIndent();
-            sb.append(indent(context)).append("$setDifference: [\"$").append(firstVar).append("\", [null]]\n");
-            buildClosingBrackets(pipelineStages, context, sb);
+            StringBuilder sb = new StringBuilder(indent(UP, context)).append("{\n");
+            sb.append(indent(UP, context)).append("$project: {\n");
+            sb.append(indent(UP, context)).append(firstVar).append(": {\n");
+            sb.append(indent(DOWN, context)).append("$setDifference: [\"$").append(firstVar).append("\", [null]]\n");
+            sb.append(indent(DOWN, context)).append("}\n");
+            sb.append(indent(DOWN, context)).append("}\n");
+            sb.append(indent(NONE, context)).append("}");
+            pipelineStages.add(sb.toString());
             // $project с $size
             sb.setLength(0);
             String secondVar = context.nextVariableName();
 
-            sb.append(indent(context)).append("{\n");
-            context.increaseIndent();
-            sb.append(indent(context)).append("$project: {\n");
-            context.increaseIndent();
-            sb.append(indent(context)).append(secondVar).append(": {\n");
-            context.increaseIndent();
-            sb.append(indent(context)).append("$size: \"$").append(firstVar).append("\"\n");
-            buildClosingBrackets(pipelineStages, context, sb);
+            sb.append(indent(UP, context)).append("{\n");
+            sb.append(indent(UP, context)).append("$project: {\n");
+            sb.append(indent(UP, context)).append(secondVar).append(": {\n");
+            sb.append(indent(DOWN, context)).append("$size: \"$").append(firstVar).append("\"\n");
+            sb.append(indent(DOWN, context)).append("}\n");
+            sb.append(indent(DOWN, context)).append("}\n");
+            sb.append(indent(NONE, context)).append("}");
+            pipelineStages.add(sb.toString());
         }
     }
 
@@ -128,22 +126,6 @@ public class ProjectStageBuilder {
         return hasDistinctCount;
     }
 
-    private void buildClosingBrackets(List<String> pipelineStages, GenerationContext context, StringBuilder sb) {
-        context.decreaseIndent();
-        sb.append(indent(context)).append("}\n");
-        context.decreaseIndent();
-        sb.append(indent(context)).append("}\n");
-        context.decreaseIndent();
-        sb.append(indent(context)).append("}");
-
-        pipelineStages.add(sb.toString());
-    }
-
-    /**
-     * Построение проекции для find() запроса
-     * @param ir промежуточное представление
-     * @return строка проекции для find()
-     */
     private String buildFindProjection(SqlToMongoIR ir) {
         List<String> fields = new ArrayList<>();
         for (Projectionable proj : ir.getProjectionFields()) {
@@ -153,8 +135,6 @@ public class ProjectStageBuilder {
                     fields.add(name + ": 1");
                 }
             }
-            // Для find() запроса агрегатные функции и подзапросы не поддерживаются
-            // поэтому игнорируем AggregateProjection и SubqueryProjection
         }
         if (fields.isEmpty()) return null;
         return "{ " + String.join(", ", fields) + " }";
@@ -164,22 +144,16 @@ public class ProjectStageBuilder {
                                         String sourceField,
                                         String valueField,
                                         GenerationContext context) {
-        StringBuilder addFields = new StringBuilder();
-        addFields.append(indent(context)).append("{\n");
-        context.increaseIndent();
-        addFields.append(context.getIndent()).append("$addFields: {\n");
-        context.increaseIndent();
-        addFields.append(context.getIndent()).append(arrayName).append(": {\n");
-        addFields.append(context.getIndent()).append("    $map: {\n");
-        addFields.append(context.getIndent()).append("        input: \"$").append(sourceField).append("\",\n");
-        addFields.append(context.getIndent()).append("        as: \"item\",\n");
-        addFields.append(context.getIndent()).append("        in: \"$$item.").append(valueField).append("\"\n");
-        addFields.append(context.getIndent()).append("    }\n");
-        addFields.append(context.getIndent()).append("}\n");
-        context.decreaseIndent();
-        addFields.append(context.getIndent()).append("}\n");
-        context.decreaseIndent();
-        addFields.append(indent(context)).append("}");
-        return addFields.toString();
+        return indent(UP, context) + "{\n" +
+                indent(UP, context) + "$addFields: {\n" +
+                indent(UP, context) + arrayName + ": {\n" +
+                indent(UP, context) + "$map: {\n" +
+                indent(NONE, context) + "input: \"$" + sourceField + "\",\n" +
+                indent(NONE, context) + "as: \"item\",\n" +
+                indent(DOWN, context) + "in: \"$$item." + valueField + "\"\n" +
+                indent(DOWN, context) + "}\n" +
+                indent(DOWN, context) + "}\n" +
+                indent(DOWN, context) + "}\n" +
+                indent(NONE, context) + "}";
     }
 }

@@ -14,6 +14,11 @@ import sql.to.mongodb.translator.ir.expression.UnaryOperation;
 
 import java.util.Map;
 
+import static sql.to.mongodb.translator.helpers.FormatHelper.IndentChangeType.DOWN;
+import static sql.to.mongodb.translator.helpers.FormatHelper.IndentChangeType.NONE;
+import static sql.to.mongodb.translator.helpers.FormatHelper.IndentChangeType.UP;
+import static sql.to.mongodb.translator.helpers.FormatHelper.indent;
+
 @Component
 public class ExpressionTranslator {
 
@@ -72,13 +77,12 @@ public class ExpressionTranslator {
                                  GenerationContext context) throws CodeGenerationException {
         StringBuilder result = new StringBuilder("{ $switch: {\n");
         context.increaseIndent();
-        result.append(context.getIndent()).append("branches: [\n");
-        context.increaseIndent();
+        result.append(indent(UP, context)).append("branches: [\n");
 
         var list = caseExpr.getWhenThenList();
         for (int i = 0; i < list.size(); i++) {
             var wt = list.get(i);
-            result.append(context.getIndent())
+            result.append(indent(NONE, context))
                     .append("{ case: ").append(translate(wt.getCondition(), context))
                     .append(", then: ").append(translate(wt.getResult(), context))
                     .append(" }");
@@ -87,19 +91,18 @@ public class ExpressionTranslator {
         }
 
         context.decreaseIndent();
-        result.append(context.getIndent()).append("],\n");
+        result.append(indent(NONE, context)).append("],\n");
 
         if (caseExpr.getElseExpression() != null) {
-            result.append(context.getIndent())
+            result.append(indent(DOWN, context))
                     .append("default: ")
                     .append(translate(caseExpr.getElseExpression(), context))
                     .append("\n");
         } else {
-            result.append(context.getIndent()).append("default: null\n");
+            result.append(indent(DOWN, context)).append("default: null\n");
         }
 
-        context.decreaseIndent();
-        result.append(context.getIndent()).append("} }");
+        result.append(indent(NONE, context)).append("} }");
 
         return result.toString();
     }

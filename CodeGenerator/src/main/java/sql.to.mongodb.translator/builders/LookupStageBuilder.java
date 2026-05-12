@@ -10,6 +10,9 @@ import sql.to.mongodb.translator.ir.join.JoinTable;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static sql.to.mongodb.translator.helpers.FormatHelper.IndentChangeType.DOWN;
+import static sql.to.mongodb.translator.helpers.FormatHelper.IndentChangeType.NONE;
+import static sql.to.mongodb.translator.helpers.FormatHelper.IndentChangeType.UP;
 import static sql.to.mongodb.translator.helpers.FormatHelper.indent;
 
 @Component
@@ -22,21 +25,18 @@ public class LookupStageBuilder {
                                             String asName,
                                             List<String> pipelineStages,
                                             GenerationContext context) {
-        StringBuilder lookup = new StringBuilder(indent(context)).append("{\n");
-        context.increaseIndent();
-        lookup.append(indent(context)).append("$lookup: {\n");
-        context.increaseIndent();
-        lookup.append(indent(context)).append("from: \"").append(fromCollection).append("\",\n");
-        lookup.append(indent(context)).append("pipeline: [\n");
-        context.increaseIndent();
+        StringBuilder lookup = new StringBuilder(indent(UP, context)).append("{\n");
+        lookup.append(indent(UP, context)).append("$lookup: {\n");
+        lookup.append(indent(NONE, context)).append("from: \"").append(fromCollection).append("\",\n");
+        lookup.append(indent(UP, context)).append("pipeline: [\n");
 
         for (int i = 0; i < pipelineStages.size(); i++) {
-            lookup.append(indent(context)).append(pipelineStages.get(i));
+            lookup.append(indent(NONE, context)).append(pipelineStages.get(i));
             if (i < pipelineStages.size() - 1) lookup.append(",\n");
             else lookup.append("\n");
         }
 
-        return closeLookup(asName, context, lookup);
+        return buildCloseLookup(asName, context, lookup);
     }
 
     public String buildSimpleLookup(JoinInfo join, GenerationContext context) {
@@ -57,18 +57,14 @@ public class LookupStageBuilder {
             foreignField = joinFields.foreignField;
         }
 
-        StringBuilder lookup = new StringBuilder(indent(context)).append("{\n");
-        context.increaseIndent();
-        lookup.append(context.getIndent()).append("$lookup: {\n");
-        context.increaseIndent();
-        lookup.append(context.getIndent()).append("from: \"").append(rightTable).append("\",\n");
-        lookup.append(context.getIndent()).append("localField: \"").append(localField).append("\",\n");
-        lookup.append(context.getIndent()).append("foreignField: \"").append(foreignField).append("\",\n");
-        lookup.append(context.getIndent()).append("as: \"").append(as).append("\"\n");
-        context.decreaseIndent();
-        lookup.append(context.getIndent()).append("}\n");
-        context.decreaseIndent();
-        lookup.append(indent(context)).append("}");
+        String lookup = indent(UP, context) + "{\n" +
+                indent(UP, context) + "$lookup: {\n" +
+                indent(NONE, context) + "from: \"" + rightTable + "\",\n" +
+                indent(NONE, context) + "localField: \"" + localField + "\",\n" +
+                indent(NONE, context) + "foreignField: \"" + foreignField + "\",\n" +
+                indent(DOWN, context) + "as: \"" + as + "\"\n" +
+                indent(DOWN, context) + "}\n" +
+                indent(NONE, context) + "}";
 
         boolean preserveNull = join.getType() == JoinInfo.JoinType.LEFT
                 || join.getType() == JoinInfo.JoinType.RIGHT
@@ -82,22 +78,18 @@ public class LookupStageBuilder {
                                           List<String> pipelineStages,
                                           GenerationContext context) {
         context.setIndentLevel(1 + 3 * (context.getSubqueryLevel() - 1));
-        StringBuilder lookup = new StringBuilder(indent(context)).append("{\n");
-        context.increaseIndent();
-        lookup.append(indent(context)).append("$lookup: {\n");
-        context.increaseIndent();
-        lookup.append(indent(context)).append("from: \"").append(fromCollection).append("\",\n");
+        StringBuilder lookup = new StringBuilder(indent(UP, context)).append("{\n");
+        lookup.append(indent(UP, context)).append("$lookup: {\n");
+        lookup.append(indent(NONE, context)).append("from: \"").append(fromCollection).append("\",\n");
 
-        lookup.append(indent(context)).append("let: {\n");
-        context.increaseIndent();
+        lookup.append(indent(UP, context)).append("let: {\n");
         lookup.append(buildLetVariables(context)).append("\n");
         context.decreaseIndent();
-        lookup.append(indent(context)).append("},\n");
+        lookup.append(indent(NONE, context)).append("},\n");
 
         context.clearCorrelationVariables();
 
-        lookup.append(indent(context)).append("pipeline: [\n");
-        context.increaseIndent();
+        lookup.append(indent(UP, context)).append("pipeline: [\n");
 
         // Добавляем все стадии подзапроса
         for (int i = 0; i < pipelineStages.size(); i++) {
@@ -107,50 +99,39 @@ public class LookupStageBuilder {
             else lookup.append("\n");
         }
 
-        return closeLookup(asName, context, lookup);
+        return buildCloseLookup(asName, context, lookup);
     }
 
-    private String closeLookup(String asName, GenerationContext context, StringBuilder lookup) {
+    private String buildCloseLookup(String asName, GenerationContext context, StringBuilder lookup) {
         context.decreaseIndent();
-        lookup.append(indent(context)).append("],\n");
-        lookup.append(indent(context)).append("as: \"").append(asName).append("\"\n");
-        context.decreaseIndent();
-        lookup.append(indent(context)).append("}\n");
-        context.decreaseIndent();
-        lookup.append(indent(context)).append("}");
+        lookup.append(indent(NONE, context)).append("],\n");
+        lookup.append(indent(DOWN, context)).append("as: \"").append(asName).append("\"\n");
+        lookup.append(indent(DOWN, context)).append("}\n");
+        lookup.append(indent(NONE, context)).append("}");
         return lookup.toString();
     }
 
     private String buildLetVariables(GenerationContext context) {
         return context.getCorrelationVariables().values().stream()
                 .map(correlationVariable ->
-                        context.getIndent() + correlationVariable.getMongoName()
+                        indent(NONE, context) + correlationVariable.getMongoName()
                                 + ": \"$" + correlationVariable.getLink() + "\"")
                 .collect(Collectors.joining(",\n"));
     }
 
     public String buildUnwind(String path, boolean preserveNull, GenerationContext context) {
         if (preserveNull) {
-            StringBuilder unwind = new StringBuilder(indent(context)).append("{\n");
-            context.increaseIndent();
-            unwind.append(context.getIndent()).append("$unwind: {\n");
-            context.increaseIndent();
-            unwind.append(context.getIndent()).append("path: \"$").append(path).append("\",\n");
-            unwind.append(context.getIndent()).append("preserveNullAndEmptyArrays: true\n");
-            context.decreaseIndent();
-            unwind.append(context.getIndent()).append("}\n");
-            context.decreaseIndent();
-            unwind.append(indent(context)).append("}");
-            return unwind.toString();
+            return indent(UP, context) + "{\n" +
+                    indent(UP, context) + "$unwind: {\n" +
+                    indent(NONE, context) + "path: \"$" + path + "\",\n" +
+                    indent(DOWN, context) + "preserveNullAndEmptyArrays: true\n" +
+                    indent(DOWN, context) + "}\n" +
+                    indent(NONE, context) + "}";
         }
 
-        StringBuilder unwind = new StringBuilder(indent(context)).append("{\n");
-        context.increaseIndent();
-        unwind.append(indent(context)).append("$unwind: \"$").append(path).append("\"\n");
-        context.decreaseIndent();
-        unwind.append(indent(context)).append("}");
-
-        return unwind.toString();
+        return indent(UP, context) + "{\n" +
+                indent(DOWN, context) + "$unwind: \"$" + path + "\"\n" +
+                indent(NONE, context) + "}";
     }
 
     private JoinFields resolveJoinFields(Comparison comparison,
@@ -169,7 +150,8 @@ public class LookupStageBuilder {
     }
 
     private boolean isRightField(Field field, String rightAlias, String rightTable) {
-        return field.getSource() != null && (field.getSource().equals(rightAlias) || field.getSource().equals(rightTable));
+        return field.getSource() != null
+                && (field.getSource().equals(rightAlias) || field.getSource().equals(rightTable));
     }
 
     private String toJoinAlias(String table) {

@@ -25,6 +25,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import static sql.to.mongodb.translator.helpers.FormatHelper.IndentChangeType.DOWN;
+import static sql.to.mongodb.translator.helpers.FormatHelper.IndentChangeType.NONE;
+import static sql.to.mongodb.translator.helpers.FormatHelper.IndentChangeType.UP;
 import static sql.to.mongodb.translator.helpers.FormatHelper.indent;
 
 @Component
@@ -119,15 +122,14 @@ public class ConditionTranslator {
             StringBuilder sb = new StringBuilder();
             sb.append("{\n");
             context.increaseIndent();
-            sb.append(indent(context))
+            sb.append(indent(DOWN, context))
                     .append(field)
                     .append(": { ")
                     .append(mongoOp)
                     .append(": ")
                     .append(value)
                     .append(" }\n");
-            context.decreaseIndent();
-            sb.append(indent(context)).append("}\n");
+            sb.append(indent(NONE, context)).append("}\n");
             return sb.toString();
         }
 
@@ -180,12 +182,12 @@ public class ConditionTranslator {
             if (expr instanceof Subquery) {
                 var result = inSubqueryBuilder.build(in, context);
                 if (result != null) {
-                    String condition = "{\n"
-                            + "    $in: [\n"
-                            + "        " + expressionTranslator.translate(in.getOperand(), context) + ",\n"
-                            + "        " + result.arrayPath() + "\n"
-                            + "    ]\n"
-                            + "}";
+                    String condition = "{\n" + indent(UP, context) + "$in: [\n" +
+                            indent(NONE, context) +
+                            expressionTranslator.translate(in.getOperand(), context) + ",\n" +
+                            indent(DOWN, context) + result.arrayPath() + "\n" +
+                            indent(DOWN, context) + "]\n" +
+                            indent(UP, context) + "}";
                     return new TranslationResult(condition, result.stages());
                 }
             }

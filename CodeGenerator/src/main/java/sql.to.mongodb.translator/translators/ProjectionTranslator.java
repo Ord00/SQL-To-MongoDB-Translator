@@ -11,6 +11,8 @@ import sql.to.mongodb.translator.ir.projection.ProjectionField;
 import sql.to.mongodb.translator.ir.projection.Projectionable;
 import sql.to.mongodb.translator.ir.projection.SubqueryProjection;
 
+import static sql.to.mongodb.translator.helpers.FormatHelper.IndentChangeType.DOWN;
+import static sql.to.mongodb.translator.helpers.FormatHelper.IndentChangeType.NONE;
 import static sql.to.mongodb.translator.helpers.FormatHelper.indent;
 
 @Component
@@ -48,7 +50,7 @@ public class ProjectionTranslator {
         }
         String fieldPath = context.resolveFieldPath(field.getAlias(), field.getField());
         String name = field.getAlias() != null ? field.getAlias() : field.getField();
-        return context.getIndent() + name + ": \"$" + fieldPath + "\"";
+        return indent(NONE, context) + name + ": \"$" + fieldPath + "\"";
     }
 
     private String translateAggregate(AggregateProjection agg, GenerationContext context) {
@@ -61,9 +63,8 @@ public class ProjectionTranslator {
                 if (agg.isDistinct()) {
                     expr.append("{\n");
                     context.increaseIndent();
-                    expr.append(indent(context)).append("$addToSet: \"$").append(fieldPath).append("\"\n");
-                    context.decreaseIndent();
-                    expr.append(indent(context)).append("}");
+                    expr.append(indent(DOWN, context)).append("$addToSet: \"$").append(fieldPath).append("\"\n");
+                    expr.append(indent(NONE, context)).append("}");
                 } else if (fieldPath == null || "*".equals(fieldPath)) {
                     expr.append("{ $sum: 1 }");
                 } else {
@@ -76,21 +77,21 @@ public class ProjectionTranslator {
             case MAX: expr.append("{ $max: \"$").append(fieldPath).append("\" }"); break;
             default: expr.append("{ $first: \"$$ROOT\" }");
         }
-        return context.getIndent() + name + ": " + expr;
+        return indent(NONE, context) + name + ": " + expr;
     }
 
     private String translateArithmetic(ArithmeticProjection arith,
                                        GenerationContext context) throws CodeGenerationException {
         String name = arith.getAlias() != null ? arith.getAlias() : "computed";
         String expr = expressionTranslator.translate(arith.getExpression(), context);
-        return context.getIndent() + name + ": " + expr;
+        return indent(NONE, context) + name + ": " + expr;
     }
 
     private String translateCase(CaseProjection caseProj,
                                  GenerationContext context) throws CodeGenerationException {
         String name = caseProj.getAlias() != null ? caseProj.getAlias() : "case_result";
         String expr = expressionTranslator.translate(caseProj.getExpression(), context);
-        return context.getIndent() + name + ": " + expr;
+        return indent(NONE, context) + name + ": " + expr;
     }
 
     private String translateSubquery(SubqueryProjection subq, GenerationContext context) {
@@ -102,12 +103,12 @@ public class ProjectionTranslator {
             if (subqueryName == null || subqueryName.isBlank()) {
                 subqueryName = context.getOrCreateSubqueryName(subq);
             }
-            return context.getIndent()
+            return indent(NONE, context)
                     + name
                     + ": { $ifNull: [ { $arrayElemAt: [ \"$"
                     + subqueryName
                     + ".result\", 0 ] }, null ] }";
         }
-        return context.getIndent() + name + ": null";
+        return indent(NONE, context) + name + ": null";
     }
 }
