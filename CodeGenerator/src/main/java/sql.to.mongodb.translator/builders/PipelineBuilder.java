@@ -35,6 +35,9 @@ public class PipelineBuilder {
 
         List<String> stages = new ArrayList<>();
 
+        // установить состояние с алиасами
+        context.pushAliases(ir.getAliases());
+
         initSourceMappings(ir, context);
 
         // Обработка JOIN

@@ -2,12 +2,16 @@ package sql.to.mongodb.translator.base;
 
 import lombok.Getter;
 import lombok.Setter;
-import sql.to.mongodb.translator.ir.projection.AggregateProjection;
+import sql.to.mongodb.translator.code.generator.CorrelationVariable;
 import sql.to.mongodb.translator.ir.Field;
+import sql.to.mongodb.translator.ir.condition.CorrelationCondition;
 
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Stack;
 
 @Getter
 @Setter
@@ -22,7 +26,9 @@ public class GenerationContext {
     private boolean insideSubquery = false;
     private int subqueryLevel = 0;
     private final Map<String, String> subqueryArrayNames = new HashMap<>();
-    private final Map<String, String> correlationVariables = new HashMap<>();
+    private final Map<String, CorrelationVariable> correlationVariables = new HashMap<>();
+    private List<CorrelationCondition> correlationConditions = new ArrayList<>();
+    private final Stack<Map<String, String>> aliasesStack = new Stack<>();
 
     public String getVariableName() {
         return "var" + (variableCounter);
@@ -38,13 +44,6 @@ public class GenerationContext {
 
     public String nextCorrelationName() {
         return "corr_" + (++correlationCounter);
-    }
-
-    public String getVariableNameForAggregate(AggregateProjection agg) {
-        if (agg.getAlias() != null && !agg.getAlias().isBlank()) {
-            return agg.getAlias();
-        }
-        return nextVariableName();
     }
 
     public String getOrCreateSubqueryName(Object subqueryRef) {
@@ -79,15 +78,6 @@ public class GenerationContext {
         subqueryLevel++;
     }
 
-    public void exitSubquery() {
-        if (subqueryLevel > 0) subqueryLevel--;
-    }
-
-    public String getSubqueryArrayName(String subqueryId) {
-        return subqueryArrayNames.computeIfAbsent(subqueryId,
-                id -> "subquery_" + (++subqueryCounter) + "Array");
-    }
-
     public String resolveFieldPath(String source, String field) {
         if (source == null || source.isBlank()) {
             return field;
@@ -106,28 +96,40 @@ public class GenerationContext {
         return prefix.isBlank() ? field : prefix + "." + field;
     }
 
-    public void addCorrelation(String originalField, String varName) {
+    public void addCorrelationVariable(String originalField, CorrelationVariable varName) {
         correlationVariables.put(originalField, varName);
     }
 
-    public String getCorrelationVariable(String originalField) {
-        return correlationVariables.get(originalField);
+    public void clearCorrelationVariables() {
+        correlationVariables.clear();
+    }
+
+    public void addCorrelation(CorrelationCondition correlationCondition) {
+        correlationConditions.add(correlationCondition);
     }
 
     public boolean isCorrelationField(Field field) {
         if (field.getSource() == null) return false;
         String fullField = field.getSource() + "." + field.getField();
-        return correlationVariables.containsKey(fullField) ||
-                correlationVariables.containsKey(field.getField());
+        return correlationVariables.containsKey(fullField);
     }
 
     public String getCorrelationVariableForField(Field field) {
         String fullField = field.getSource() + "." + field.getField();
-        String varName = correlationVariables.get(fullField);
-        if (varName == null) {
-            varName = correlationVariables.get(field.getField());
-        }
-        return varName;
+        CorrelationVariable corVar = correlationVariables.get(fullField);
+        return corVar.getMongoName();
+    }
+
+    public void pushAliases(Map<String, String> aliases) {
+        aliasesStack.push(aliases);
+    }
+
+    public void popAliases() {
+        aliasesStack.pop();
+    }
+
+    public Map<String, String> peekAliases() {
+        return aliasesStack.peek();
     }
 
     private String subqueryKey(Object subqueryRef) {

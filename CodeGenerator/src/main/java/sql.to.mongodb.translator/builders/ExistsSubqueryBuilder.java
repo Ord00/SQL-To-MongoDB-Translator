@@ -2,14 +2,17 @@ package sql.to.mongodb.translator.builders;
 
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
+import sql.to.mongodb.translator.code.generator.CorrelationVariable;
 import sql.to.mongodb.translator.exceptions.CodeGenerationException;
 import sql.to.mongodb.translator.base.GenerationContext;
 import sql.to.mongodb.translator.ir.CorrelationSubquery;
+import sql.to.mongodb.translator.ir.Field;
 import sql.to.mongodb.translator.ir.SqlToMongoIR;
 import sql.to.mongodb.translator.ir.condition.CorrelationCondition;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @Component
 public class ExistsSubqueryBuilder {
@@ -34,6 +37,8 @@ public class ExistsSubqueryBuilder {
 
         List<String> stages = new ArrayList<>();
 
+        // установить состояние с алиасами
+
         boolean originalSyntax = context.isUseAggregationSyntax();
         context.setUseAggregationSyntax(true);
         context.setInsideSubquery(true);
@@ -45,35 +50,58 @@ public class ExistsSubqueryBuilder {
                 context.increaseIndent();
             }
 
+            // до построения стадий обновить список своих переменных в соответствии с внешним запросом
+            // после построения стадий второй раз проверить свои корреляции, чтобы обновить контекст корреляций
+            Map<String, String> aliases = context.peekAliases();
+
+            List<CorrelationCondition> outerCorr = new ArrayList<>();
+
             List<CorrelationCondition> correlations = subquery.getCorrelations();
             if (correlations != null && !correlations.isEmpty()) {
                 for (CorrelationCondition corr : correlations) {
-                    String outerField = context.resolveFieldPath(
-                            corr.getOuterField().getSource(),
-                            corr.getOuterField().getField());
 
-                    String varName = corr.getOuterField().getField().toLowerCase();
-                    context.addCorrelation(outerField, varName);
+                    if (aliases.containsKey(corr.getOuterField().getSource())) {
+                        Field outer =  corr.getOuterField();
+                        String outerField = context.resolveFieldPath(outer.getSource(), outer.getField());
+                        String varName = corr.getOuterField().getField().toLowerCase();
+                        context.addCorrelationVariable(outer.getSource() + "." + outer.getField(),
+                                new CorrelationVariable(varName, outerField));
+                    } else {
+                        Field outer =  corr.getOuterField();
+                        String outerField = outer.getField().toLowerCase();
+
+                        outerCorr.add(corr);
+                        String varName = "outer_" + outerField;
+                        context.addCorrelationVariable(outer.getSource() + "." + outer.getField(),
+                                new CorrelationVariable(varName, "$" + outerField));
+                    }
                 }
             }
 
             // Строим pipeline для подзапроса
             List<String> pipelineStages = pipelineBuilder.buildStages(subIR, context);
 
-            if (correlations != null && !correlations.isEmpty()) {
+            List<CorrelationCondition> newContextCorr = context.getCorrelationConditions();
 
-                String correlationMatch = lookupStageBuilder.buildCorrelationMatch(correlations, context);
-                if (correlationMatch != null) {
-                    pipelineStages.addFirst(correlationMatch);
+            for (CorrelationCondition corr : context.getCorrelationConditions()) {
+                if (aliases.containsKey(corr.getOuterField().getSource())) {
+                    Field outer =  corr.getOuterField();
+                    String outerField = context.resolveFieldPath(outer.getSource(), outer.getField());
+                    String varName = corr.getOuterField().getField().toLowerCase();
+                    context.addCorrelationVariable(outer.getSource() + "." + outer.getField(),
+                            new CorrelationVariable(varName, outerField));
+                } else {
+                    newContextCorr.add(corr);
                 }
             }
+
+            context.setCorrelationConditions(newContextCorr);
 
             // Создаём $lookup
             String lookup = lookupStageBuilder.buildLookupWithPipeline(
                     subIR.getMainCollection(),
                     subqueryName,
                     pipelineStages,
-                    subquery.getCorrelations(),
                     context
             );
             stages.add(lookup);
@@ -82,9 +110,19 @@ public class ExistsSubqueryBuilder {
             String match = buildExistsMatch(subqueryName, isExists, context);
             stages.add(match);
 
+            if (correlations != null && !correlations.isEmpty()) {
+                for (CorrelationCondition corr : correlations) {
+                    if (outerCorr.contains(corr)) {
+                        context.addCorrelation(corr);
+                    }
+                }
+            }
+
         } finally {
             context.setInsideSubquery(false);
             context.setUseAggregationSyntax(originalSyntax);
+            // сбросить состояние с алиасами
+            context.popAliases();
         }
 
         return new ExistsSubqueryResult(stages, subqueryName);

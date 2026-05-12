@@ -4,7 +4,6 @@ import org.springframework.stereotype.Component;
 import sql.to.mongodb.translator.base.GenerationContext;
 import sql.to.mongodb.translator.ir.Field;
 import sql.to.mongodb.translator.ir.condition.Comparison;
-import sql.to.mongodb.translator.ir.condition.CorrelationCondition;
 import sql.to.mongodb.translator.ir.join.JoinInfo;
 import sql.to.mongodb.translator.ir.join.JoinTable;
 
@@ -86,7 +85,6 @@ public class LookupStageBuilder {
     public String buildLookupWithPipeline(String fromCollection,
                                           String asName,
                                           List<String> pipelineStages,
-                                          List<CorrelationCondition> correlations,
                                           GenerationContext context) {
         context.setIndentLevel(1);
         StringBuilder lookup = new StringBuilder(indent(context)).append("{\n");
@@ -95,13 +93,12 @@ public class LookupStageBuilder {
         context.increaseIndent();
         lookup.append(context.getIndent()).append("from: \"").append(fromCollection).append("\",\n");
 
-        // Добавляем let variables если есть корреляции
-        if (correlations != null && !correlations.isEmpty()) {
-            lookup.append(context.getIndent())
-                    .append("let: { ")
-                    .append(buildLetVariables(correlations, context))
-                    .append(" },\n");
-        }
+
+        lookup.append(context.getIndent())
+                .append("let: { ")
+                .append(buildLetVariables(context))
+                .append(" },\n");
+        context.clearCorrelationVariables();
 
         lookup.append(context.getIndent()).append("pipeline: [\n");
         context.increaseIndent();
@@ -124,79 +121,11 @@ public class LookupStageBuilder {
         return lookup.toString();
     }
 
-    private String buildLetVariables(List<CorrelationCondition> correlations, GenerationContext context) {
-        return correlations.stream()
-                .map(c -> {
-                    String outerField = c.getOuterField().getField().toLowerCase();
-                    String resolvedPath = resolveFieldPath(c.getOuterField(), context);
-                    return outerField + ": \"$" + resolvedPath + "\"";
-                })
+    private String buildLetVariables(GenerationContext context) {
+        return context.getCorrelationVariables().values().stream()
+                .map(correlationVariable ->
+                        correlationVariable.getMongoName() + ": \"$" + correlationVariable.getLink() + "\"")
                 .collect(Collectors.joining(", "));
-    }
-
-    private String resolveFieldPath(Field field, GenerationContext context) {
-        if (field.getSource() == null || field.getSource().isBlank()) {
-            return field.getField();
-        }
-        String mapped = context.getSourcePathMap().get(field.getSource());
-        if (mapped != null && !mapped.isBlank()) {
-            return mapped + "." + field.getField();
-        } else {
-            return field.getField();
-        }
-    }
-
-    public String buildCorrelationMatch(List<CorrelationCondition> correlations,
-                                        GenerationContext context) {
-        if (correlations == null || correlations.isEmpty()) return null;
-
-        StringBuilder match = new StringBuilder();
-
-        match.append(indent(context)).append("{\n");
-        context.increaseIndent();
-        match.append(indent(context)).append("$match: {\n");
-        context.increaseIndent();
-        match.append(indent(context)).append("$expr: {\n");
-        context.increaseIndent();
-
-        boolean isMultiCor = false;
-        if (correlations.size() > 1) {
-            isMultiCor = true;
-            match.append(indent(context)).append("$and: [\n");
-            context.increaseIndent();
-        }
-
-        for (int i = 0; i < correlations.size(); i++) {
-            CorrelationCondition c = correlations.get(i);
-
-            match.append(indent(context));
-            if (isMultiCor) {
-                match.append("{ ");
-            }
-            match.append("$eq: [\"$")
-                    .append(c.getInnerField().getField())
-                    .append("\", \"$$")
-                    .append(c.getOuterField().getField().toLowerCase())
-                    .append("\"]");
-
-            context.decreaseIndent();
-
-            if (i < correlations.size() - 1) match.append(",");
-            match.append("\n");
-        }
-
-        if (isMultiCor) {
-            match.append(indent(context)).append("]\n");
-            context.decreaseIndent();
-        }
-
-        match.append(indent(context)).append("}\n");
-        context.decreaseIndent();
-        match.append(indent(context)).append("}\n");
-        context.decreaseIndent();
-        match.append(indent(context)).append("}");
-
-        return match.toString();
     }
 
     public String buildUnwind(String path, boolean preserveNull, GenerationContext context) {

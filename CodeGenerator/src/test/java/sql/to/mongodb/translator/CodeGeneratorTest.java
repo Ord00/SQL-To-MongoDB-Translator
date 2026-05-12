@@ -461,13 +461,6 @@ public class CodeGeneratorTest {
                             let: { id_competition: "$Id_competition" },
                             pipeline: [
                                 {
-                                    $match: {
-                                        $expr: {
-                                            $eq: ["$Competition", "$$id_competition"]
-                                        }
-                                    }
-                                },
-                                {
                                     $lookup: {
                                         from: "StaffRace",
                                         localField: "Id_race",
@@ -661,10 +654,7 @@ public class CodeGeneratorTest {
                                                 }
                                             },
                                             {
-                                                $unwind: {
-                                                    path: "$SR3",
-                                                    preserveNullAndEmptyArrays: false
-                                                }
+                                                $unwind: "$SR3"
                                             },
                                             {
                                                 $lookup: {
@@ -675,10 +665,7 @@ public class CodeGeneratorTest {
                                                 }
                                             },
                                             {
-                                                $unwind: {
-                                                    path: "$S3",
-                                                    preserveNullAndEmptyArrays: false
-                                                }
+                                                $unwind: "$S3"
                                             },
                                             {
                                                 $lookup: {
@@ -689,10 +676,7 @@ public class CodeGeneratorTest {
                                                 }
                                             },
                                             {
-                                                $unwind: {
-                                                    path: "$TS3",
-                                                    preserveNullAndEmptyArrays: false
-                                                }
+                                                $unwind: "$TS3"
                                             },
                                             {
                                                 $lookup: {
@@ -703,10 +687,7 @@ public class CodeGeneratorTest {
                                                 }
                                             },
                                             {
-                                                $unwind: {
-                                                    path: "$Tm3",
-                                                    preserveNullAndEmptyArrays: false
-                                                }
+                                                $unwind: "$Tm3"
                                             },
                                             {
                                                 $match: {
@@ -758,9 +739,7 @@ public class CodeGeneratorTest {
                                     $match: {
                                         $expr: {
                                             $eq: [
-                                                {
-                                                    $size: "$subquery_2"
-                                                },
+                                                { $size: "$subquery_2" },
                                                 0
                                             ]
                                         }
@@ -774,9 +753,7 @@ public class CodeGeneratorTest {
                         $match: {
                             $expr: {
                                 $eq: [
-                                    {
-                                        $size: "$subquery_1"
-                                    },
+                                    { $size: "$subquery_1" },
                                     0
                                 ]
                             }
