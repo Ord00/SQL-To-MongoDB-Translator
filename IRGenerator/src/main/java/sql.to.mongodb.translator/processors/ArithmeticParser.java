@@ -10,10 +10,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Внутренний парсер арифметических выражений
- * Возвращает готовые объекты Field, Constant, BinaryOperation, UnaryOperation
- */
 public class ArithmeticParser {
     private final List<Object> tokens;
     private int pos;

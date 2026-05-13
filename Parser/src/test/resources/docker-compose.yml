@@ -1,7 +1,6 @@
-version: '3.8'
 services:
   rabbitmq:
-    image: rabbitmq:3.12-management
+    image: rabbitmq:3.13-management-alpine
     ports:
       - "5672:5672"
       - "15672:15672"
@@ -10,36 +9,21 @@ services:
       RABBITMQ_DEFAULT_PASS: guest
     healthcheck:
       test: [ "CMD", "rabbitmq-diagnostics", "ping" ]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
-  api-gateway:
-    build:
-      context: ../../../../
-      dockerfile: ApiGateway/Dockerfile
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    environment:
-      SPRING_RABBITMQ_HOST: rabbitmq
-      SPRING_RABBITMQ_PORT: 5672
-      SPRING_RABBITMQ_USERNAME: guest
-      SPRING_RABBITMQ_PASSWORD: guest
-    ports:
-      - "8080:8080"
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   scanner:
     build:
       context: ../../../../
       dockerfile: Scanner/Dockerfile
+    #image: sql-to-mongodb-translator-scanner:latest
+    ports:
+      - "8081:8081"
     depends_on:
       rabbitmq:
         condition: service_healthy
     environment:
-      SPRING_RABBITMQ_HOST: rabbitmq
-      SPRING_RABBITMQ_PORT: 5672
-      SPRING_RABBITMQ_USERNAME: guest
-      SPRING_RABBITMQ_PASSWORD: guest
-    ports:
-      - "8081:8080"
+      RABBIT_USER: guest
+      RABBIT_PASSWORD: guest
+      RABBIT_SERVICE: rabbitmq

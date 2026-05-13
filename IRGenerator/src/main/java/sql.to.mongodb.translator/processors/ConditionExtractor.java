@@ -1,7 +1,8 @@
 package sql.to.mongodb.translator.processors;
 
+import lombok.Getter;
+import lombok.Setter;
 import sql.to.mongodb.translator.IRGenerator;
-import sql.to.mongodb.translator.exceptions.IRGenerationException;
 import sql.to.mongodb.translator.ir.Constant;
 import sql.to.mongodb.translator.ir.CorrelationSubquery;
 import sql.to.mongodb.translator.ir.Field;
@@ -22,13 +23,22 @@ import sql.to.mongodb.translator.scanner.Category;
 import sql.to.mongodb.translator.scanner.Token;
 
 import java.math.BigDecimal;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import static sql.to.mongodb.translator.processors.ExpressionBuilder.buildAggregateExpression;
 
-public record ConditionExtractor(SqlToMongoIR ir,
-                                 Set<String> outerTables,
-                                 Map<String, String> outerAliases) {
+@Getter
+@Setter
+public class ConditionExtractor {
+    private final SqlToMongoIR ir;
+    private final Set<String> outerTables;
+    private final Map<String, String> outerAliases;
+    private ConditionContext context;
 
     public ConditionExtractor(SqlToMongoIR ir,
                               Set<String> outerTables,
@@ -221,30 +231,27 @@ public record ConditionExtractor(SqlToMongoIR ir,
                 Token token = child.getToken();
                 String lexeme = token.lexeme;
 
-                if (token.category == Category.LOGICAL_OPERATOR) {
-                    operator = lexeme;
-                } else if (token.category == Category.LOGICAL_EXPRESSION) {
-                    switch (lexeme) {
-                        case "NOT":
-                            hasNot = true;
-                            break;
-                        case "EXISTS":
-                            hasExists = true;
-                            break;
-                        case "IN":
-                            hasIn = true;
-                            break;
-                        case "BETWEEN":
-                            hasBetween = true;
-                            break;
-                        case "IS":
-                            break;
-                        case "LIKE":
-                            operator = "LIKE";
-                            break;
+                switch (token.category) {
+                    case LOGICAL_OPERATOR -> operator = lexeme;
+                    case NOT -> hasNot = true;
+                    case LOGICAL_EXPRESSION -> {
+                        switch (lexeme) {
+                            case "EXISTS" -> hasExists = true;
+                            case "IN" -> hasIn = true;
+                            case "BETWEEN" -> hasBetween = true;
+                            case "LIKE" -> operator = "LIKE";
+                        }
                     }
-                } else if (token.category == Category.NULL) {
-                    hasIsNull = true;
+                    case NULL -> hasIsNull = true;
+                    default -> {
+                        Expressionable expr = buildExpression(child, ctx);
+                        if (expr != null) {
+                            operands.add(expr);
+                            if (leftOperand == null && !hasIn && !hasExists) {
+                                leftOperand = expr;
+                            }
+                        }
+                    }
                 }
             } else if (child.getNodeType() == NodeType.QUERY) {
                 subqueryNode = child;
@@ -263,7 +270,7 @@ public record ConditionExtractor(SqlToMongoIR ir,
 
         // EXISTS (SELECT ...)
         if (hasExists && subqueryNode != null && irGenerator != null) {
-            return createExistsCondition(subqueryNode, irGenerator);
+            return createExistsCondition(subqueryNode, irGenerator, hasNot);
         }
 
         // IN (SELECT ...)
@@ -373,25 +380,20 @@ public record ConditionExtractor(SqlToMongoIR ir,
                 return ExpressionBuilder.buildArithmeticExpression(node);
 
             case QUERY:
-                try {
-                    // Для подзапроса в IN нужно создать CorrelationSubquery, если есть корреляции
-                    SqlToMongoIR subqueryIR = irGenerator.generateIR(node, outerTables, outerAliases);
+                // Для подзапроса в IN нужно создать CorrelationSubquery, если есть корреляции
+                SqlToMongoIR subqueryIR = irGenerator.generateIR(node, outerTables, outerAliases);
 
-                    // Извлекаем корреляции для этого подзапроса
-                    List<CorrelationCondition> correlations = extractCorrelations(node);
+                // Извлекаем корреляции для этого подзапроса
+                List<CorrelationCondition> correlations = extractCorrelations(node);
 
-                    if (!correlations.isEmpty()) {
-                        CorrelationSubquery correlationSubquery = new CorrelationSubquery();
-                        correlationSubquery.setSubqueryIR(subqueryIR);
-                        correlationSubquery.getCorrelations().addAll(correlations);
-                        return correlationSubquery;
-                    } else {
-                        return new Subquery(subqueryIR);
-                    }
-                } catch (IRGenerationException e) {
-                    // Логирование ошибки
+                if (!correlations.isEmpty()) {
+                    CorrelationSubquery correlationSubquery = new CorrelationSubquery();
+                    correlationSubquery.setSubqueryIR(subqueryIR);
+                    correlationSubquery.getCorrelations().addAll(correlations);
+                    return correlationSubquery;
+                } else {
+                    return new Subquery(subqueryIR);
                 }
-                break;
 
             default:
                 // Если узел имеет детей, рекурсивно обрабатываем
@@ -404,26 +406,26 @@ public record ConditionExtractor(SqlToMongoIR ir,
         return null;
     }
 
-    private ExistsCondition createExistsCondition(Node subqueryNode, IRGenerator irGenerator) {
+    private ExistsCondition createExistsCondition(Node subqueryNode,
+                                                  IRGenerator irGenerator,
+                                                  boolean hasNot) {
         ExistsCondition exists = new ExistsCondition();
-        exists.setExists(true);
+        exists.setExists(!hasNot);
 
-        try {
-            SqlToMongoIR subqueryIR = irGenerator.generateIR(subqueryNode, outerTables, outerAliases);
-            CorrelationSubquery correlationSubquery = new CorrelationSubquery();
-            correlationSubquery.setSubqueryIR(subqueryIR);
+        SqlToMongoIR subqueryIR = irGenerator.generateIR(subqueryNode, outerTables, outerAliases);
+        CorrelationSubquery correlationSubquery = new CorrelationSubquery();
+        correlationSubquery.setSubqueryIR(subqueryIR);
 
-            List<CorrelationCondition> correlations = extractCorrelations(subqueryNode);
-            correlationSubquery.getCorrelations().addAll(correlations);
+        List<CorrelationCondition> correlations = extractCorrelations(subqueryNode);
+        correlationSubquery.getCorrelations().addAll(correlations);
 
-            exists.setSubquery(correlationSubquery);
+        exists.setSubquery(correlationSubquery);
 
-            if (ir != null && !correlations.isEmpty()) {
+        if (ir != null) {
+            if (!correlations.isEmpty()) {
                 ir.setHasCorrelatedSubqueries(true);
-                ir.setHasSubqueries(true);
             }
-        } catch (Exception e) {
-            // Логирование ошибки
+            ir.setHasSubqueries(true);
         }
 
         return exists;

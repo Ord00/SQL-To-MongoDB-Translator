@@ -3,6 +3,7 @@ package sql.to.mongodb.translator.listener;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Profile;
 import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Component;
 import sql.to.mongodb.translator.Parser;
@@ -16,6 +17,7 @@ import sql.to.mongodb.translator.scanner.Token;
 import java.util.List;
 
 @Component
+@Profile("prod")
 public class ScannerListener {
     private final RabbitTemplate rabbitTemplate;
 

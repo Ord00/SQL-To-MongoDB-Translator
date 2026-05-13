@@ -28,7 +28,13 @@ import sql.to.mongodb.translator.processors.ConditionExtractor;
 import sql.to.mongodb.translator.processors.ExpressionBuilder;
 import sql.to.mongodb.translator.scanner.Token;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.Stack;
 
 import static sql.to.mongodb.translator.processors.ExpressionBuilder.extractAlias;
 import static sql.to.mongodb.translator.processors.ExpressionBuilder.extractFieldParts;
@@ -63,8 +69,6 @@ public class IRGenerator {
         return ctx.ir;
     }
 
-    // ==================== GenerationContext ====================
-
     public static class GenerationContext {
         public final SqlToMongoIR ir;
         public final Map<String, String> tableAliases;
@@ -86,8 +90,6 @@ public class IRGenerator {
             this.conditionExtractor = new ConditionExtractor(ir, outerTables, outerAliases);
         }
     }
-
-    // ==================== Process Query ====================
 
     private void processQueryNode(Node queryNode,
                                   GenerationContext ctx) throws IRGenerationException {
@@ -118,26 +120,22 @@ public class IRGenerator {
         }
     }
 
-    // ==================== Terminal ====================
-
     private void processTerminalInQuery(Node terminalNode, GenerationContext ctx) {
-        Token token = terminalNode.getToken();
-        if (token != null && "DISTINCT".equals(token.lexeme)) {
-            ctx.ir.setDistinct(true);
+        switch (terminalNode.getToken().lexeme) {
+            case "DISTINCT" -> ctx.ir.setDistinct(true);
+            case "WHERE" -> ctx.conditionExtractor.setContext(ConditionExtractor.ConditionContext.WHERE);
+            case "HAVING" -> ctx.conditionExtractor.setContext(ConditionExtractor.ConditionContext.HAVING);
         }
     }
 
-    // ==================== Condition ====================
-
     private void processConditionNode(Node conditionNode, GenerationContext ctx) {
-        ConditionExtractor.ConditionContext context = determineConditionContext(ctx);
         ConditionNode extractedCondition = ctx.conditionExtractor.extractCondition(
                 conditionNode,
                 this,
                 ctx);
 
         if (extractedCondition != null) {
-            switch (context) {
+            switch (ctx.conditionExtractor.getContext()) {
                 case WHERE -> ctx.ir.setWhereCondition(extractedCondition);
                 case HAVING -> {
                     ctx.ir.setHavingCondition(extractedCondition);
@@ -148,15 +146,6 @@ public class IRGenerator {
             }
         }
     }
-
-    private ConditionExtractor.ConditionContext determineConditionContext(GenerationContext ctx) {
-        if (ctx.ir.isHasGroupBy() && ctx.ir.getHavingCondition() != null) {
-            return ConditionExtractor.ConditionContext.HAVING;
-        }
-        return ConditionExtractor.ConditionContext.WHERE;
-    }
-
-    // ==================== Column Names / Projection ====================
 
     private void processColumnNames(Node columnNamesNode,
                                     GenerationContext ctx) throws IRGenerationException {
@@ -266,8 +255,6 @@ public class IRGenerator {
 
         return result;
     }
-
-    // ==================== Case Expression ====================
 
     private CaseExpression parseCaseExpression(Node caseNode) throws IRGenerationException {
         if (caseNode.getChildren() == null) return null;
@@ -395,8 +382,6 @@ public class IRGenerator {
         return new Field(expr);
     }
 
-    // ==================== Group By ====================
-
     private void processGroupBy(Node groupByNode, GenerationContext ctx) {
         ctx.ir.setHasGroupBy(true);
         if (groupByNode.getChildren() != null) {
@@ -418,8 +403,6 @@ public class IRGenerator {
         }
         return null;
     }
-
-    // ==================== Order By ====================
 
     private void processOrderBy(Node orderByNode, GenerationContext ctx) {
         if (orderByNode.getChildren() == null) return;
@@ -463,8 +446,6 @@ public class IRGenerator {
         ctx.ir.getOrderBy().add(field);
     }
 
-    // ==================== Limit / Offset ====================
-
     private void processLimit(Node limitNode, GenerationContext ctx) {
         if (limitNode.getChildren() == null) return;
         ctx.ir.setLimit(Integer.parseInt(limitNode.getChildren().getFirst().getToken().lexeme));
@@ -475,13 +456,13 @@ public class IRGenerator {
         ctx.ir.setOffset(Integer.parseInt(offsetNode.getChildren().getFirst().getToken().lexeme));
     }
 
-    // ==================== Table Names / JOIN ====================
-
     private void processTableNames(Node tableNamesNode,
                                    GenerationContext ctx) throws IRGenerationException {
         if (tableNamesNode.getChildren() == null) return;
 
         JoinInfo currentJoin = new JoinInfo();
+        int rightJoinPos = -1;
+        int curJoinPos = 0;
 
         for (Node child : tableNamesNode.getChildren()) {
             switch (child.getNodeType()) {
@@ -510,6 +491,7 @@ public class IRGenerator {
                         ctx.currentContext.push(operand instanceof JoinTable t ? t.getValue() : "subquery");
                     }
                     ctx.outerTables.add(operand instanceof JoinTable t ? t.getValue() : "subquery");
+                    ctx.outerAliases.put(operand.getAlias(), operand instanceof JoinTable t ? t.getValue() : "subquery");
                 }
                 case TERMINAL, JOIN -> {
                     processJoin(child, currentJoin);
@@ -521,8 +503,14 @@ public class IRGenerator {
                             this,
                             ctx);
                     currentJoin.setJoinCondition(joinCondition);
+
+                    Joinable newLeft = currentJoin.getRight();
+
+                    rightJoinPos = rightJoinTransformation(currentJoin, curJoinPos, rightJoinPos, ctx);
+                    ++curJoinPos;
+
                     ctx.ir.getJoins().add(currentJoin);
-                    currentJoin = new JoinInfo(currentJoin.getRight());
+                    currentJoin = new JoinInfo(newLeft);
                 }
                 case QUERY -> {
                     Joinable operand = processSubqueryAsJoinable(child, ctx);
@@ -539,6 +527,57 @@ public class IRGenerator {
                 }
             }
         }
+        if (rightJoinPos != -1) {
+            rightJoinTransformation(currentJoin, curJoinPos, rightJoinPos, ctx);
+        }
+    }
+
+    private int rightJoinTransformation(JoinInfo currentJoin,
+                                        int curJoinPos,
+                                        int rightJoinPos,
+                                        GenerationContext ctx) {
+        int newRightJoinPos = rightJoinPos;
+
+        if (currentJoin.getType() != JoinInfo.JoinType.RIGHT) {
+            if (rightJoinPos != -1 && curJoinPos != rightJoinPos - 1) {
+                if (rightJoinPos == 0) {
+                    if (ctx.ir.getJoins().getLast().getRight() instanceof JoinTable) {
+                        ctx.ir.setMainCollection(((JoinTable) ctx.ir.getJoins().getLast().getLeft()).getValue());
+                    } else {
+                        throw new IRGenerationException("RIGHT JOIN с подзапросом в качестве второй таблицы!");
+                    }
+                }
+                int left = rightJoinPos;
+                int right = curJoinPos - 1;
+                List<JoinInfo> joins = ctx.ir.getJoins();
+                List<String> curContext = new ArrayList<>();
+                while (left < right) {
+                    JoinInfo temp = joins.get(left);
+                    joins.set(left, joins.get(right));
+                    joins.set(right, temp);
+                    left++;
+                    right--;
+                    for (int i = 0; i < 2; i++) {
+                        curContext.add(ctx.currentContext.pop());
+                    }
+                }
+                for (String s : curContext) {
+                    ctx.currentContext.push(s);
+                }
+                newRightJoinPos = -1;
+            }
+        } else {
+            if (rightJoinPos == -1) {
+                newRightJoinPos = curJoinPos;
+            }
+            Joinable left = currentJoin.getLeft();
+            Joinable right = currentJoin.getRight();
+            currentJoin.setType(JoinInfo.JoinType.LEFT);
+            currentJoin.setLeft(right);
+            currentJoin.setRight(left);
+        }
+
+        return newRightJoinPos;
     }
 
     private Joinable extractJoinableFromTable(Node tableNode,

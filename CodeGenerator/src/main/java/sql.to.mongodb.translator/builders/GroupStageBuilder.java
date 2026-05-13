@@ -3,14 +3,24 @@ package sql.to.mongodb.translator.builders;
 import org.springframework.stereotype.Component;
 import sql.to.mongodb.translator.exceptions.CodeGenerationException;
 import sql.to.mongodb.translator.base.GenerationContext;
+import sql.to.mongodb.translator.ir.Aggregate;
 import sql.to.mongodb.translator.ir.GroupByField;
 import sql.to.mongodb.translator.ir.SqlToMongoIR;
+import sql.to.mongodb.translator.ir.condition.Comparison;
+import sql.to.mongodb.translator.ir.condition.ConditionNode;
+import sql.to.mongodb.translator.ir.condition.LinkNode;
 import sql.to.mongodb.translator.ir.projection.AggregateProjection;
+import sql.to.mongodb.translator.ir.projection.ProjectionField;
 import sql.to.mongodb.translator.ir.projection.Projectionable;
 import sql.to.mongodb.translator.translators.ProjectionTranslator;
 
 import java.util.ArrayList;
 import java.util.List;
+
+import static sql.to.mongodb.translator.helpers.FormatHelper.IndentChangeType.DOWN;
+import static sql.to.mongodb.translator.helpers.FormatHelper.IndentChangeType.NONE;
+import static sql.to.mongodb.translator.helpers.FormatHelper.IndentChangeType.UP;
+import static sql.to.mongodb.translator.helpers.FormatHelper.indent;
 
 @Component
 public class GroupStageBuilder {
@@ -26,21 +36,30 @@ public class GroupStageBuilder {
             return null;
         }
 
-        StringBuilder group = new StringBuilder(indent(context) + "{ $group: {\n");
-        context.increaseIndent();
+        StringBuilder group = new StringBuilder(indent(UP, context)).append("{\n");
+        group.append(indent(UP, context)).append("$group: {\n");
 
         // _id
-        group.append(context.getIndent()).append("_id: ");
+        group.append(indent(NONE, context)).append("_id: ");
         buildGroupId(ir, group, context);
 
-        // Агрегации
+        // Агрегации из проекции
         List<String> aggregations = new ArrayList<>();
         for (Projectionable proj : ir.getProjectionFields()) {
             if (proj instanceof AggregateProjection agg) {
                 String aggStr = projectionTranslator.translate(agg, context, false);
                 if (!aggStr.isEmpty()) {
-                    aggregations.add(aggStr.replace(context.getIndent(), context.getIndent()));
+                    aggregations.add(aggStr.replace(indent(NONE, context), indent(NONE, context)));
                 }
+            }
+        }
+
+        // Агрегации из HAVING
+        List<AggregateProjection> havingAggregations = extractAggregationsFromHaving(ir.getHavingCondition(), context);
+        for (AggregateProjection agg : havingAggregations) {
+            String aggStr = projectionTranslator.translate(agg, context, false);
+            if (!aggStr.isEmpty()) {
+                aggregations.add(aggStr.replace(indent(NONE, context), indent(NONE, context)));
             }
         }
 
@@ -49,7 +68,8 @@ public class GroupStageBuilder {
         }
 
         context.decreaseIndent();
-        group.append("\n").append(indent(context)).append("} }");
+        group.append("\n").append(indent(DOWN, context)).append("}\n");
+        group.append(indent(NONE, context)).append("}");
 
         return group.toString();
     }
@@ -58,89 +78,61 @@ public class GroupStageBuilder {
         if (ir.getGroupByFields().isEmpty()) {
             group.append("null");
         } else if (ir.getGroupByFields().size() == 1) {
-            group.append("\"$").append(ir.getGroupByFields().getFirst()).append("\"");
+            GroupByField field = ir.getGroupByFields().getFirst();
+            String resolved = context.resolveFieldPath(field.getSource(), field.getField());
+            group.append("\"$").append(resolved).append("\"");
         } else {
             group.append("{\n");
             context.increaseIndent();
             for (int i = 0; i < ir.getGroupByFields().size(); i++) {
                 GroupByField field = ir.getGroupByFields().get(i);
-                group.append(context.getIndent())
-                        .append(field.getSource())
-                        .append(": \"$")
+                group.append(indent(NONE, context))
                         .append(field.getField())
-                        .append("\"");
+                        .append(": \"$").append(field.getField()).append("\"");
                 if (i < ir.getGroupByFields().size() - 1) group.append(",\n");
             }
             context.decreaseIndent();
-            group.append("\n").append(context.getIndent()).append("}");
+            group.append("\n").append(indent(NONE, context)).append("}");
         }
     }
 
-    /**
-     * Построение $group стадии для подзапроса с использованием контекста
-     * @param subIR IR подзапроса
-     * @param context контекст генерации (используется для отступов и синтаксиса)
-     * @return строка $group стадии или null если GROUP BY нет
-     */
-    public String buildForSubquery(SqlToMongoIR subIR,
-                                   GenerationContext context) {
-        if (subIR == null || !subIR.isHasGroupBy()) {
-            return null;
-        }
+    private List<AggregateProjection> extractAggregationsFromHaving(ConditionNode havingCondition,
+                                                                    GenerationContext context) {
+        List<AggregateProjection> aggregations = new ArrayList<>();
+        if (havingCondition == null) return aggregations;
 
-        StringBuilder group = new StringBuilder();
-
-        // Добавляем отступ если в агрегационном контексте
-        if (context.isUseAggregationSyntax()) {
-            group.append(indent(context));
-        }
-
-        group.append("{ $group: { _id: ");
-
-        if (subIR.getGroupByFields().isEmpty()) {
-            group.append("null");
-        } else if (subIR.getGroupByFields().size() == 1) {
-            group.append("\"$").append(subIR.getGroupByFields().getFirst()).append("\"");
-        } else {
-            group.append("{\n");
-            int savedIndent = context.getIndentLevel();
-            context.setIndentLevel(savedIndent + 1);
-
-            for (int i = 0; i < subIR.getGroupByFields().size(); i++) {
-                GroupByField field = subIR.getGroupByFields().get(i);
-                group.append(indent(context))
-                        .append(field.getSource())
-                        .append(": \"$")
-                        .append(field.getField())
-                        .append("\"");
-                if (i < subIR.getGroupByFields().size() - 1) group.append(",\n");
-            }
-
-            context.setIndentLevel(savedIndent);
-            group.append("\n").append(indent(context)).append("}");
-        }
-
-        // Добавляем агрегации для подзапроса
-        boolean hasAggregations = false;
-        for (Projectionable proj : subIR.getProjectionFields()) {
-            if (proj instanceof AggregateProjection agg) {
-                if (!hasAggregations) {
-                    hasAggregations = true;
-                }
-                String field = agg.getField() != null ? agg.getField().getField() : null;
-                if (field != null && !field.isEmpty()) {
-                    group.append(", ").append(agg.getType().name().toLowerCase())
-                            .append(": { $").append(agg.getType().name().toLowerCase())
-                            .append(": \"$").append(field).append("\" }");
-                }
-            }
-        }
-
-        group.append(" } }");
-        return group.toString();
+        extractAggregationsRecursive(havingCondition, aggregations, context);
+        return aggregations;
     }
 
-    private String indent(GenerationContext context) {
-        return "  ".repeat(Math.max(0, context.getIndentLevel()));
+    private void extractAggregationsRecursive(ConditionNode node,
+                                              List<AggregateProjection> aggregations,
+                                              GenerationContext context) {
+        if (node == null) return;
+
+        if (node instanceof Comparison comp) {
+            if (comp.getOperand() instanceof Aggregate agg) {
+                AggregateProjection aggProj = new AggregateProjection();
+                aggProj.setType(agg.getType());
+                aggProj.setDistinct(agg.isDistinct());
+                if (agg.getField() != null) {
+                    aggProj.setField(new ProjectionField(
+                            agg.getField().getSource(),
+                            agg.getField().getField(),
+                            null));
+                }
+
+                if (agg.isDistinct() && agg.getType() == Aggregate.AggregateType.COUNT) {
+                    aggProj.setAlias(context.nextVariableName());
+                }
+                aggregations.add(aggProj);
+            }
+        }
+
+        if (node instanceof LinkNode link) {
+            for (ConditionNode child : link.getChildren()) {
+                extractAggregationsRecursive(child, aggregations, context);
+            }
+        }
     }
 }

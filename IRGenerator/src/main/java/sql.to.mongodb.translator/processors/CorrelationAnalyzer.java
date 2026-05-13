@@ -8,7 +8,12 @@ import sql.to.mongodb.translator.parser.NodeType;
 import sql.to.mongodb.translator.scanner.Category;
 import sql.to.mongodb.translator.scanner.Token;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 public class CorrelationAnalyzer {
 
@@ -39,15 +44,10 @@ public class CorrelationAnalyzer {
         // Проверяем идентификаторы на корреляцию
         if (node.getNodeType() == NodeType.IDENTIFIER) {
             checkIdentifierForCorrelation(node);
-        }
-
-        // Проверяем логические условия
-        if (node.getNodeType() == NodeType.LOGICAL_CHECK) {
+        } else if (node.getNodeType() == NodeType.LOGICAL_CHECK) {
+            // Проверяем логические условия
             processLogicalCheck(node);
-        }
-
-        // Рекурсивно обходим детей
-        if (node.getChildren() != null) {
+        } else if (node.getChildren() != null) {
             for (Node child : node.getChildren()) {
                 findCorrelationsInNode(child);
             }
@@ -87,6 +87,9 @@ public class CorrelationAnalyzer {
                 } else {
                     rightIdentifiers.addAll(fields);
                 }
+            } else if (child.getNodeType() == NodeType.LOGICAL_CONDITION) {
+                // Рекурсивно обрабатываем вложенные условия
+                findCorrelationsInNode(child);
             }
         }
 
@@ -102,9 +105,6 @@ public class CorrelationAnalyzer {
         }
     }
 
-    /**
-     * Извлечение полей из арифметического выражения
-     */
     private List<String> extractFieldsFromArithmetic(Node arithNode) {
         List<String> fields = new ArrayList<>();
         if (arithNode == null) return fields;
@@ -162,15 +162,12 @@ public class CorrelationAnalyzer {
 
             CorrelationCondition correlation = new CorrelationCondition(outerField, innerField, "=");
 
-            if (containsCorrelation(correlation)) {
+            if (!containsCorrelation(correlation)) {
                 correlations.add(correlation);
             }
         }
     }
 
-    /**
-     * Проверка, образуют ли два идентификатора корреляцию
-     */
     private boolean isCorrelationPair(String left, String right) {
         boolean leftIsExternal = isExternalReference(left);
         boolean rightIsExternal = isExternalReference(right);
@@ -179,9 +176,6 @@ public class CorrelationAnalyzer {
         return leftIsExternal != rightIsExternal;
     }
 
-    /**
-     * Добавление корреляции
-     */
     private void addCorrelation(String left, String right, String operator) {
         // Определяем, какой из них внешний
         boolean leftIsExternal = isExternalReference(left);
@@ -193,7 +187,7 @@ public class CorrelationAnalyzer {
         String[] outerParts = outerIdentifier.split("\\.");
         CorrelationCondition correlation = getCorrelationCondition(operator, outerParts, innerIdentifier);
 
-        if (containsCorrelation(correlation)) {
+        if (!containsCorrelation(correlation)) {
             correlations.add(correlation);
         }
     }
@@ -204,16 +198,20 @@ public class CorrelationAnalyzer {
         String outerTable = outerParts[0];
         String outerColumn = outerParts.length > 1 ? outerParts[1] : outerParts[0];
 
-        // Внутренний идентификатор может быть без таблицы
-        String[] innerParts = innerIdentifier.split("\\.");
-        String innerColumn = innerParts.length > 1 ? innerParts[1] : innerParts[0];
-
         Field outerField = new Field();
         outerField.setSource(outerTable);
         outerField.setField(outerColumn);
 
+        // Внутренний идентификатор может быть без таблицы
+        String[] innerParts = innerIdentifier.split("\\.");
+
         Field innerField = new Field();
-        innerField.setField(innerColumn);
+        if (innerParts.length > 1) {
+            innerField.setSource(innerParts[0]);
+            innerField.setField(innerParts[1]);
+        } else {
+            innerField.setField(innerParts[0]);
+        }
 
         return new CorrelationCondition(outerField, innerField, operator);
     }
@@ -245,10 +243,10 @@ public class CorrelationAnalyzer {
             if (existing.getOuterField().toString().equals(newCorrelation.getOuterField().toString())
                     && existing.getInnerField().toString().equals(newCorrelation.getInnerField().toString())
                     && existing.getOperator().equals(newCorrelation.getOperator())) {
-                return true; // Исправлено: если найден, возвращаем true
+                return true;
             }
         }
-        return false; // Если не найден, возвращаем false
+        return false;
     }
 
     public List<CorrelationCondition> extractCorrelationConditions(Node whereNode) {
@@ -271,8 +269,6 @@ public class CorrelationAnalyzer {
     private boolean isExternalReference(String identifier) {
         if (identifier == null) return false;
 
-        // Если идентификатор не содержит точку, он не может быть внешней ссылкой
-        // (внешняя ссылка всегда имеет вид table.column)
         if (!identifier.contains(".")) {
             return false;
         }

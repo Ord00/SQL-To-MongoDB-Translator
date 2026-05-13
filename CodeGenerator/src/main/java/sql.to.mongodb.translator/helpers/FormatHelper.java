@@ -11,7 +11,7 @@ public class FormatHelper {
             }
             case String str -> {
                 if (str.startsWith("'") && str.endsWith("'")) {
-                    return "\"" + str.substring(1, str.length() - 1) + "\"";
+                    return str;
                 }
                 if (str.contains(".") && context.isUseAggregationSyntax()) {
                     return "\"$" + str + "\"";
@@ -29,5 +29,21 @@ public class FormatHelper {
         }
 
         return String.valueOf(value);
+    }
+
+    public static String indent(IndentChangeType changeType, GenerationContext context) {
+        String result = "    ".repeat(Math.max(0, context.getIndentLevel()));
+        switch (changeType) {
+            case UP -> context.increaseIndent();
+            case DOWN -> context.decreaseIndent();
+            case NONE -> {}
+        }
+        return result;
+    }
+
+    public enum IndentChangeType {
+        UP,
+        DOWN,
+        NONE
     }
 }

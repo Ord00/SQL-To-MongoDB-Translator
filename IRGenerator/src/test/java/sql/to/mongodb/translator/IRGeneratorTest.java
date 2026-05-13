@@ -1,15 +1,29 @@
 package sql.to.mongodb.translator;
 
-import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import sql.to.mongodb.translator.config.RabbitMQConfig;
+import sql.to.mongodb.translator.helper.RabbitMQTestHelper;
+import sql.to.mongodb.translator.helper.TestContainersHelper;
+import sql.to.mongodb.translator.ir.Aggregate;
+import sql.to.mongodb.translator.ir.Constant;
+import sql.to.mongodb.translator.ir.CorrelationSubquery;
 import sql.to.mongodb.translator.ir.Field;
+import sql.to.mongodb.translator.ir.GroupByField;
 import sql.to.mongodb.translator.ir.SortField;
 import sql.to.mongodb.translator.ir.SqlToMongoIR;
 import sql.to.mongodb.translator.ir.Subquery;
 import sql.to.mongodb.translator.ir.condition.Comparison;
+import sql.to.mongodb.translator.ir.condition.CorrelationCondition;
+import sql.to.mongodb.translator.ir.condition.ExistsCondition;
 import sql.to.mongodb.translator.ir.condition.InCondition;
 import sql.to.mongodb.translator.ir.condition.LinkNode;
 import sql.to.mongodb.translator.ir.condition.NullCheck;
@@ -19,7 +33,6 @@ import sql.to.mongodb.translator.ir.join.JoinTable;
 import sql.to.mongodb.translator.ir.projection.ArithmeticProjection;
 import sql.to.mongodb.translator.ir.projection.ProjectionField;
 import sql.to.mongodb.translator.parser.Node;
-import sql.to.mongodb.translator.scanner.Token;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -28,23 +41,30 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest
+@Testcontainers
+@ActiveProfiles("test")
+@Import(RabbitMQConfig.class)
 class IRGeneratorTest {
+    @DynamicPropertySource
+    static void properties(DynamicPropertyRegistry registry) {
+        TestContainersHelper.properties(registry);
+    }
+
+    @BeforeAll
+    static void startContainers() {
+        TestContainersHelper.startContainers();
+    }
+
+    @AfterAll
+    static void stopContainers() {
+        TestContainersHelper.stopContainers();
+    }
 
     @Autowired
     IRGenerator irGenerator;
 
     @Autowired
-    Scanner scanner;
-    @Autowired
-    Parser parser;
-
-    private static List<Token> tokens = new ArrayList<>();
-
-    @BeforeEach
-    public void initialize() {
-        tokens = new ArrayList<>();
-    }
-
+    private RabbitMQTestHelper rabbitMQTestHelper;
 
     @Test
     void testGenerationOfSimpleQuery() {
@@ -54,10 +74,7 @@ class IRGeneratorTest {
 
         String codeToScan = "SELECT * FROM t";
 
-        Assertions.assertDoesNotThrow(() -> scanner.tryAnalyse(codeToScan, tokens));
-
-        Node root = Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(tokens));
-
+        Node root = rabbitMQTestHelper.getParserResult(codeToScan);
         SqlToMongoIR actualIR = irGenerator.generateIR(root);
 
         assertThat(actualIR)
@@ -94,10 +111,29 @@ class IRGeneratorTest {
                       JOIN t3 ON t2.id = t3.id
                 """;
 
-        Assertions.assertDoesNotThrow(() -> scanner.tryAnalyse(codeToScan, tokens));
+        Node root = rabbitMQTestHelper.getParserResult(codeToScan);
+        SqlToMongoIR actualIR = irGenerator.generateIR(root);
 
-        Node root = Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(tokens));
+        assertThat(actualIR)
+                .usingRecursiveComparison()
+                .isEqualTo(expectedIR);
+    }
 
+    @Test
+    void testGenerationOfWhere() {
+        SqlToMongoIR expectedIR = new SqlToMongoIR();
+        expectedIR.setMainCollection("collection");
+        expectedIR.getProjectionFields().add(new ProjectionField(null, "*", null));
+        expectedIR.setWhereCondition(new Comparison(
+                new Field("age"),
+                ">",
+                Constant.ofNumber("22")));
+
+        String codeToScan = """
+                SELECT * FROM collection WHERE age > 22
+                """;
+
+        Node root = rabbitMQTestHelper.getParserResult(codeToScan);
         SqlToMongoIR actualIR = irGenerator.generateIR(root);
 
         assertThat(actualIR)
@@ -129,10 +165,7 @@ class IRGeneratorTest {
                 ORDER BY R.TicketPrice DESC
                 """;
 
-        Assertions.assertDoesNotThrow(() -> scanner.tryAnalyse(codeToScan, tokens));
-
-        Node root = Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(tokens));
-
+        Node root = rabbitMQTestHelper.getParserResult(codeToScan);
         SqlToMongoIR actualIR = irGenerator.generateIR(root);
 
         assertThat(actualIR)
@@ -143,7 +176,7 @@ class IRGeneratorTest {
     @Test
     void testGenerationOfLogicalConditionAndIn() {
         SqlToMongoIR expectedIR = new SqlToMongoIR();
-        expectedIR.setMainCollection("Race");
+        expectedIR.setMainCollection("Country");
         expectedIR.setDistinct(true);
         expectedIR.getProjectionFields().addAll(List.of(
                 new ProjectionField("Cn", "Id_country", null),
@@ -159,56 +192,56 @@ class IRGeneratorTest {
         ));
 
         expectedIR.setJoins(List.of(
-                new JoinInfo(JoinInfo.JoinType.RIGHT,
-                        new JoinTable("Race", "R"),
-                        new JoinTable("StaffRace", "SR"),
-                        new Comparison(new Field("R", "Id_race"),
-                                "=",
-                                new Field("SR", "Race"))
-                ),
-                new JoinInfo(JoinInfo.JoinType.RIGHT,
-                        new JoinTable("StaffRace", "SR"),
-                        new JoinTable("Staff", "S"),
-                        new Comparison(new Field("SR", "Staff"),
-                                "=",
-                                new Field("S", "Id_staff"))
-                ),
-                new JoinInfo(JoinInfo.JoinType.RIGHT,
-                        new JoinTable("Staff", "S"),
-                        new JoinTable("TeamStaff", "TS"),
-                        new Comparison(new Field("S", "Id_staff"),
-                                "=",
-                                new Field("TS", "Staff"))
-                ),
-                new JoinInfo(JoinInfo.JoinType.RIGHT,
-                        new JoinTable("TeamStaff", "TS"),
+                new JoinInfo(JoinInfo.JoinType.LEFT,
+                        new JoinTable("Country", "Cn"),
                         new JoinTable("Team", "Tm"),
+                        new Comparison(new Field("Tm", "Country"),
+                                "=",
+                                new Field("Cn", "Id_country"))
+                ),
+                new JoinInfo(JoinInfo.JoinType.LEFT,
+                        new JoinTable("Team", "Tm"),
+                        new JoinTable("TeamStaff", "TS"),
                         new Comparison(new Field("TS", "Team"),
                                 "=",
                                 new Field("Tm", "Id_team"))
                 ),
-                new JoinInfo(JoinInfo.JoinType.RIGHT,
-                        new JoinTable("Team", "Tm"),
-                        new JoinTable("Country", "Cn"),
-                        new Comparison(new Field("Tm", "Country"),
+                new JoinInfo(JoinInfo.JoinType.LEFT,
+                        new JoinTable("TeamStaff", "TS"),
+                        new JoinTable("Staff", "S"),
+                        new Comparison(new Field("S", "Id_staff"),
                                 "=",
-                                new Field("Cn", "Id_country"))
+                                new Field("TS", "Staff"))
+                ),
+                new JoinInfo(JoinInfo.JoinType.LEFT,
+                        new JoinTable("Staff", "S"),
+                        new JoinTable("StaffRace", "SR"),
+                        new Comparison(new Field("SR", "Staff"),
+                                "=",
+                                new Field("S", "Id_staff"))
+                ),
+                new JoinInfo(JoinInfo.JoinType.LEFT,
+                        new JoinTable("StaffRace", "SR"),
+                        new JoinTable("Race", "R"),
+                        new Comparison(new Field("R", "Id_race"),
+                                "=",
+                                new Field("SR", "Race"))
                 )
         ));
         expectedIR.setHasJoins(true);
 
         SqlToMongoIR expectedSubIR = new SqlToMongoIR();
         expectedSubIR.setMainCollection("Race");
-        expectedSubIR.getAliases().put("R", "Race");
+        expectedSubIR.getAliases().put("R2", "Race");
         expectedSubIR.getProjectionFields().add(new ArithmeticProjection(new BinaryOperation(
-                new Field("R", "TicketPrice"),
-                new Field("R", "SoldTickets"),
+                new Field("R2", "TicketPrice"),
+                new Field("R2", "SoldTickets"),
                 BinaryOperation.Operator.MULTIPLY),
                 "Profit"));
         expectedSubIR.setHasComplexProjections(true);
         expectedSubIR.getOrderBy().add(new SortField(
-                "Profit",
                 null,
+                "Profit",
                 SortField.SortDirection.DESC));
         expectedSubIR.setLimit(3);
 
@@ -249,15 +282,304 @@ class IRGeneratorTest {
                 	ON Tm.Country = Cn.Id_country
                 WHERE R.RaceDate >= TS.EntryDate
                 	AND (TS.ExitDate IS NULL OR R.RaceDate <= TS.ExitDate)
-                	AND R.TicketPrice * R.SoldTickets IN (SELECT R.TicketPrice * R.SoldTickets AS Profit
-                										  FROM Race R
+                	AND R.TicketPrice * R.SoldTickets IN (SELECT R2.TicketPrice * R2.SoldTickets AS Profit
+                										  FROM Race R2
                 										  ORDER BY Profit DESC
                 										  LIMIT 3)""";
 
-        Assertions.assertDoesNotThrow(() -> scanner.tryAnalyse(codeToScan, tokens));
+        Node root = rabbitMQTestHelper.getParserResult(codeToScan);
+        SqlToMongoIR actualIR = irGenerator.generateIR(root);
 
-        Node root = Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(tokens));
+        assertThat(actualIR)
+                .usingRecursiveComparison()
+                .isEqualTo(expectedIR);
+    }
 
+    @Test
+    void testGenerationOfExistsAndJoin() {
+        SqlToMongoIR expectedIR = new SqlToMongoIR();
+        expectedIR.setMainCollection("Team");
+        expectedIR.getProjectionFields().add(new ProjectionField("Tm", "TeamName", null));
+        expectedIR.getAliases().put("Tm", "Team");
+
+        SqlToMongoIR expectedSubCompIR = new SqlToMongoIR();
+        expectedSubCompIR.setMainCollection("Competition");
+        expectedSubCompIR.getProjectionFields().add(new ProjectionField(null, "1.0", null));
+        expectedSubCompIR.getAliases().put("Comp2", "Competition");
+
+        SqlToMongoIR expectedSubRaceIR = new SqlToMongoIR();
+        expectedSubRaceIR.setMainCollection("Race");
+        expectedSubRaceIR.getProjectionFields().add(new ProjectionField(null, "1.0", null));
+        expectedSubRaceIR.getAliases().putAll(Map.of(
+                "R3", "Race",
+                "SR3", "StaffRace",
+                "S3", "Staff",
+                "TS3", "TeamStaff",
+                "Tm3", "Team"
+        ));
+
+        expectedSubRaceIR.setJoins(List.of(
+                new JoinInfo(JoinInfo.JoinType.INNER,
+                        new JoinTable("Race", "R3"),
+                        new JoinTable("StaffRace", "SR3"),
+                        new Comparison(new Field("R3", "Id_race"),
+                                "=",
+                                new Field("SR3", "Race"))
+                ),
+                new JoinInfo(JoinInfo.JoinType.INNER,
+                        new JoinTable("StaffRace", "SR3"),
+                        new JoinTable("Staff", "S3"),
+                        new Comparison(new Field("SR3", "Staff"),
+                                "=",
+                                new Field("S3", "Id_staff"))
+                ),
+                new JoinInfo(JoinInfo.JoinType.INNER,
+                        new JoinTable("Staff", "S3"),
+                        new JoinTable("TeamStaff", "TS3"),
+                        new Comparison(new Field("S3", "Id_staff"),
+                                "=",
+                                new Field("TS3", "Staff"))
+                ),
+                new JoinInfo(JoinInfo.JoinType.INNER,
+                        new JoinTable("TeamStaff", "TS3"),
+                        new JoinTable("Team", "Tm3"),
+                        new Comparison(new Field("TS3", "Team"),
+                                "=",
+                                new Field("Tm3", "Id_team"))
+                )
+        ));
+        expectedSubRaceIR.setHasJoins(true);
+
+        expectedSubRaceIR.setWhereCondition(new LinkNode(LinkNode.LinkType.AND, List.of(
+                new LinkNode(LinkNode.LinkType.AND, List.of(
+                        new LinkNode(LinkNode.LinkType.AND, List.of(
+                                new Comparison(
+                                        new Field("R3", "RaceDate"),
+                                        ">=",
+                                        new Field("TS3", "EntryDate")),
+                                new LinkNode(LinkNode.LinkType.OR, List.of(
+                                        new NullCheck(new Field("TS3", "ExitDate"), true),
+                                        new Comparison(
+                                                new Field("R3", "RaceDate"),
+                                                "<=",
+                                                new Field("TS3", "ExitDate"))
+                                ))
+                        )),
+                        new Comparison(
+                                new Field("Tm", "Id_team"),
+                                "=",
+                                new Field("Tm3", "Id_team"))
+                )),
+                new Comparison(
+                        new Field("Comp2", "Id_competition"),
+                        "=",
+                        new Field("R3", "Competition"))
+        )));
+
+        expectedSubCompIR.setWhereCondition(new ExistsCondition(
+                false,
+                new CorrelationSubquery(
+                        expectedSubRaceIR,
+                        List.of(
+                                new CorrelationCondition(
+                                        new Field("Tm", "Id_team"),
+                                        new Field("Tm3", "Id_team"),
+                                        "="
+                                ),
+                                new CorrelationCondition(
+                                        new Field("Comp2", "Id_competition"),
+                                        new Field("R3", "Competition"),
+                                        "="
+                                )
+                        )
+                )
+        ));
+
+        expectedSubCompIR.setHasSubqueries(true);
+        expectedSubCompIR.setHasCorrelatedSubqueries(true);
+
+        expectedIR.setWhereCondition(new ExistsCondition(
+                false,
+                new CorrelationSubquery(expectedSubCompIR, new ArrayList<>())));
+        expectedIR.setHasSubqueries(true);
+
+        String codeToScan = """
+                SELECT Tm.TeamName
+                FROM Team Tm
+                WHERE NOT EXISTS
+                          (SELECT 1
+                          FROM Competition Comp2
+                          WHERE NOT EXISTS
+                                    (SELECT 1
+                                    FROM Race R3 JOIN StaffRace SR3
+                                    ON R3.Id_race = SR3.Race
+                                    JOIN Staff S3
+                                    ON SR3.Staff = S3.Id_staff
+                                    JOIN TeamStaff TS3
+                                    ON S3.Id_staff = TS3.Staff
+                                    JOIN Team Tm3
+                                    ON TS3.Team = Tm3.Id_team
+                                    WHERE R3.RaceDate >= TS3.EntryDate
+                                            AND (TS3.ExitDate IS NULL OR R3.RaceDate <= TS3.ExitDate)
+                                            AND Tm.Id_team = Tm3.Id_team
+                                            AND Comp2.Id_competition = R3.Competition
+                                    )
+                          )""";
+
+        Node root = rabbitMQTestHelper.getParserResult(codeToScan);
+        SqlToMongoIR actualIR = irGenerator.generateIR(root);
+
+        assertThat(actualIR)
+                .usingRecursiveComparison()
+                .isEqualTo(expectedIR);
+    }
+
+    @Test
+    void testGenerationOfExistsAndGroupBy() {
+        SqlToMongoIR expectedIR = new SqlToMongoIR();
+        expectedIR.setMainCollection("Competition");
+        expectedIR.setDistinct(true);
+        expectedIR.getProjectionFields().addAll(List.of(
+                new ProjectionField("Comp", "Id_competition", null),
+                new ProjectionField("Comp", "CompetitionName", null)
+        ));
+        expectedIR.getAliases().putAll(Map.of(
+                "R", "Race",
+                "Comp", "Competition"
+        ));
+
+        SqlToMongoIR expectedSubRaceIR = new SqlToMongoIR();
+        expectedSubRaceIR.setMainCollection("Race");
+        expectedSubRaceIR.getProjectionFields().add(new ProjectionField(null, "1.0", null));
+        expectedSubRaceIR.getAliases().putAll(Map.of(
+                "R2", "Race",
+                "SR2", "StaffRace",
+                "S2", "Staff",
+                "TS2", "TeamStaff",
+                "Tm2", "Team",
+                "Cn2", "Country"
+        ));
+
+        expectedIR.setJoins(List.of(
+                new JoinInfo(JoinInfo.JoinType.INNER,
+                        new JoinTable("Competition", "Comp"),
+                        new JoinTable("Race", "R"),
+                        new Comparison(new Field("R", "Competition"),
+                                "=",
+                                new Field("Comp", "Id_competition"))
+                )
+        ));
+        expectedIR.setHasJoins(true);
+
+        expectedSubRaceIR.setJoins(List.of(
+                new JoinInfo(JoinInfo.JoinType.LEFT,
+                        new JoinTable("Race", "R2"),
+                        new JoinTable("StaffRace", "SR2"),
+                        new Comparison(new Field("R2", "Id_race"),
+                                "=",
+                                new Field("SR2", "Race"))
+                ),
+                new JoinInfo(JoinInfo.JoinType.LEFT,
+                        new JoinTable("StaffRace", "SR2"),
+                        new JoinTable("Staff", "S2"),
+                        new Comparison(new Field("SR2", "Staff"),
+                                "=",
+                                new Field("S2", "Id_staff"))
+                ),
+                new JoinInfo(JoinInfo.JoinType.LEFT,
+                        new JoinTable("Staff", "S2"),
+                        new JoinTable("TeamStaff", "TS2"),
+                        new Comparison(new Field("S2", "Id_staff"),
+                                "=",
+                                new Field("TS2", "Staff"))
+                ),
+                new JoinInfo(JoinInfo.JoinType.LEFT,
+                        new JoinTable("TeamStaff", "TS2"),
+                        new JoinTable("Team", "Tm2"),
+                        new Comparison(new Field("TS2", "Team"),
+                                "=",
+                                new Field("Tm2", "Id_team"))
+                ),
+                new JoinInfo(JoinInfo.JoinType.LEFT,
+                        new JoinTable("Team", "Tm2"),
+                        new JoinTable("Country", "Cn2"),
+                        new Comparison(new Field("Tm2", "Country"),
+                                "=",
+                                new Field("Cn2", "Id_country"))
+                )
+        ));
+        expectedSubRaceIR.setHasJoins(true);
+
+        expectedSubRaceIR.setWhereCondition(new LinkNode(LinkNode.LinkType.AND, List.of(
+                new LinkNode(LinkNode.LinkType.AND, List.of(
+                        new Comparison(
+                                new Field("R2", "Competition"),
+                                "=",
+                                new Field("Comp", "Id_competition")),
+                        new Comparison(
+                                new Field("R2", "RaceDate"),
+                                ">=",
+                                new Field("TS2", "EntryDate"))
+                )),
+                new LinkNode(LinkNode.LinkType.OR, List.of(
+                        new NullCheck(new Field("TS2", "ExitDate"), true),
+                        new Comparison(
+                                new Field("R2", "RaceDate"),
+                                "<=",
+                                new Field("TS2", "ExitDate"))
+                ))
+        )));
+
+        expectedSubRaceIR.setGroupByFields(List.of(
+                new GroupByField("Cn2", "Id_country")
+        ));
+        expectedSubRaceIR.setHasGroupBy(true);
+
+        expectedSubRaceIR.setHavingCondition(new Comparison(
+                new Aggregate(Aggregate.AggregateType.COUNT,
+                        new ProjectionField("Tm2", "Id_team", null),
+                        true),
+                "<",
+                Constant.ofNumber("2")));
+        expectedSubRaceIR.setHasHaving(true);
+        expectedSubRaceIR.setHasAggregateFunctions(true);
+
+        expectedIR.setWhereCondition(new ExistsCondition(
+                false,
+                new CorrelationSubquery(
+                        expectedSubRaceIR,
+                        List.of(new CorrelationCondition(
+                                new Field("Comp", "Id_competition"),
+                                new Field("R2", "Competition"),
+                                "=")
+                        ))
+        ));
+        expectedIR.setHasSubqueries(true);
+        expectedIR.setHasCorrelatedSubqueries(true);
+
+        String codeToScan = """
+                SELECT DISTINCT Comp.Id_competition, Comp.CompetitionName
+                FROM Competition Comp JOIN Race R
+                 ON R.Competition = Comp.Id_competition
+                WHERE NOT EXISTS(SELECT 1
+                			 FROM Race R2 LEFT JOIN StaffRace SR2
+                			 	 ON R2.Id_race = SR2.Race
+                				 LEFT JOIN Staff S2
+                				 ON SR2.Staff = S2.Id_staff
+                				 LEFT JOIN TeamStaff TS2
+                				 ON S2.Id_staff = TS2.Staff
+                				 LEFT JOIN Team Tm2
+                				 ON TS2.Team = Tm2.Id_team
+                				 LEFT JOIN Country Cn2
+                				 ON Tm2.Country = Cn2.Id_country
+                			 WHERE R2.Competition = Comp.Id_competition
+                				 AND R2.RaceDate >= TS2.EntryDate
+                				 AND (TS2.ExitDate IS NULL OR R2.RaceDate <= TS2.ExitDate)
+                			 GROUP BY Cn2.Id_country
+                			 HAVING COUNT(DISTINCT Tm2.Id_team) < 2
+                			 )""";
+
+        Node root = rabbitMQTestHelper.getParserResult(codeToScan);
         SqlToMongoIR actualIR = irGenerator.generateIR(root);
 
         assertThat(actualIR)

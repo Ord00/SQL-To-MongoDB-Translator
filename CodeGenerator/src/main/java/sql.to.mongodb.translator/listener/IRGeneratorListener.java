@@ -3,6 +3,7 @@ package sql.to.mongodb.translator.listener;
 import lombok.AllArgsConstructor;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.context.annotation.Profile;
 import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Component;
 import sql.to.mongodb.translator.CodeGenerator;
@@ -13,11 +14,12 @@ import sql.to.mongodb.translator.ir.SqlToMongoIR;
 
 @Component
 @AllArgsConstructor
+@Profile("prod")
 public class IRGeneratorListener {
 
     private final RabbitTemplate rabbitTemplate;
 
-    private CodeGenerator codeGenerator;
+    private final CodeGenerator codeGenerator;
 
     @RabbitListener(queues = "${rabbitmq.request.queue.name}")
     public void listenIRGeneration(CodeGeneratorRequest request,

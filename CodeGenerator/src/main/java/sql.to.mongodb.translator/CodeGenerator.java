@@ -18,14 +18,17 @@ public class CodeGenerator {
     private final PipelineBuilder pipelineBuilder;
     private final ProjectStageBuilder projectStageBuilder;
     private final SortStageBuilder sortStageBuilder;
+    private final MatchStageBuilder matchStageBuilder;
 
     @Autowired
     public CodeGenerator(PipelineBuilder pipelineBuilder,
                          ProjectStageBuilder projectStageBuilder,
-                         SortStageBuilder sortStageBuilder) {
+                         SortStageBuilder sortStageBuilder,
+                         MatchStageBuilder matchStageBuilder) {
         this.pipelineBuilder = pipelineBuilder;
         this.projectStageBuilder = projectStageBuilder;
         this.sortStageBuilder = sortStageBuilder;
+        this.matchStageBuilder = matchStageBuilder;
     }
 
     public String generate(SqlToMongoIR ir) throws CodeGenerationException {
@@ -45,13 +48,8 @@ public class CodeGenerator {
                                      GenerationContext context) throws CodeGenerationException {
         StringBuilder query = new StringBuilder("db." + ir.getMainCollection() + ".find(");
 
-        // WHERE - используем $match builder но с find синтаксисом
-        context.setUseAggregationSyntax(false);
-        var whereBuilder = new MatchStageBuilder(null);
-        String where = whereBuilder.buildWhere(ir, context);
-        query.append(where != null ? where.replace("{ $match: ", "")
-                .replace("}", "")
-                .trim() : "{}");
+        String where = matchStageBuilder.buildFindCondition(ir, context);
+        query.append(where != null ? where : "{}");
 
         // Projection
         String projection = projectStageBuilder.build(ir, context);
@@ -68,19 +66,20 @@ public class CodeGenerator {
         if (ir.getLimit() != null) query.append(".limit(").append(ir.getLimit()).append(")");
         if (ir.getOffset() != null) query.append(".skip(").append(ir.getOffset()).append(")");
 
-        return query.append(";").toString();
+        return query.toString();
     }
 
     private String generateAggregationPipeline(SqlToMongoIR ir,
                                                GenerationContext context) throws CodeGenerationException {
         StringBuilder pipeline = new StringBuilder("db." + ir.getMainCollection() + ".aggregate([\n");
         context.setIndentLevel(1);
+        context.setUseAggregationSyntax(true);
 
         List<String> stages = pipelineBuilder.buildStages(ir, context);
 
         pipeline.append(String.join(",\n", stages));
-        pipeline.append("\n]);");
+        pipeline.append("\n])");
 
-        return pipeline.toString();
+        return pipeline.append("\n").toString();
     }
 }

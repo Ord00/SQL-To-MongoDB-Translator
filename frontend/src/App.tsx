@@ -1,14 +1,17 @@
 import { useState } from 'react';
-import { Code2, Database, FileSearch, Maximize2, Minimize2, Braces } from 'lucide-react';
+import { Code2, Database, FileSearch, Maximize2, Minimize2, Braces, GitBranch, FileCode, Terminal } from 'lucide-react';
 import SyntaxTree from './SyntaxTree';
+import IRViewer from './IRViewer';
 import { AnalysisResult } from "./types.ts";
 
 function App() {
     const [sqlQuery, setSqlQuery] = useState('');
-    const [activeTab, setActiveTab] = useState<'lexical' | 'syntax' | 'code' | null>(null);
+    const [activeTab, setActiveTab] = useState<'lexical' | 'syntax' | 'ir' | 'code' | null>(null);
     const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [isTreeFullscreen, setIsTreeFullscreen] = useState(false);
+    const [isCodeFullscreen, setIsCodeFullscreen] = useState(false);
+    const [isSqlFullscreen, setIsSqlFullscreen] = useState(false);
 
     const analyseSql = async () => {
         setActiveTab(null);
@@ -42,8 +45,71 @@ function App() {
         }
     };
 
+    // Модальное окно для SQL
+    const SqlFullscreenModal = () => {
+        if (!isSqlFullscreen) return null;
+        return (
+            <div className="fixed inset-0 z-50 bg-white flex flex-col">
+                <div className="flex justify-between items-center p-4 border-b bg-gray-50">
+                    <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                        <Terminal size={20} className="text-blue-600" />
+                        Исходный SQL запрос
+                    </h2>
+                    <button
+                        onClick={() => setIsSqlFullscreen(false)}
+                        className="text-gray-500 hover:text-gray-700"
+                    >
+                        <Minimize2 size={20} />
+                    </button>
+                </div>
+                <div className="flex-1 p-6 overflow-auto">
+                    <pre className="bg-gray-900 rounded-lg p-4 text-green-400 font-mono text-sm whitespace-pre-wrap">
+                        {sqlQuery || '-- нет запроса --'}
+                    </pre>
+                </div>
+            </div>
+        );
+    };
+
+    // Модальное окно для MongoDB кода
+    const MongoFullscreenModal = () => {
+        if (!isCodeFullscreen || !analysisResult?.mongoCode) return null;
+        return (
+            <div className="fixed inset-0 z-50 bg-white flex flex-col">
+                <div className="flex justify-between items-center p-4 border-b bg-gray-50">
+                    <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                        <FileCode size={20} className="text-amber-600" />
+                        Сгенерированный MongoDB код
+                    </h2>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={copyToClipboard}
+                            className="text-gray-500 hover:text-gray-700 px-2 py-1 text-sm bg-gray-100 rounded"
+                        >
+                            Копировать
+                        </button>
+                        <button
+                            onClick={() => setIsCodeFullscreen(false)}
+                            className="text-gray-500 hover:text-gray-700"
+                        >
+                            <Minimize2 size={20} />
+                        </button>
+                    </div>
+                </div>
+                <div className="flex-1 p-6 overflow-auto">
+                    <pre className="bg-gray-900 rounded-lg p-4 text-green-400 font-mono text-sm overflow-x-auto">
+                        {analysisResult.mongoCode}
+                    </pre>
+                </div>
+            </div>
+        );
+    };
+
     return (
         <div className="min-h-screen bg-gray-50">
+            <SqlFullscreenModal />
+            <MongoFullscreenModal />
+
             <div className="mx-auto p-6">
                 <div className="text-center mb-8">
                     <h1 className="text-3xl font-bold text-gray-800 mb-2">Транслятор с SQL в MongoDB</h1>
@@ -52,8 +118,10 @@ function App() {
 
                 <div className="flex gap-6 h-[calc(100vh-180px)] w-full">
                     {/* Левый блок ввода */}
-                    <div className={`bg-white rounded-lg shadow-md overflow-hidden ${(activeTab || error) && !isTreeFullscreen ? 'w-1/2' : 'w-full'} transition-all duration-300 ${isTreeFullscreen ? 'hidden' : ''}`}>
-                        <div className="p-6 border-b border-gray-200 flex gap-3">
+                    <div className={`bg-white rounded-lg shadow-md overflow-hidden flex flex-col ${
+                        (activeTab || error) && !isTreeFullscreen ? 'w-1/2' : 'w-full'
+                    } transition-all duration-300 ${isTreeFullscreen ? 'hidden' : ''}`}>
+                        <div className="p-6 border-b border-gray-200 flex flex-wrap gap-3">
                             <button
                                 onClick={analyseSql}
                                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
@@ -86,6 +154,18 @@ function App() {
                                 Синтаксический анализ
                             </button>
                             <button
+                                onClick={() => analysisResult && setActiveTab('ir')}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-md transition-colors ${
+                                    activeTab === 'ir'
+                                        ? 'bg-indigo-600 text-white'
+                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                }`}
+                                disabled={!analysisResult}
+                            >
+                                <GitBranch size={20} />
+                                Промежуточное представление
+                            </button>
+                            <button
                                 onClick={() => analysisResult && setActiveTab('code')}
                                 className={`flex items-center gap-2 px-4 py-2 rounded-md transition-colors ${
                                     activeTab === 'code'
@@ -98,7 +178,20 @@ function App() {
                                 Генерация кода
                             </button>
                         </div>
-                        <div className="h-[calc(100%-68px)] overflow-auto p-6">
+                        <div className="flex-1 overflow-auto p-6">
+                            <div className="flex justify-between items-center mb-2">
+                                <label htmlFor="sqlQuery" className="text-sm font-medium text-gray-700">
+                                    SQL запрос
+                                </label>
+                                <button
+                                    onClick={() => setIsSqlFullscreen(true)}
+                                    className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1"
+                                    disabled={!sqlQuery}
+                                >
+                                    <Maximize2 size={14} />
+                                    полноэкранный режим
+                                </button>
+                            </div>
                             <textarea
                                 id="sqlQuery"
                                 value={sqlQuery}
@@ -111,28 +204,40 @@ function App() {
 
                     {/* Правый блок результатов или ошибок */}
                     {(activeTab || error) && (
-                        <div className={`bg-white rounded-lg shadow-md overflow-hidden flex flex-col ${isTreeFullscreen ? 'fixed inset-0 z-50 m-0' : 'w-1/2'}`}>
+                        <div className={`bg-white rounded-lg shadow-md overflow-hidden flex flex-col ${
+                            isTreeFullscreen ? 'fixed inset-0 z-50 m-0' : 'w-1/2'
+                        }`}>
                             <div className="p-6 border-b border-gray-200 flex justify-between items-center">
                                 <h2 className="text-lg font-semibold text-gray-800">
                                     {error ? 'Ошибка' :
                                         activeTab === 'lexical' ? 'Лексический анализ' :
                                             activeTab === 'syntax' ? 'Синтаксический анализ' :
-                                                'Сгенерированный MongoDB код'}
+                                                activeTab === 'ir' ? 'Промежуточное представление (IR)' :
+                                                    'Сгенерированный MongoDB код'}
                                 </h2>
                                 <div className="flex gap-2">
                                     {activeTab === 'code' && analysisResult?.mongoCode && (
-                                        <button
-                                            onClick={copyToClipboard}
-                                            className="text-gray-500 hover:text-gray-700 p-1"
-                                            title="Копировать в буфер"
-                                        >
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                                            </svg>
-                                        </button>
+                                        <>
+                                            <button
+                                                onClick={() => setIsCodeFullscreen(true)}
+                                                className="text-gray-500 hover:text-gray-700 p-1"
+                                                title="Открыть в полноэкранном режиме"
+                                            >
+                                                <Maximize2 size={20} />
+                                            </button>
+                                            <button
+                                                onClick={copyToClipboard}
+                                                className="text-gray-500 hover:text-gray-700 p-1"
+                                                title="Копировать в буфер"
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                                </svg>
+                                            </button>
+                                        </>
                                     )}
-                                    {activeTab === 'syntax' && (
+                                    {(activeTab === 'syntax' || activeTab === 'ir') && (
                                         <button
                                             onClick={() => setIsTreeFullscreen(!isTreeFullscreen)}
                                             className="text-gray-500 hover:text-gray-700 p-1"
@@ -185,6 +290,10 @@ function App() {
 
                                 {activeTab === 'syntax' && analysisResult && (
                                     <SyntaxTree data={analysisResult.syntaxResult} isFullscreen={isTreeFullscreen} />
+                                )}
+
+                                {activeTab === 'ir' && analysisResult?.ir && (
+                                    <IRViewer ir={analysisResult.ir} />
                                 )}
 
                                 {activeTab === 'code' && analysisResult?.mongoCode && (

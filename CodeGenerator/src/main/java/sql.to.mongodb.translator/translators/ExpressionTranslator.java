@@ -4,16 +4,20 @@ import org.springframework.stereotype.Component;
 import sql.to.mongodb.translator.exceptions.CodeGenerationException;
 import sql.to.mongodb.translator.base.GenerationContext;
 import sql.to.mongodb.translator.helpers.FormatHelper;
+import sql.to.mongodb.translator.ir.Aggregate;
 import sql.to.mongodb.translator.ir.Constant;
-import sql.to.mongodb.translator.ir.CorrelationSubquery;
 import sql.to.mongodb.translator.ir.Field;
-import sql.to.mongodb.translator.ir.Subquery;
 import sql.to.mongodb.translator.ir.expression.BinaryOperation;
 import sql.to.mongodb.translator.ir.expression.CaseExpression;
 import sql.to.mongodb.translator.ir.expression.Expressionable;
 import sql.to.mongodb.translator.ir.expression.UnaryOperation;
 
 import java.util.Map;
+
+import static sql.to.mongodb.translator.helpers.FormatHelper.IndentChangeType.DOWN;
+import static sql.to.mongodb.translator.helpers.FormatHelper.IndentChangeType.NONE;
+import static sql.to.mongodb.translator.helpers.FormatHelper.IndentChangeType.UP;
+import static sql.to.mongodb.translator.helpers.FormatHelper.indent;
 
 @Component
 public class ExpressionTranslator {
@@ -34,21 +38,22 @@ public class ExpressionTranslator {
             case BinaryOperation binary -> translateBinary(binary, context);
             case UnaryOperation unary -> translateUnary(unary, context);
             case CaseExpression caseExpr -> translateCase(caseExpr, context);
-            case Subquery subq -> translateSubquery(subq, context);
+            case Aggregate agg -> translateAggregate(agg, context);
             case null, default -> "null";
         };
-
     }
 
     private String translateField(Field field, GenerationContext context) {
-        String result = field.getSource() != null && !field.getSource().isEmpty()
-                ? field.getSource() + "." + field.getField()
-                : field.getField();
+        if (context.isCorrelationField(field)) {
+            String varName = context.getCorrelationVariableForField(field);
+            return "\"$$" + varName + "\"";
+        }
+        String result = context.resolveFieldPath(field.getSource(), field.getField());
         return context.isUseAggregationSyntax() ? "\"$" + result + "\"" : result;
     }
 
     private String translateConstant(Constant constant, GenerationContext context) {
-        return FormatHelper.formatValue(constant.toString(), context);
+        return FormatHelper.formatValue(constant.getValue(), context);
     }
 
     private String translateBinary(BinaryOperation binary,
@@ -56,6 +61,9 @@ public class ExpressionTranslator {
         String left = translate(binary.getLeft(), context);
         String right = translate(binary.getRight(), context);
         String op = BINARY_OP_MAP.get(binary.getOperator());
+        if (context.isUseAggregationSyntax()) {
+            return "{ " + op + ": [" + left + ", " + right + "] }";
+        }
         return "{ " + op + ": [ " + left + ", " + right + " ] }";
     }
 
@@ -69,13 +77,12 @@ public class ExpressionTranslator {
                                  GenerationContext context) throws CodeGenerationException {
         StringBuilder result = new StringBuilder("{ $switch: {\n");
         context.increaseIndent();
-        result.append(context.getIndent()).append("branches: [\n");
-        context.increaseIndent();
+        result.append(indent(UP, context)).append("branches: [\n");
 
         var list = caseExpr.getWhenThenList();
         for (int i = 0; i < list.size(); i++) {
             var wt = list.get(i);
-            result.append(context.getIndent())
+            result.append(indent(NONE, context))
                     .append("{ case: ").append(translate(wt.getCondition(), context))
                     .append(", then: ").append(translate(wt.getResult(), context))
                     .append(" }");
@@ -84,27 +91,38 @@ public class ExpressionTranslator {
         }
 
         context.decreaseIndent();
-        result.append(context.getIndent()).append("],\n");
+        result.append(indent(NONE, context)).append("],\n");
 
         if (caseExpr.getElseExpression() != null) {
-            result.append(context.getIndent())
+            result.append(indent(DOWN, context))
                     .append("default: ")
                     .append(translate(caseExpr.getElseExpression(), context))
                     .append("\n");
         } else {
-            result.append(context.getIndent()).append("default: null\n");
+            result.append(indent(DOWN, context)).append("default: null\n");
         }
 
-        context.decreaseIndent();
-        result.append(context.getIndent()).append("} }");
+        result.append(indent(NONE, context)).append("} }");
 
         return result.toString();
     }
 
-    private String translateSubquery(Subquery subquery, GenerationContext context) {
-        if (subquery instanceof CorrelationSubquery) {
-            return "\"$" + context.nextCorrelationName() + "\"";
+    private String translateAggregate(Aggregate agg, GenerationContext context) {
+        String fieldPath = context.resolveFieldPath(agg.getField().getSource(), agg.getField().getField());
+        String type = agg.getType().name().toLowerCase();
+
+        if (agg.isDistinct() && agg.getType() == Aggregate.AggregateType.COUNT) {
+            String alias = agg.getField() != null ? agg.getField().getField() : "teams";
+            return "\"" + alias + "\"";
         }
-        return "/* subquery */";
+
+        if (fieldPath == null || "*".equals(fieldPath)) {
+            if (agg.getType() == Aggregate.AggregateType.COUNT) {
+                return "\"count\"";
+            }
+            return "\"" + type + "\"";
+        }
+
+        return "\"" + fieldPath + "\"";
     }
 }

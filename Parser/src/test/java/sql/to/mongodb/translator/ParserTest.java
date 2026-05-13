@@ -1,99 +1,52 @@
 package sql.to.mongodb.translator;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.springframework.amqp.rabbit.core.RabbitAdmin;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
-import org.springframework.amqp.core.Queue;
-import org.testcontainers.containers.DockerComposeContainer;
-import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
-import sql.to.mongodb.translator.configs.TestRabbitConfig;
+import sql.to.mongodb.translator.config.RabbitMQConfig;
+import sql.to.mongodb.translator.helper.RabbitMQTestHelper;
+import sql.to.mongodb.translator.helper.TestContainersHelper;
 import sql.to.mongodb.translator.parser.Node;
 import sql.to.mongodb.translator.scanner.Token;
 
-import java.io.File;
 import java.util.List;
 
 @SpringBootTest
 @Testcontainers
 @ActiveProfiles("test")
-@Import(TestRabbitConfig.class)
+@Import(RabbitMQConfig.class)
 public class ParserTest {
-
-    @Container
-    static DockerComposeContainer<?> environment = new DockerComposeContainer<>(
-            new File("src/test/resources/docker-compose.yml"))
-            .withExposedService("rabbitmq", 5672)
-            .withExposedService("scanner", 8080);
-
     @DynamicPropertySource
-    static void rabbitMQProperties(DynamicPropertyRegistry registry) {
-        String rabbitmqHost = environment.getServiceHost("rabbitmq", 5672);
-        Integer rabbitmqPort = environment.getServicePort("rabbitmq", 5672);
-
-        registry.add("spring.rabbitmq.host", () -> rabbitmqHost);
-        registry.add("spring.rabbitmq.port", () -> rabbitmqPort);
-        registry.add("spring.rabbitmq.username", () -> "guest");
-        registry.add("spring.rabbitmq.password", () -> "guest");
-
-        System.out.println("RabbitMQ at: " + rabbitmqHost + ":" + rabbitmqPort);
+    static void properties(DynamicPropertyRegistry registry) {
+        TestContainersHelper.properties(registry);
     }
 
-    @Autowired
-    private RabbitTemplate rabbitTemplate;
+    @BeforeAll
+    static void startContainers() {
+        TestContainersHelper.startContainers();
+    }
+
+    @AfterAll
+    static void stopContainers() {
+        TestContainersHelper.stopContainers();
+    }
 
     @Autowired
     private Parser parser;
 
     @Autowired
-    private ObjectMapper objectMapper;
-
-    @Autowired
-    private RabbitAdmin rabbitAdmin;
-
-    private static final String SCANNER_QUEUE = "scanner_queue";
-    private static final String PARSER_QUEUE = "parser_queue";
-
-    @BeforeEach
-    public void setUp() {
-        // Создаем все необходимые очереди
-        rabbitAdmin.declareQueue(new Queue(SCANNER_QUEUE, false));
-        rabbitAdmin.declareQueue(new Queue(PARSER_QUEUE, false));
-
-        System.out.println("Queues created successfully");
-    }
-
-    /**
-     * Отправляет SQL в Scanner через RabbitMQ и получает реальные токены
-     */
-    private List<Token> sendSqlToScannerAndGetTokens(String sql) throws JsonProcessingException {
-        rabbitTemplate.convertAndSend(SCANNER_QUEUE, sql);
-        System.out.println("Sent SQL to Scanner");
-
-        // Получаем ответ от Scanner
-        Object response = rabbitTemplate.receiveAndConvert(PARSER_QUEUE);
-
-        if (response == null) {
-            throw new RuntimeException("No response from Scanner service");
-        }
-
-        String tokensJson = (String) response;
-        return objectMapper.readValue(tokensJson,
-                objectMapper.getTypeFactory().constructCollectionType(List.class, Token.class));
-    }
+    private RabbitMQTestHelper rabbitMQTestHelper;
 
     @Test
-    public void testInOfOneSubquery() throws JsonProcessingException {
+    public void testInOfOneSubquery() {
         String codeToScan = """
                 SELECT id, name, file
                 FROM products
@@ -101,14 +54,14 @@ public class ParserTest {
                              FROM sales)""";
 
         // Получаем реальные токены от Scanner через RabbitMQ
-        List<Token> tokens = sendSqlToScannerAndGetTokens(codeToScan);
+        List<Token> tokens = rabbitMQTestHelper.getScannerResult(codeToScan);
 
         // Передаем токены в Parser
         Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(tokens));
     }
 
     @Test
-    public void testExistsAndJoin() throws JsonProcessingException {
+    public void testExistsAndJoin() {
         String codeToScan = """
                 SELECT Tm.TeamName
                 FROM Team Tm
@@ -130,46 +83,46 @@ public class ParserTest {
                                         ) >= 1
                                 )""";
 
-        List<Token> tokens = sendSqlToScannerAndGetTokens(codeToScan);
+        List<Token> tokens = rabbitMQTestHelper.getScannerResult(codeToScan);
         Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(tokens));
     }
 
     @Test
-    public void testAllWithSpecificTable() throws JsonProcessingException {
+    public void testAllWithSpecificTable() {
         String codeToScan = """
                 SELECT CompetitionName, Race.*
                 FROM Competition LEFT JOIN Race
                      ON Id_competition = Competition""";
 
-        List<Token> tokens = sendSqlToScannerAndGetTokens(codeToScan);
+        List<Token> tokens = rabbitMQTestHelper.getScannerResult(codeToScan);
         Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(tokens));
     }
 
     @Test
-    public void testAllFunction() throws Exception {
+    public void testAllFunction() {
         String codeToScan = """
                 SELECT TP.Id_team, TP.TeamName
                 FROM TeamProfit TP
                 WHERE TP.Profit >= ALL(SELECT TP2.Profit
                                        FROM TeamProfit TP2)""";
 
-        List<Token> tokens = sendSqlToScannerAndGetTokens(codeToScan);
+        List<Token> tokens = rabbitMQTestHelper.getScannerResult(codeToScan);
         Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(tokens));
     }
 
     @Test
-    public void testOrderBy() throws JsonProcessingException {
+    public void testOrderBy() {
         String codeToScan = """
                 SELECT R.*, R.TicketPrice * R.SoldTickets AS Profit
                 FROM Race R
                 ORDER BY R.TicketPrice * R.SoldTickets DESC""";
 
-        List<Token> tokens = sendSqlToScannerAndGetTokens(codeToScan);
+        List<Token> tokens = rabbitMQTestHelper.getScannerResult(codeToScan);
         Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(tokens));
     }
 
     @Test
-    public void testLimit() throws JsonProcessingException {
+    public void testLimit() {
         String codeToScan = """
                 SELECT DISTINCT Cn.Id_country, Cn.CountryName
                 FROM Race R RIGHT JOIN StaffRace SR
@@ -189,7 +142,7 @@ public class ParserTest {
                                                           ORDER BY Profit DESC
                                                           LIMIT 3)""";
 
-        List<Token> tokens = sendSqlToScannerAndGetTokens(codeToScan);
+        List<Token> tokens = rabbitMQTestHelper.getScannerResult(codeToScan);
 
         Node result = Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(tokens));
 
@@ -197,7 +150,7 @@ public class ParserTest {
     }
 
     @Test
-    public void testCaseAsAggregateAttribute() throws JsonProcessingException {
+    public void testCaseAsAggregateAttribute() {
         String codeToScan = """
                 SELECT (CalcRes.ChampionshipNum * 100) / CalcRes.Total AS Championship,
                        (CalcRes.CupNum * 100) / CalcRes.Total AS Cup,
@@ -218,7 +171,7 @@ public class ParserTest {
                         ON Comp.CompetitionType = CT.Id_competition_type
                      ) AS CalcRes""";
 
-        List<Token> tokens = sendSqlToScannerAndGetTokens(codeToScan);
+        List<Token> tokens = rabbitMQTestHelper.getScannerResult(codeToScan);
         Assertions.assertDoesNotThrow(() -> parser.tryAnalyse(tokens));
     }
 }

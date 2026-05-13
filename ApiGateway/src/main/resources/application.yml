@@ -1,11 +1,13 @@
 spring:
   application:
     name: ApiGateway
+  profiles:
+    active: ${ACTIVE_PROFILE:prod}
   rabbitmq:
-    username: ${RABBIT_USER}
-    password: ${RABBIT_PASSWORD}
+    username: ${RABBIT_USER:guest}
+    password: ${RABBIT_PASSWORD:guest}
     host: ${RABBIT_SERVICE:localhost}
-    port: 5672
+    port: ${RABBIT_PORT:5672}
 
 server:
   port: 8080

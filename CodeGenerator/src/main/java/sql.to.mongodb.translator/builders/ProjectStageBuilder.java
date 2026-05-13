@@ -12,6 +12,11 @@ import sql.to.mongodb.translator.translators.ProjectionTranslator;
 import java.util.ArrayList;
 import java.util.List;
 
+import static sql.to.mongodb.translator.helpers.FormatHelper.IndentChangeType.DOWN;
+import static sql.to.mongodb.translator.helpers.FormatHelper.IndentChangeType.NONE;
+import static sql.to.mongodb.translator.helpers.FormatHelper.IndentChangeType.UP;
+import static sql.to.mongodb.translator.helpers.FormatHelper.indent;
+
 @Component
 public class ProjectStageBuilder {
 
@@ -32,35 +37,95 @@ public class ProjectStageBuilder {
         }
 
         // Для aggregation pipeline
-        StringBuilder project = new StringBuilder(indent(context) + "{ $project: {\n");
-        context.increaseIndent();
+        StringBuilder project = new StringBuilder(indent(UP, context)).append("{\n");
+        project.append(indent(UP, context)).append("$project: {\n");
 
         boolean hasId = ir.getProjectionFields().stream()
                 .anyMatch(p -> p instanceof ProjectionField f && "_id".equals(f.getField()));
         if (!hasId) {
-            project.append(context.getIndent()).append("_id: 0,\n");
+            project.append(indent(NONE, context)).append("_id: 0,\n");
         }
 
         List<String> fields = new ArrayList<>();
-        for (Projectionable proj : ir.getProjectionFields()) {
-            String field = projectionTranslator.translate(proj, context, false);
-            if (!field.isEmpty()) {
-                fields.add(field);
+
+        if (!context.isInsideSubquery()) {
+            for (Projectionable proj : ir.getProjectionFields()) {
+                if (proj instanceof ProjectionField pf) {
+                    String name = pf.getAlias() != null ? pf.getAlias() : pf.getField();
+                    fields.add(indent(NONE, context) + name + ": 1");
+                }
+            }
+        } else {
+            for (Projectionable proj : ir.getProjectionFields()) {
+                String field = projectionTranslator.translate(proj, context, false);
+                if (!field.isEmpty()) {
+                    fields.add(field);
+                }
             }
         }
 
         project.append(String.join(",\n", fields));
         context.decreaseIndent();
-        project.append("\n").append(indent(context)).append("} }");
+        project.append("\n").append(indent(DOWN, context)).append("}\n");
+        project.append(indent(NONE, context)).append("}");
 
         return project.toString();
     }
 
-    /**
-     * Построение проекции для find() запроса
-     * @param ir промежуточное представление
-     * @return строка проекции для find()
-     */
+    public void addProjectionStages(SqlToMongoIR ir,
+                                    List<String> pipelineStages,
+                                    GenerationContext context) {
+        if (ir == null) return;
+
+        boolean hasDistinctCount = isDistinctCount(ir);
+
+        if (hasDistinctCount) {
+            String firstVar = context.getVariableName();
+
+            // $project с $setDifference
+            StringBuilder sb = new StringBuilder(indent(UP, context)).append("{\n");
+            sb.append(indent(UP, context)).append("$project: {\n");
+            sb.append(indent(UP, context)).append(firstVar).append(": {\n");
+            sb.append(indent(DOWN, context)).append("$setDifference: [\"$").append(firstVar).append("\", [null]]\n");
+            sb.append(indent(DOWN, context)).append("}\n");
+            sb.append(indent(DOWN, context)).append("}\n");
+            sb.append(indent(NONE, context)).append("}");
+            pipelineStages.add(sb.toString());
+            // $project с $size
+            sb.setLength(0);
+            String secondVar = context.nextVariableName();
+
+            sb.append(indent(UP, context)).append("{\n");
+            sb.append(indent(UP, context)).append("$project: {\n");
+            sb.append(indent(UP, context)).append(secondVar).append(": {\n");
+            sb.append(indent(DOWN, context)).append("$size: \"$").append(firstVar).append("\"\n");
+            sb.append(indent(DOWN, context)).append("}\n");
+            sb.append(indent(DOWN, context)).append("}\n");
+            sb.append(indent(NONE, context)).append("}");
+            pipelineStages.add(sb.toString());
+        }
+    }
+
+    private static boolean isDistinctCount(SqlToMongoIR ir) {
+        boolean hasDistinctCount = false;
+
+        // Проверяем проекции
+        for (Projectionable proj : ir.getProjectionFields()) {
+            if (proj instanceof AggregateProjection agg &&
+                    agg.isDistinct() &&
+                    agg.getType() == AggregateProjection.AggregateType.COUNT) {
+                hasDistinctCount = true;
+                break;
+            }
+        }
+
+        // Если не нашли в проекциях, проверяем HAVING (по флагам)
+        if (!hasDistinctCount && ir.isHasAggregateFunctions() && ir.isHasGroupBy()) {
+            hasDistinctCount = true;
+        }
+        return hasDistinctCount;
+    }
+
     private String buildFindProjection(SqlToMongoIR ir) {
         List<String> fields = new ArrayList<>();
         for (Projectionable proj : ir.getProjectionFields()) {
@@ -70,56 +135,25 @@ public class ProjectStageBuilder {
                     fields.add(name + ": 1");
                 }
             }
-            // Для find() запроса агрегатные функции и подзапросы не поддерживаются
-            // поэтому игнорируем AggregateProjection и SubqueryProjection
         }
         if (fields.isEmpty()) return null;
         return "{ " + String.join(", ", fields) + " }";
     }
 
-    /**
-     * Построение проекции для подзапроса (используется в LookupStageBuilder)
-     * @param subIR IR подзапроса
-     * @param context контекст генерации (используется для отступов и синтаксиса)
-     * @return строка $project стадии
-     */
-    public String buildForSubquery(SqlToMongoIR subIR,
-                                   GenerationContext context) throws CodeGenerationException {
-        if (subIR == null || subIR.getProjectionFields().isEmpty()) {
-            return null;
-        }
-
-        // Если поле-подзапрос и это не агрегация - простая проекция
-        if (subIR.getProjectionFields().size() == 1) {
-            Projectionable only = subIR.getProjectionFields().getFirst();
-            if (only instanceof ProjectionField pf) {
-                return "{ $project: { _id: 0, " + pf.getField() + ": 1 } }";
-            }
-            return "{ $project: { _id: 0, result: 1 } }";
-        }
-
-        // Сложная проекция с несколькими полями
-        StringBuilder project = new StringBuilder("{ $project: { _id: 0");
-
-        for (Projectionable proj : subIR.getProjectionFields()) {
-            if (proj instanceof ProjectionField pf) {
-                String fieldName = pf.getAlias() != null ? pf.getAlias() : pf.getField();
-                project.append(", ").append(fieldName).append(": 1");
-            } else if (proj instanceof AggregateProjection agg) {
-                // Для подзапросов с агрегациями используем транслятор
-                String aggStr = projectionTranslator.translate(agg, context, false);
-                if (!aggStr.isEmpty()) {
-                    String name = agg.getAlias() != null ? agg.getAlias() : agg.getType().name().toLowerCase();
-                    project.append(", ").append(name).append(": 1");
-                }
-            }
-        }
-
-        project.append(" } }");
-        return project.toString();
-    }
-
-    private String indent(GenerationContext context) {
-        return "  ".repeat(Math.max(0, context.getIndentLevel()));
+    public String buildAddFieldsWithMap(String arrayName,
+                                        String sourceField,
+                                        String valueField,
+                                        GenerationContext context) {
+        return indent(UP, context) + "{\n" +
+                indent(UP, context) + "$addFields: {\n" +
+                indent(UP, context) + arrayName + ": {\n" +
+                indent(UP, context) + "$map: {\n" +
+                indent(NONE, context) + "input: \"$" + sourceField + "\",\n" +
+                indent(NONE, context) + "as: \"item\",\n" +
+                indent(DOWN, context) + "in: \"$$item." + valueField + "\"\n" +
+                indent(DOWN, context) + "}\n" +
+                indent(DOWN, context) + "}\n" +
+                indent(DOWN, context) + "}\n" +
+                indent(NONE, context) + "}";
     }
 }
