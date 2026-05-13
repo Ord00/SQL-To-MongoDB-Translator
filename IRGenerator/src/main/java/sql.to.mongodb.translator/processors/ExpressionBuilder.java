@@ -1,6 +1,7 @@
 package sql.to.mongodb.translator.processors;
 
 import sql.to.mongodb.translator.IRGenerator;
+import sql.to.mongodb.translator.exceptions.IRGenerationException;
 import sql.to.mongodb.translator.ir.Aggregate;
 import sql.to.mongodb.translator.ir.Constant;
 import sql.to.mongodb.translator.ir.Field;
@@ -14,7 +15,10 @@ import sql.to.mongodb.translator.parser.NodeType;
 import sql.to.mongodb.translator.scanner.Category;
 import sql.to.mongodb.translator.scanner.Token;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 public class ExpressionBuilder {
 
@@ -28,9 +32,6 @@ public class ExpressionBuilder {
         AGGREGATE_MAPPING.put("MAX", AggregateProjection.AggregateType.MAX);
     }
 
-    /**
-     * Построение Field из узла IDENTIFIER
-     */
     public static Field buildField(Node identifierNode) {
         Field field = new Field();
         extractFieldParts(identifierNode, field);
@@ -59,9 +60,6 @@ public class ExpressionBuilder {
         return false;
     }
 
-    /**
-     * Построение AggregateProjection из узла AGGREGATE
-     */
     public static AggregateProjection buildAggregateFunction(Node aggregateNode) {
         if (aggregateNode == null) {
             return null;
@@ -139,9 +137,6 @@ public class ExpressionBuilder {
         return null;
     }
 
-    /**
-     * Построение строки идентификатора
-     */
     public static String buildIdentifierString(Node identifierNode) {
         if (identifierNode.getChildren() == null || identifierNode.getChildren().isEmpty()) {
             return "";
@@ -159,9 +154,6 @@ public class ExpressionBuilder {
         return parts.get(0) + "." + parts.get(1);
     }
 
-    /**
-     * Построение строки выражения (для обратной совместимости)
-     */
     public static String buildExpressionString(Node node) {
         if (node == null) return "";
         return switch (node.getNodeType()) {
@@ -253,9 +245,6 @@ public class ExpressionBuilder {
         return getString(logicalCheckNode);
     }
 
-    /**
-     * Построение AST арифметического выражения
-     */
     public static Arithmetical buildArithmeticExpression(Node arithNode) {
         if (arithNode == null || arithNode.getChildren() == null) {
             return null;
@@ -343,7 +332,7 @@ public class ExpressionBuilder {
 
                 return aggregate;
             } catch (IllegalArgumentException e) {
-                // Неизвестный тип агрегации
+                throw  new IRGenerationException(e.getMessage());
             }
         }
 

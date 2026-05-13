@@ -8,7 +8,12 @@ import sql.to.mongodb.translator.parser.NodeType;
 import sql.to.mongodb.translator.scanner.Category;
 import sql.to.mongodb.translator.scanner.Token;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 public class CorrelationAnalyzer {
 
@@ -43,7 +48,6 @@ public class CorrelationAnalyzer {
             // Проверяем логические условия
             processLogicalCheck(node);
         } else if (node.getChildren() != null) {
-            // Рекурсивно обходим детей
             for (Node child : node.getChildren()) {
                 findCorrelationsInNode(child);
             }
@@ -101,9 +105,6 @@ public class CorrelationAnalyzer {
         }
     }
 
-    /**
-     * Извлечение полей из арифметического выражения
-     */
     private List<String> extractFieldsFromArithmetic(Node arithNode) {
         List<String> fields = new ArrayList<>();
         if (arithNode == null) return fields;
@@ -167,9 +168,6 @@ public class CorrelationAnalyzer {
         }
     }
 
-    /**
-     * Проверка, образуют ли два идентификатора корреляцию
-     */
     private boolean isCorrelationPair(String left, String right) {
         boolean leftIsExternal = isExternalReference(left);
         boolean rightIsExternal = isExternalReference(right);
@@ -178,9 +176,6 @@ public class CorrelationAnalyzer {
         return leftIsExternal != rightIsExternal;
     }
 
-    /**
-     * Добавление корреляции
-     */
     private void addCorrelation(String left, String right, String operator) {
         // Определяем, какой из них внешний
         boolean leftIsExternal = isExternalReference(left);
@@ -248,10 +243,10 @@ public class CorrelationAnalyzer {
             if (existing.getOuterField().toString().equals(newCorrelation.getOuterField().toString())
                     && existing.getInnerField().toString().equals(newCorrelation.getInnerField().toString())
                     && existing.getOperator().equals(newCorrelation.getOperator())) {
-                return true; // Исправлено: если найден, возвращаем true
+                return true;
             }
         }
-        return false; // Если не найден, возвращаем false
+        return false;
     }
 
     public List<CorrelationCondition> extractCorrelationConditions(Node whereNode) {
@@ -274,8 +269,6 @@ public class CorrelationAnalyzer {
     private boolean isExternalReference(String identifier) {
         if (identifier == null) return false;
 
-        // Если идентификатор не содержит точку, он не может быть внешней ссылкой
-        // (внешняя ссылка всегда имеет вид table.column)
         if (!identifier.contains(".")) {
             return false;
         }
