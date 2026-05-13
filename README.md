@@ -26,10 +26,11 @@
 ---
 # Используемые технологии
 * Java
+* Spring Boot
 * Gradle
 * PostgreSQL
 * MongoDB
-* Spring Boot
+* RabbitMQ
 * Docker
 * React
 ---
@@ -40,4 +41,14 @@
 ![image](https://github.com/user-attachments/assets/f73b8714-1371-4fcf-8b4f-36ee19bb72d9)
 ![image](https://github.com/user-attachments/assets/796c0732-a3dd-4b14-9a15-814cf331058c)
 ![image](https://github.com/user-attachments/assets/9a998793-cf11-45e7-b03b-ccd9051f38f6)
+<img width="1917" height="950" alt="IR_DEMO_1" src="https://github.com/user-attachments/assets/07b88eda-280f-41c3-85af-48648ad06e19" />
+<img width="1917" height="951" alt="IR_DEMO_2" src="https://github.com/user-attachments/assets/b8c16e07-7fda-4321-97b5-11261e061ecc" />
+<img width="1916" height="956" alt="CODE_GEN_1" src="https://github.com/user-attachments/assets/13f50a59-b8ad-4940-a1f1-e88675c7a179" />
+
+
+
+
+
+
+
 
