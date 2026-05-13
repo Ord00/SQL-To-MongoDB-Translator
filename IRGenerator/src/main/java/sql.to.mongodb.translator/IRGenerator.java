@@ -28,7 +28,13 @@ import sql.to.mongodb.translator.processors.ConditionExtractor;
 import sql.to.mongodb.translator.processors.ExpressionBuilder;
 import sql.to.mongodb.translator.scanner.Token;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.Stack;
 
 import static sql.to.mongodb.translator.processors.ExpressionBuilder.extractAlias;
 import static sql.to.mongodb.translator.processors.ExpressionBuilder.extractFieldParts;
@@ -63,8 +69,6 @@ public class IRGenerator {
         return ctx.ir;
     }
 
-    // ==================== GenerationContext ====================
-
     public static class GenerationContext {
         public final SqlToMongoIR ir;
         public final Map<String, String> tableAliases;
@@ -86,8 +90,6 @@ public class IRGenerator {
             this.conditionExtractor = new ConditionExtractor(ir, outerTables, outerAliases);
         }
     }
-
-    // ==================== Process Query ====================
 
     private void processQueryNode(Node queryNode,
                                   GenerationContext ctx) throws IRGenerationException {
@@ -118,8 +120,6 @@ public class IRGenerator {
         }
     }
 
-    // ==================== Terminal ====================
-
     private void processTerminalInQuery(Node terminalNode, GenerationContext ctx) {
         switch (terminalNode.getToken().lexeme) {
             case "DISTINCT" -> ctx.ir.setDistinct(true);
@@ -127,8 +127,6 @@ public class IRGenerator {
             case "HAVING" -> ctx.conditionExtractor.setContext(ConditionExtractor.ConditionContext.HAVING);
         }
     }
-
-    // ==================== Condition ====================
 
     private void processConditionNode(Node conditionNode, GenerationContext ctx) {
         ConditionNode extractedCondition = ctx.conditionExtractor.extractCondition(
@@ -148,8 +146,6 @@ public class IRGenerator {
             }
         }
     }
-
-    // ==================== Column Names / Projection ====================
 
     private void processColumnNames(Node columnNamesNode,
                                     GenerationContext ctx) throws IRGenerationException {
@@ -259,8 +255,6 @@ public class IRGenerator {
 
         return result;
     }
-
-    // ==================== Case Expression ====================
 
     private CaseExpression parseCaseExpression(Node caseNode) throws IRGenerationException {
         if (caseNode.getChildren() == null) return null;
@@ -388,8 +382,6 @@ public class IRGenerator {
         return new Field(expr);
     }
 
-    // ==================== Group By ====================
-
     private void processGroupBy(Node groupByNode, GenerationContext ctx) {
         ctx.ir.setHasGroupBy(true);
         if (groupByNode.getChildren() != null) {
@@ -411,8 +403,6 @@ public class IRGenerator {
         }
         return null;
     }
-
-    // ==================== Order By ====================
 
     private void processOrderBy(Node orderByNode, GenerationContext ctx) {
         if (orderByNode.getChildren() == null) return;
@@ -456,8 +446,6 @@ public class IRGenerator {
         ctx.ir.getOrderBy().add(field);
     }
 
-    // ==================== Limit / Offset ====================
-
     private void processLimit(Node limitNode, GenerationContext ctx) {
         if (limitNode.getChildren() == null) return;
         ctx.ir.setLimit(Integer.parseInt(limitNode.getChildren().getFirst().getToken().lexeme));
@@ -467,8 +455,6 @@ public class IRGenerator {
         if (offsetNode.getChildren() == null) return;
         ctx.ir.setOffset(Integer.parseInt(offsetNode.getChildren().getFirst().getToken().lexeme));
     }
-
-    // ==================== Table Names / JOIN ====================
 
     private void processTableNames(Node tableNamesNode,
                                    GenerationContext ctx) throws IRGenerationException {
