@@ -161,7 +161,7 @@ public class CodeGeneratorTest {
     }
 
     @Test
-    void testGenerationOfLogicalConditionAndIn() throws CodeGenerationException {
+    void testGenerationOfLogicalConditionAndIn() {
 
         String expectedMongoCode = """
                 db.Country.aggregate([
@@ -323,12 +323,14 @@ public class CodeGeneratorTest {
                 										  ORDER BY Profit DESC
                 										  LIMIT 3)""";
 
-        Assertions.assertEquals(expectedMongoCode,
+        String actualMongoCode = Assertions.assertDoesNotThrow(() ->
                 rabbitMQTestHelper.getCodeGeneratorResult(codeToScan));
+        Assertions.assertEquals(expectedMongoCode,
+                actualMongoCode);
     }
 
     @Test
-    public void testExistsAndGroupBy() throws CodeGenerationException {
+    public void testGenerationOfExistsAndGroupBy() {
         String expectedMongoCode = """
                 db.Competition.aggregate([
                     {
@@ -500,12 +502,14 @@ public class CodeGeneratorTest {
                 			 HAVING COUNT(DISTINCT Tm2.Id_team) < 2
                 			 )""";
 
-        Assertions.assertEquals(expectedMongoCode,
+        String actualMongoCode = Assertions.assertDoesNotThrow(() ->
                 rabbitMQTestHelper.getCodeGeneratorResult(codeToScan));
+        Assertions.assertEquals(expectedMongoCode,
+                actualMongoCode);
     }
 
     @Test
-    public void testExistsAndJoin() throws CodeGenerationException {
+    public void testGenerationOfNestedExists() {
         String expectedMongoCode = """
                 db.Team.aggregate([
                     {
@@ -652,7 +656,9 @@ public class CodeGeneratorTest {
                                     )
                           )""";
 
-        Assertions.assertEquals(expectedMongoCode,
+        String actualMongoCode = Assertions.assertDoesNotThrow(() ->
                 rabbitMQTestHelper.getCodeGeneratorResult(codeToScan));
+        Assertions.assertEquals(expectedMongoCode,
+                actualMongoCode);
     }
 }

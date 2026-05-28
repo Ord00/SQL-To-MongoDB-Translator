@@ -2,6 +2,7 @@ package sql.to.mongodb.translator.processors;
 
 import lombok.Getter;
 import lombok.Setter;
+import org.springframework.stereotype.Component;
 import sql.to.mongodb.translator.IRGenerator;
 import sql.to.mongodb.translator.ir.Constant;
 import sql.to.mongodb.translator.ir.CorrelationSubquery;
@@ -24,30 +25,14 @@ import sql.to.mongodb.translator.scanner.Token;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
 import static sql.to.mongodb.translator.processors.ExpressionBuilder.buildAggregateExpression;
 
+@Component
 @Getter
 @Setter
 public class ConditionExtractor {
-    private final SqlToMongoIR ir;
-    private final Set<String> outerTables;
-    private final Map<String, String> outerAliases;
-    private ConditionContext context;
-
-    public ConditionExtractor(SqlToMongoIR ir,
-                              Set<String> outerTables,
-                              Map<String, String> outerAliases) {
-        this.ir = ir;
-        this.outerTables = outerTables != null ? outerTables : new HashSet<>();
-        this.outerAliases = outerAliases != null ? outerAliases : new HashMap<>();
-    }
-
     /**
      * Извлечение условия с учетом приоритетов операторов и скобок
      * Использует алгоритм рекурсивного спуска
@@ -270,7 +255,7 @@ public class ConditionExtractor {
 
         // EXISTS (SELECT ...)
         if (hasExists && subqueryNode != null && irGenerator != null) {
-            return createExistsCondition(subqueryNode, irGenerator, hasNot);
+            return createExistsCondition(subqueryNode, irGenerator, hasNot, ctx);
         }
 
         // IN (SELECT ...)
@@ -284,7 +269,7 @@ public class ConditionExtractor {
 
             // Обрабатываем ATTRIBUTES (значения после IN)
             if (attributesNode != null) {
-                List<Expressionable> attributes = extractAttributes(attributesNode, irGenerator);
+                List<Expressionable> attributes = extractAttributes(attributesNode, irGenerator, ctx);
                 inCondition.setInValues(attributes);
             }
 
@@ -338,7 +323,8 @@ public class ConditionExtractor {
      * - QUERY (подзапросы)
      */
     private List<Expressionable> extractAttributes(Node attributesNode,
-                                                   IRGenerator irGenerator) {
+                                                   IRGenerator irGenerator,
+                                                   IRGenerator.GenerationContext ctx) {
         List<Expressionable> values = new ArrayList<>();
 
         if (attributesNode.getChildren() == null) {
@@ -346,7 +332,7 @@ public class ConditionExtractor {
         }
 
         for (Node child : attributesNode.getChildren()) {
-            Expressionable expr = buildAttributeExpression(child, irGenerator);
+            Expressionable expr = buildAttributeExpression(child, irGenerator, ctx);
             if (expr != null) {
                 values.add(expr);
             }
@@ -358,7 +344,9 @@ public class ConditionExtractor {
     /**
      * Построение выражения из элемента ATTRIBUTES
      */
-    private Expressionable buildAttributeExpression(Node node, IRGenerator irGenerator) {
+    private Expressionable buildAttributeExpression(Node node,
+                                                    IRGenerator irGenerator,
+                                                    IRGenerator.GenerationContext ctx) {
         if (node == null) return null;
 
         switch (node.getNodeType()) {
@@ -381,10 +369,10 @@ public class ConditionExtractor {
 
             case QUERY:
                 // Для подзапроса в IN нужно создать CorrelationSubquery, если есть корреляции
-                SqlToMongoIR subqueryIR = irGenerator.generateIR(node, outerTables, outerAliases);
+                SqlToMongoIR subqueryIR = irGenerator.generateIR(node, ctx.outerTables, ctx.outerAliases);
 
                 // Извлекаем корреляции для этого подзапроса
-                List<CorrelationCondition> correlations = extractCorrelations(node);
+                List<CorrelationCondition> correlations = extractCorrelations(node, ctx);
 
                 if (!correlations.isEmpty()) {
                     CorrelationSubquery correlationSubquery = new CorrelationSubquery();
@@ -398,7 +386,7 @@ public class ConditionExtractor {
             default:
                 // Если узел имеет детей, рекурсивно обрабатываем
                 if (node.getChildren() != null && node.getChildren().size() == 1) {
-                    return buildAttributeExpression(node.getChildren().getFirst(), irGenerator);
+                    return buildAttributeExpression(node.getChildren().getFirst(), irGenerator, ctx);
                 }
                 break;
         }
@@ -408,24 +396,25 @@ public class ConditionExtractor {
 
     private ExistsCondition createExistsCondition(Node subqueryNode,
                                                   IRGenerator irGenerator,
-                                                  boolean hasNot) {
+                                                  boolean hasNot,
+                                                  IRGenerator.GenerationContext ctx) {
         ExistsCondition exists = new ExistsCondition();
         exists.setExists(!hasNot);
 
-        SqlToMongoIR subqueryIR = irGenerator.generateIR(subqueryNode, outerTables, outerAliases);
+        SqlToMongoIR subqueryIR = irGenerator.generateIR(subqueryNode, ctx.outerTables, ctx.outerAliases);
         CorrelationSubquery correlationSubquery = new CorrelationSubquery();
         correlationSubquery.setSubqueryIR(subqueryIR);
 
-        List<CorrelationCondition> correlations = extractCorrelations(subqueryNode);
+        List<CorrelationCondition> correlations = extractCorrelations(subqueryNode, ctx);
         correlationSubquery.getCorrelations().addAll(correlations);
 
         exists.setSubquery(correlationSubquery);
 
-        if (ir != null) {
+        if (ctx.ir != null) {
             if (!correlations.isEmpty()) {
-                ir.setHasCorrelatedSubqueries(true);
+                ctx.ir.setHasCorrelatedSubqueries(true);
             }
-            ir.setHasSubqueries(true);
+            ctx.ir.setHasSubqueries(true);
         }
 
         return exists;
@@ -465,9 +454,10 @@ public class ConditionExtractor {
         return ExpressionBuilder.buildField(identifierNode);
     }
 
-    public List<CorrelationCondition> extractCorrelations(Node subqueryNode) {
+    public List<CorrelationCondition> extractCorrelations(Node subqueryNode,
+                                                          IRGenerator.GenerationContext ctx) {
         CorrelationAnalyzer analyzer = new CorrelationAnalyzer();
-        analyzer.analyzeForCorrelations(subqueryNode, outerTables, outerAliases);
+        analyzer.analyzeForCorrelations(subqueryNode, ctx.outerTables, ctx.outerAliases);
 
         Node whereCondition = findWhereCondition(subqueryNode);
         if (whereCondition != null) {
